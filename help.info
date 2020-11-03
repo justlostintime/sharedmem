@@ -1,0 +1,150 @@
+  Gambas Shell V1.2
+  
+  help <command name> command name will print a more detailed description
+                      of the external commands ie loaded from the profile.gsh
+  
+  You may use most Gambas language and variables definitions
+  Regular Gambas variables will not persist between commands
+  Gambas Shell is run as a Gambas script, so may use USE, INCLUDE etc
+  SUB, Procedures and functions and class may be defined within the shell and will
+  Persist across commands and restart of the shell. GSH scripts are executed one block
+  or line at a time. Global variables are the only variable which are carried from block to block.
+  
+  Keyboard input and config.
+            GSH uses the C readline function and is very configurable please
+            see http://man7.org/linux/man-pages/man3/readline.3.html
+            for details of the keyboard support.
+            The readline package must be installed for gsh to work correctly
+  
+  profile.gsh is executed upon each startup and may be edited. It defines most of the available commands.
+
+  Global variables start with $ for example $history .. Case matters 
+            These Variables are not dim'd. Data Type is assigned at first 
+              Use And the type may not change after the first assignment.
+            Global variables persist and are saved at the time of closing the gsh shell.
+            Global variables may be used the same way regular variables are used except for iteration
+            not allowed: for $i = 0 to 100 .....
+            Global Variables can be referenced in any process or sub process of gsh. They are system wide
+ 
+ 
+ $result :  This reserved variable will have the returned value after each builtin function is called
+            May be used by your functions to return value Note, you must VarDel \"$result\" if you change the type from string type.
+            
+ $trace  :  Turn on or off shell script tracing. Writes line to stderr as they are executed.
+            This Is Global And will affect system wide scripts On the fly
+            $trace = true ' turns on tracing
+            $trace = false ' turn off tracing this is the default
+            
+ $prompt :  The prompt, it is displays as 'print eval($prompt);;' so can be edited with any valid eval statement
+
+  At Startup gsh loads the environment from ~/vars/gsh.image if it is exists.
+  
+  The gsh.image  file is created when ever the gsh shell exits or save is called with no parameters.
+  The gsh.image and ~/vars directory will be created if they do not exist upon first startup of GSH.
+  
+ $VarName = <value> : Global Variables Definition, value defines the type and must not change after first use
+ 
+ ! or |             : Is used at the beginning of a line to define an external command. 
+ 											 In Many cases the shell will detect an external command but using ! forces it to execute as a command
+ 											 | may only be used between commands not at the beginning of a line
+                      For example '!ls or 'ls' to list a directory.
+                      !ls > $a or just ls -1 > $a  will store the returned value into the global value $a, if a local variable is used it needs to be dim'd first and
+                      Will only persist during the command execution
+                      This may also be used to pipe stdout to std in of next command
+                      eg  '!cat < $f ! cat ! cat ! cat > $r'
+                      This will send output from first to second command and so on
+                      the ! is not needed for the first command as gsh checks the first symbol to see if its external
+                      so from eg above 'cat < $f ! cat ! cat ! cat > $r' will also work
+                      
+<                   : Direct content of global variable into external command 
+                      It is allowed to send multiple Variable contents to a command
+                      You may also send variable input to a command in a pipe sequence
+                      eg ' cat < $f <$t ! cat < $r ! cat > $b ! cat > $s' is quite valid
+                      
+>  >>               : Direct Output from an external command to a global variable
+                      It is allowed to write the output to multiple variables and also pipe to next external command
+                      eg ' cat < $f < $t > $g > $d ! cat < $u > $s ! cat ! cat > $z' quite valid
+                      >> appends to variable content, > clears variable first.
+
+&>  &>>             : Direct stderr to a global variable. It is allowed to end it to many variables as well
+                      eg ' cc "myprog.c" < $f < $t > $g > $d &> $cerr &>> $cerrhist ! cat < $u > $s ! cat ! cat > $z' quite valid
+                      &>> appends to Variable content, &> clears variable first.
+                      
+ number!            : Will re-execute the command from history for example : 3!
+ 
+ [0]findpattern/replacepattern : Allows to edit the history lines regular expression regex.replace()
+ 
+ "#{expression}"    : evaluate the expression immeadiatly and replace text with evaluated expression
+ 										  example "#{'print'}" application.name; "stuff"..
+ 										  inside expressions use ' instead of "
+ 										  This example will be evaluated to 'print application.name; "stuff"..'
+ 										  after the evaluation the line will be executed
+ 										  example default prompt print "#{'\''&Sharedmem['$pwd']&'->'&sharedmem['$blockindent']&'\''}"
+ 										  remember the evaluation is executed in this context, the line is executed in its own context
+                     this allows to pass values from this context to the next.
+                     example print "#{'\''&application.name'\''}"    this will print "gsh"
+                             print application.name                  this will print "execgbs" 
+                             they happen in different contexts, global variables span contexts
+                             
+ ?                  : at the beginning of a line will print what ever follows
+                      For example ? $a;$b,c,d -- will print the content of these variables
+                      
+ &                  : place this after the last line of your command to execute the command as an independent process
+ 
+ { }                : are used to create a block of executable code. gsh will execute code as it is read.
+                      also any block type command will start a block eg for .... next, while...do etc 
+                      { and } must be only thing on the line not even comments. 
+                      example
+                      {
+                       Dim i As String
+                       i = "this\nthat"
+                       dim j as string[]
+                       j = split(j,"\n")
+                       $e = j
+                       } <&>
+                       This is basically a syntactic trick to let the editor know your entering code that should be executed 
+                       as one block. By default gsh executes each line as it is entered.
+                       If used in gsh scripts { to }  execute  after the closing brace, local variables(inside {}) are lost.
+                     
+ Code Blocks        : will execute independently in the order they appear in the script
+                                   eg if endif while-wend {} etc
+ 
+ quit               : end of execution or close gsh session.  
+                      gsh shells/scripts return values in global variables
+
+ Global Commands/Functions/Classes :
+ 
+ Get <Command> <Command> ...           list of additional commands  to be loaded these are complete modules having many functions
+                                         only the provided command name may be called from the command line.
+                                         Command may be a file name or filename and path
+                                         as a file "/usr/bin/mycommand" or CommandName which is loaded from ~/vars
+                                         The interface entry point is the function with the same name as command
+ 
+ Edit class|function|variable          edit or create a class,function,string or string[] variable for your environment
+                                       starts the editor defined in the $editor global variable
+                                       classes and functions become part of the image and are linked to commands as needed
+                                       Examples:
+                                           sub test() is defined then 'edit test' will allow you to change this function
+                                           class test2 is defined then 'edit test2' will allow you to change this
+                                           $h = ["ddd","dddd"] then edit this like 'edit $h'
+                                           $h = "djjdjdjddj"  then edit this like 'edit $h' the shell knows the base type and
+                                                              will save it in the same form
+                                                              
+ @GlobalVariableName(don't include $) 	This will execute the content of the variable as a program and place the output
+                                      	into the current program line. Sort of self modifying code.
+                                      	eg. $j = "Print \"\"hello\"\"" _. this returns "hello"
+                                          ? @j -> this prints   hello
+                                          
+ $parameters                          	This will contain all the parameters passed to the @variable call 
+                                      	eg $j = "Print $parameters[0]"
+                                         ? @j("hello") -> prints hello
+ 
+ Sub,function,procedure and class      Each are all compiled immediatly after creation. If used as a command then they are executed
+                                       in the context of the current shell they are loaded as plugins to the shell.
+                                       if used as functions then they execute in the context of the block or app executed
+                                       
+onstart()                              This function is run when the gambas shell starts in interactive mode
+                                       it may be changed using 'edit onstart' any valid gambas code may be used here
+                                       
+*************************************************************************************************
+

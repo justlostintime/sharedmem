@@ -1,0 +1,72 @@
+Description
+ 	Shared memory is used to transfer data between tasks in gambas without using kernel buffer transfers and copies. Memory is accessed and modified directly by each task.
+ 	information is available and shared by all tasks as soon as it is changed. The access to each part of shared memory variables is protected form concurrent chanes by semaphor locks.
+ 	all tasks and objects can request to be notified of changes in real time.
+ 	
+Implementation
+
+  SharedMem and MEM are implemented as class static functions
+
+	Programmers reserve a section of shared memory be writing the ShareMem.Begin(ChunkLength) Chunklength can be any size supported by local os. This cause the mmap of a section of shared memory
+	When the allocated section of Memory is used up by variables then a new chunk will be allocated automatically.
+	When the program is closing or ending the programmer will call the SharedMem.end() function to release all mmapped memory segments.
+	
+	Shared memory can be saved and loaded by using the SharedMem.Begin(fileName) and SharedMem.end(fileName). These cause the details like chunk length, all named variables  and parameters to be saved and loaded
+	when called.
+	
+	Programmers create shared variables by using SharedMem["MyVariable"] = anything. The datatype of the variable is fixed until the variable is released by the SharedMem.Free("myVariable")
+	Case matters in variable names. 
+	
+	When variables are created or released all referring tasks are notified of the change and syncronized. 
+	
+	Upon creation the variable is available to all tasks created by the parent application.
+	
+	Tasks can request notification of changes to a shared variable by using the SharedMem.NotifyChange("MyVariable",objectRequestingNotify, optional timeout, Method to call)
+	
+	NotifyChange(Symbol As String, NotifyObject As Object, Optional iTimeOut As Long = 0, FunctionName As String = "") As Boolean
+	
+	This returns  true if it worked. Timeouts can be -1 = notify of every change forever, 0 = one shot notify of next change, > 0 = one shot notify only before timeout
+	
+	The function name defaults to MyVariable_changed(value as variant). this may be over ridden by an explicit function passed at creation of notify
+	Notify funtion are executed in real time thru a signal 31. So should do as little as possible when called.
+	
+	The object [passed ] is ussually ME, but can be any object.
+	
+	Notify can be cancelled for a variable by using the SharedMem.NotifyCancel("MyVariable",objectWaiting).
+	NotifyCancel(Symbol As String, NotifyObject As Object)
+	
+	It should be noted that any number of objects may wait for a change, as well as any number of tasks and task objects. within the Parent and child processes.
+	
+	Storing and loading variables and using variables
+	
+	Individual variables may be saved and stored to disk files. The default save location is /home/username/vars/variable
+	
+	This is dome with the SharedMem.WriteVarTo("MyVar",Optional filename) and SharedMem.ReadVarFrom("MyVar", Optional fileName)
+	
+	Any Variable may be saved, When loading a variable it is created from the file, if a variable of the same name exists it is deleted and replaced by the new one.
+	
+  The actual storage location pointer is available for all variables using the SharedMem._varptr("MyVariable")
+  
+  The length of a variable can be accessed using the SharedMemory._sizeof("MyVariable")
+  
+  Elements of array variable me be directly accessed and set using the subscript notation only simple datatype and not strings are supported at this time
+  To get or set an array element use the following notation
+  
+  SharedMem["MyArray"] = [1,2,3,4,5,6,7,8,9,0]
+  a = SharedMem["MyArray",2]
+   a is set to 2
+  SharedMem["MyArray",2 ] = 34
+  or
+  inc SharedMem[MyArray,2]
+  
+  Only single dimention arrays are supported
+  
+  Sample program
+  
+  
+  
+  
+  
+  
+	
+	
