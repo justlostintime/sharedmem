@@ -1,0 +1,38 @@
+' Gambas module file
+
+Export
+Extern strncpy(dest As String, src As String, count As Integer) As Pointer In "libc:6"
+Extern memcpy(dest As Pointer, src As Pointer, count As Integer) As Pointer In "libc:6"
+
+Public Sub str(Var As String) As Pointer
+    Return strncpy(Var, Var, 0)
+End
+
+Public Sub Array(var As Object) As Pointer
+  
+  Return var.data
+  
+End
+
+Public Sub Object(var As Object) As Pointer   ' this function allocates memory blocks and creates a static copy of the object data to pass to a c function
+  
+  Dim fLength As Integer
+  Dim mFile As File
+  Dim mMemPtr As Pointer
+
+  mFile = Open Null For Write
+  Write #mFile, var As Object
+  fLength = Seek(mFile)
+  Close mFile
+  
+  mMemPtr = Alloc(fLength)
+  mFile = Memory mMemPtr For Write
+  Write #mFile, var As Object
+  Close mFile
+  
+  'Debug mem.DumpMem(mMemPtr, fLength, "MEM" & Object.Class(var).Name)
+  Return mMemPtr
+  
+End
+
+

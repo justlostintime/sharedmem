@@ -1,0 +1,265 @@
+' Gambas class file
+
+Export
+'Fast Unsafe
+
+Private WaitQueue As Variant[] = New Variant[]        ' we will queue wait requests here
+Private InitSignal As Integer = 0                     ' force the init on first call of wait
+Private PidList As Mem                                ' pointer to shared memory
+Private Const pidlistlen As Integer = 500              ' Number of entries in the list
+Private Const ChangeSignal As Integer = 31
+
+Public Struct WaitHeader
+    pid As Integer
+    OldTime As Float
+    timeout As Long
+    sym As SharedMemSymbol
+    CallBack As Object
+    CallBackClass As String
+    Method As String
+End Struct
+
+Extern signal(sig As Integer, sighandler As Pointer) As Pointer In "libc:6"
+Extern sKill(sigpid As Integer, Sig As Integer) As Integer In "libc:6" Exec "kill"
+Extern getpid() As Integer In "libc:6"
+Extern sched_yield() As Integer In "libpthread:0"
+
+Public Sub GetWhoWaiting(sym As String) As String
+  Dim result As String = " "
+  result = "\n  [ Timeout, Last Write Time, PID of requesting Task, Callback Method,  Object Class Name ]"
+  For Each s As Waitheader In WaitQueue
+    If s.sym.symname = sym Then
+      result &= Subst("\n  [ &1, &2, &3, &4, &5 ]", CStr(s.timeout), CStr(s.oldtime), CStr(s.pid), s.method, s.CallBackClass)
+      Break
+    Endif
+  Next
+  
+  If result = "" Then result = "\n  [ UnKnown timeout, UnKnow last Time, UnKnown Pid, Unknown Method, Unknown Object]"
+  
+  Return result
+End
+
+
+  'NotifyChange(Symbol As String, NotifyObject As Object, Optional iTimeOut As Long = 0, FunctionName As String = "") As Boolean
+  ' timeout can be  = 0 = wait forever until first occurance          call _change      
+  '                 < 0 = notify me everytime a location changes      call _change
+  '                 > 0 wait for timeout and                          call _nochange
+  ' call function names can be overridden by providing function name
+  ' waiting for a timeout is very slow and you must execute a wait in your bg task to dispatch the timeout
+Public Sub NotifyCancel(Symbol As String, NotifyObject As Object)
+  
+  Dim MyWait As WaitHeader
+  Dim i As Integer = 0
+  For Each mywait In WaitQueue
+    If mywait.CallBack = NotifyObject And If mywait.sym.SymName = symbol Then
+      WaitQueue.Remove(i)
+      MyWait.sym._ClearWait()
+      Break
+    Endif
+    Inc i
+  Next
+  
+End
+
+Public Sub _new()
+  'Print "init wait queue"
+  WaitQueue = New Variant[]
+  SetSignal()
+ 
+End
+
+Public Sub reset()
+  
+   WaitQueue = New Variant[]
+  
+End
+
+Private Sub findpid(pid As Integer) As Integer
+  
+  For i As Integer = 0 To pidlistlen
+    If PidList[i * SizeOf(gb.integer), gb.integer, True] = pid Then Return i
+  Next
+  Return -1
+End
+
+Private Sub addpid(pid As Integer)
+  
+  If findpid(pid) >= 0 Then Return
+  Dim i As Integer = findpid(0)
+  If i >= 0 Then
+    PidList[i * SizeOf(gb.integer), gb.integer, True] = pid
+    Return
+  Endif
+  Error.Raise("Out of pid slots")
+  
+End
+
+Private Sub removepid(pid As Integer)
+  
+  Dim i As Integer = findpid(pid)
+  If i >= 0 Then PidList[i * SizeOf(gb.integer), gb.integer, True] = 0
+  
+End
+
+
+Public Sub _begin() ' we will allocate a fixed table of pids to be used for notification
+  With sharedmem
+  
+  Dim memoryloc As Pointer
+  
+  If Not .Exist("notifylist") Then 
+      memoryloc = .ShmAlloc(PidListLen * SizeOf(gb.integer) + SizeOf(gb.integer) + .AllocHeaderLen)
+      .["notifylist"] = memoryloc
+      PidList = New Mem(.UserMem.AddrData(memoryloc) + .AllocHeaderLen)
+  Else
+      If IsNull(PidList) Then PidList = New Mem(.UserMem.AddrData(.["notifylist"]) + .AllocHeaderLen)
+  Endif
+  
+ ' addpid(Application.id) 
+  
+End With
+End
+
+
+Public Sub Dofree()
+ 
+ removepid(Application.id)
+ 
+End
+
+Private Sub SetSignal()
+
+    InitSignal = getpid()
+    signal(ChangeSignal, _signal)
+
+End
+
+Public Sub dispatch()
+Dim result As Integer 
+For i As Integer = 0 To pidlistlen
+   Dim CurrentPid As Integer = PidList[i * SizeOf(gb.integer), gb.integer, True]
+   If CurrentPid > 0 Then
+      'Error "Signaling PID="; CurrentPid
+      result = sKill(CurrentPid, ChangeSignal)
+      'Try Signal.send(CurrentPid, ChangeSignal)
+      'If Error Then ' remove any old pids from the list
+      If result <> 0 Then
+         'Error "Error sending signal:"; System.Error
+         PidList[i * SizeOf(gb.integer), gb.integer, True] = 0
+      Endif
+      sched_yield()
+   Endif
+Next
+
+End
+
+Public Sub NotifyChange(Symbol As String, NotifyObject As Variant, Optional iTimeOut As Long = 0, FunctionName As String = "") As Boolean
+Dim FuncName As String = FunctionName
+Dim MyWait As WaitHeader = New WaitHeader
+
+If Not SharedMem.Exist(Symbol) Then
+      Error.Raise("Wait Change: Symbol not found : " & Symbol)
+      Return False
+Endif
+
+If FuncName = "" Then FuncName = Symbol & "_changed"
+Dim mClass As Class = Null
+
+Dim cClass As Class
+For Each cClass In classes 
+              If NotifyObject = cClass Then
+                mClass = cClass
+                Break
+              Endif
+Next
+
+If IsNull(mClass) Then
+  mClass = Object.class(NotifyObject)
+Endif
+
+MyWait.CallBackClass = mClass.name
+
+If Not mClass.Exist(FuncName) Then
+  Error.Raise("Call Back Function (" & FuncName & ") not found")
+  Return False
+Endif
+
+MyWait.sym = SharedMem.SymbolTable[Symbol]
+MyWait.CallBack = NotifyObject
+MyWait.Method = FuncName
+MyWait.pid = getpid()
+
+MyWait.timeout = iTimeout
+
+WaitQueue.Add(MyWait)
+
+MyWait.sym._wait()
+MyWait.sym.setLastWrite()
+MyWait.OldTime = Now + Timer 'MyWait.sym.getLastWrite()
+
+If findpid(MyWait.pid) < 0 Then
+  addpid(MyWait.pid)
+Endif
+'Error "Notify change for :"; Symbol;; "For PID="; MyWait.pid
+Return True
+
+Catch 
+    Error.Raise("Notify Change Error pid = " & Str(getpid()) & " : " & Error.text & " " & Error.where)
+    Return False
+    
+End
+
+Public Sub _signal(Sig As Integer) ' signal handler for waiting
+
+  Dim MyWait As WaitHeader 
+  Dim Counter As Integer = 0
+  Dim vReturn As Variant
+
+  If Sig <> ChangeSignal Then Return
+  'Error "recieved signal! pid="; application.id
+  
+  If WaitQueue.count = 0 Then Return
+  'Error "Wait Queue not empty!"
+  
+  For counter = WaitQueue.max DownTo 0
+    
+     mywait = WaitQueue[counter]
+     
+     If MyWait.pid <> Application.id Then
+      WaitQueue.Remove(Counter)
+      Continue
+     Endif
+      
+    Dim oldtime As Float = MyWait.OldTime
+    Dim writetime As Float = MyWait.sym.getLastWrite()
+    
+    'Error "Signal Times ";; oldtime;; "<>";; MyWait.sym.getLastWrite()
+    
+     If OldTime = writetime Then 
+        Continue
+     Endif 
+     
+     MyWait.oldtime = writetime
+     
+    'Error "signal : Dispatching updated info";; MyWait.Method
+     
+     vReturn = MyWait.sym.ShmRead()
+     
+     Object.Call(MyWait.CallBack, MyWait.Method, [vReturn, MyWait.sym.SymName])
+     
+    If MyWait.timeout >= 0 Then 
+
+        MyWait.sym._ClearWait()
+        WaitQueue.Remove(Counter)    ' this sets it for delete
+        
+     Endif
+     
+  Next
+  
+  'If WaitQueue.Length = 0 Then Signal(31, zValue)
+  
+  Catch 
+    Error.Raise("SharedMem Changed _Signal pid = " & Str(getpid()) & Error.text & " " & Error.where)
+    Stop
+  
+End

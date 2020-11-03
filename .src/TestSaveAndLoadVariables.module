@@ -1,0 +1,124 @@
+' Gambas module file
+
+Public Sub main()
+  Dim iString As String[]
+  Dim b As Variant
+  
+  Print "Begin Test Save Load ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  With SharedMem
+  .begin(12800)
+  
+  .["TheInteger[]"] = [0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 100]
+  .["TheString[]"] = ["sfsdfsdfsdf", "sdfsergtergtergergergergerggrergerggerggrggr", "sdgdgdgsgddgsdgsgdsdgsdggsdsdgsdgsdgsgdsgd"]
+  .["TheObject"] = New SharedObjectExample
+  .["TheObject2"] = New SharedObjectExample
+  .["TheString"] = "abc"
+  .["TheString"] = ".Add................................\nabcdefghijklmnopqrstuvwxyz0123456789"
+  .["TheString"] = "Sub aaa() as funcy\nprint \"hello\"\n goto 100"
+  
+  
+  .TheNumber = 23
+  .TheNumber = "23"
+  Print "TheNumber as a string "; .TheNumber
+  .TheNumber = 23
+  Print "TheNumber as a number "; .TheNumber
+  
+  .End("/tmp/file1")
+  Print "Save Load Memory test complete"
+  
+  .begin("/tmp/file1")
+  '._print()
+  Print .["TheString"]
+  
+  Print "TheInteger = [";
+  For Each i As Integer In .["TheInteger[]"]
+   Print i;; ",";;
+  Next
+  Print "]"
+
+  iString = .["TheString[]"]
+  For Each j As String In iString
+    Print j
+  Next
+  
+  Print .["TheObject"]()
+  Print .["TheObject2"]()
+  
+  Print "Save and load a simple string *******************************************************"
+  .WriteVarTo("TheString")
+  Print "Before Load   :"; .["TheString"]
+  .ReadVarFrom("TheString")
+  Print "After Loading :"; .["TheString"]
+  
+  Print "Save variable single with named file begin *******************************************"
+  .WriteVarTo("TheObject", "/tmp/file2")
+  .ReadVarFrom("TheObject2", "/tmp/file2")
+  Print .["TheObject2"]()
+  
+  
+  
+   Print "Save Variable default naming *****************************************"
+    .WriteVarTo("TheObject")
+  .ReadVarFrom("TheObject")
+   Print .["TheObject"]()
+  
+    .["TheObject"] = .["TheObject"].Set(["a", "b", "c"])
+'  .["TheObject"] = .["TheObject"].SetThisNumber(8)
+  
+    Dim a As New SharedObjectExample
+    Dim c As SharedObjectExample
+    a.set(["a", "b", "c"])
+    Print a()
+    
+    .["Object3"] = a
+    
+    c = .["Object3"]
+    
+    Print "B="; c()
+    Print .["Object3"]()
+  
+    .ReadVarFrom("TheObject2", "TheObject")
+    Print .["TheObject"]()
+    Print .["TheObject2"]()
+    Print "\n Class tostring printed"
+    Print .TheObject2.ToString()
+  
+    Print "Test Save load array strings type ================================================"
+    .WriteVarTo("TheString[]")
+    .free("TheString[]")
+    .ReadVarFrom("TheString[]")
+  
+    iString = .["TheString[]"]
+    For Each j As String In iString
+     Print j
+    Next
+
+    .TheString = "This is a test of the whole darn suite"
+    
+    .End(".")
+  
+  '============================================================
+  .Begin(".")
+  Print "Saved string :"; .TheString
+  Print "Saved Number :"; .TheNumber
+  .End()
+  '=======================================================================
+Print "Test Named Shared Memory====================================================================="
+.BeginNamed("junk", 128000, True)
+.["test"] = "yesy"
+
+.End("junk")
+
+.BeginNamed("junk", 128000, True)
+If Not .exist("test") Then .Merge("junk")
+
+Print "Named mem saved test=";; .test
+
+.End()
+ 
+
+  
+  End With
+    Print "End   Test Save Load ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  Quit 0
+End

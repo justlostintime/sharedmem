@@ -1,0 +1,40 @@
+' Gambas module file
+
+Public Sub main()
+  
+With SharedMem
+  
+  .Begin(128000)
+  
+  
+      .["This var"] = 100
+      .["ThatVar"] = "this String"
+      Print .VariableList()
+  .End(".")
+  
+  .Begin(".")
+  
+    Print .VariableList()
+    
+    .ClearMem()
+    
+    Print "["; .VariableList(); "]"
+    
+    .["Boss"] = "mean"
+    .["Sassy"] = "girl"
+    
+     Print "["; .VariableList(); "]"
+     
+     .Sync(".")
+     
+     .ClearMem()
+       Print "["; .VariableList(); "]"
+     .merge(".")
+        Print "["; .VariableList(); "]"
+  .End(".")
+  
+  
+  
+End With
+  
+End

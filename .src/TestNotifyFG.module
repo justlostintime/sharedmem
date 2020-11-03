@@ -1,0 +1,99 @@
+' Gambas module file
+
+Public Const WNOHANG As Integer = &h00000001
+Public Const WUNTRACED As Integer = &h00000002
+Public Const WSTOPPED As Integer = &h00000002
+Public Const WEXITED As Integer = &h00000004
+Public Const WCONTINUED As Integer = &h00000008
+Public Const WNOWAIT As Integer = &h01000000         ' / * Don 't reap, just poll status.  */
+
+Public Const __WNOTHREAD As Integer = &h20000000     '/ * Don 't wait on children of other threads in this group */
+Public Const __WALL As Integer = &h40000000          '/ * Wait On all children, regardless Of type * /
+Public Const __WCLONE As Integer = &h80000000        '/ * Wait only On non - SIGCHLD children * /
+
+'/ * First argument To waitid: * /
+Public Const P_ALL As Integer = 0
+Public Const P_PID As Integer = 1
+Public Const P_PGID As Integer = 2
+
+Extern waitpid(pid As Integer, state As Pointer, flags As Integer) As Integer In "libc:6"
+Extern getpid() As Integer In "libc:6"
+
+
+Public Sub main()
+  Dim MyTask As TestNotifyBG
+  Dim MyObject As TestNotifyObject
+  Dim MyObjects As Variant[] = New Variant[] 
+  Dim MyStatus As Integer = 0
+  Dim MyResult As Integer = 0
+  Dim listing As File
+  listing = Open User.home &/ "Lofile" For Write Create
+  
+  Output To listing
+  
+  With SharedMem
+
+  SharedMem.begin(120000)
+   
+  Error "FG : Testing Change notify Function Pid="; Application.id;; "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+  Print "BG : Writing to log file \"/tmp/gambas.BGFile.txt\""
+  
+  SharedMem["WaitTest"] = 1
+  
+  For i As Integer = 0 To 50
+   MyObject = New TestNotifyObject ' this will just monitor the value
+   MyObjects.Add(MyObject)
+   Wait
+  Next
+  
+  'NotifyChange(Symbol As String, NotifyObject As Object, Optional iTimeOut As Long = 0, FunctionName As String = "") As Boolean
+  ' timeout can be  = 0 = wait forever until first occurance          call _change      
+  '                 < 0 = notify me everytime a location changes      call _change
+  '                 > 0 wait for timeout and                          call _nochange
+  ' call function names can be overridden by providing function name
+  ' waiting for a timeout is very slow and you must execute a wait in your bg task to dispatch the timeout
+  
+  SharedMem.NotifyChange("WaitTest", Me, -1) ' when we wait for a symbol to change the function called is the symbolname + _changed
+ 
+  MyTask = New TestNotifyBG
+  MyTask.Cycles = 200
+  Wait
+  
+  MyResult = waitpid(-1, VarPtr(MyStatus), WNOHANG)
+  Print "MyStatus = "; Bin(MyStatus); " MyResult = "; MyResult; " Pid = "; MyTask.Handle; " MyPid = "; getpid(); " Last Error = "; System.error
+  
+  Print "INC wait test, MyTask = "; MyTask
+  Inc SharedMem["WaitTest"]
+  
+  Wait 0.5
+ 
+  Print "New Value of ", SharedMem["WaitTest"]
+  
+  Print "Wait for mytask to be done"
+  
+  ' 
+  ' While True
+  '    MyResult = waitpid(-1, VarPtr(MyStatus), 0)
+  '    Print "MyStatus = "; Bin(MyStatus); " MyResult = "; MyResult
+  '    If MyResult > 0 Then Break
+  '    Wait 0.5
+  ' Wend
+  
+  MyTask.Wait()
+  
+  .WaitTest = -1
+  
+  SharedMem.NotifyCancel("WaitTest", Me)
+  SharedMem.End()
+  
+ Error "FG : ending Change notify Function PID="; Application.id;; "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+ 
+ End With
+ 
+End
+
+Public Sub WaitTest_changed(Newvalue As Variant, symname As String)
+  
+  Print "FG Notified of Shared memory update", NewValue
+  
+End

@@ -1,0 +1,46 @@
+' Gambas class file
+
+Inherits Task
+Public MyFile As File 
+Public Cycles As Integer = 10
+
+Public Sub main() As Integer
+   MyFile = Open "/tmp/gambas.BGFile.txt" For Write Create
+   
+   Print #MyFile, "BG: Testing Change notify Function ", Application.id
+     
+   SharedMem.NotifyChange("WaitTest", Me, -1)
+   
+   SharedMem["WaitTest"] += 1
+   Print #MyFile, "BG: Start count at "; SharedMem["WaitTest"];; "for";; Cycles;; "Cycles"
+   Wait 1
+   
+   For i As Integer = 1 To Cycles
+     Print #MyFile, " Inc the counter "; i
+     Inc SharedMem["WaitTest"]
+     Wait 0.01
+   Next
+   
+   Print #MyFile, "BG: Exit"
+   Wait 0.5
+   
+   SharedMem.NotifyCancel("WaitTest", Me)
+   
+   Print "BG Exit"
+   
+   Return 0
+   
+Catch
+  
+  Print #MyFile, "BG: Error ", Error.text, Error.where
+  Quit 0
+  
+End
+
+Public Sub WaitTest_changed(NewValue As Variant)
+  
+  'Print #myFile, "BG: wait test changed ", NewValue
+   Print "BG: wait test changed ", NewValue
+  
+End
+

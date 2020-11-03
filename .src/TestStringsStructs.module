@@ -1,0 +1,85 @@
+' Gambas module file
+
+Public xxxx As String = "sasdfdsfsdfsdfsdfsdfsdfsdfsdfsdfsdfsdfsdfsdfsdfsdfsdsdd"
+
+Public Struct MyStruct
+  int As String
+  str As Integer
+  bong As Integer[] 
+End Struct
+
+
+Public Sub main()
+
+   With sharedmem
+   .begin(128000)
+  
+    Execute()
+  
+   .End()
+   End With 
+  
+End
+
+Public Sub Execute()
+  
+   With sharedmem
+  Dim aStruct As New MyStruct
+  Dim bObject As New SharedObjectExample
+  Dim sOne, sTwo As String
+  Dim pOne As Pointer
+  Print "Begin TestStringStructs >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+  
+
+  
+  .["TheStrings"] = ["asdasdasdasdasdd", "asdasdasasdasdasasdasdasd", "qweqweqweqwewewwwqwe"]
+  aStruct.int = "Test String"
+  aStruct.str = &hffffffff
+  aStruct.bong = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+  
+  SharedMem["struct"] = aStruct
+  
+  
+  For Each i As String In .["TheStrings"]
+    Print i
+  Next
+  
+ .["string1"] = "abcdefgh"
+ 
+  pOne = .RealAddress("string1")
+  sTwo = String(1, String@(pOne))
+  sOne = Mid(String@(.RealAddress("string1")), 2, 2)
+  Print .["string1"]; " = "; sOne
+  Print " Indirect = "; sTwo
+  Print " Ppointer = "; pOne 
+  Print " STwo varptr=("; ptr.str(stwo); ")", String@(ptr.str(stwo)), sTwo
+  Dim pPointer As Pointer = ptr.object(aStruct)
+  Print " MyStruct as pointer = "; pPointer 
+  Free(pPointer)
+  pPointer = ptr.Object(bObject)
+  Print " MyObject as pointer = "; pPointer
+  Free(pPointer)
+  
+  
+ .["string1"] = "axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  Print .["string1"], .RealAddress("string1"), String@(.RealAddress("string1"))
+  
+ .["string1"] = "addddddddddddddd"
+  Print .["string1"], .RealAddress("string1"), String@(.RealAddress("string1"))
+  
+ .["string1"] = "affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  Print .["string1"], .RealAddress("string1"), String@(.RealAddress("string1"))
+  
+  'Print "Shared mem struct =";.["struct"]; " a ="; Object.Address(a)
+  ._print()
+ 
+
+  Print "End   TestStringStructs >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+ 
+  End With
+  
+  Catch
+    Print Error.Text, Error.Where
+    
+End
+

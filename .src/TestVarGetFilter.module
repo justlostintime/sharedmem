@@ -1,0 +1,33 @@
+' Gambas module file
+
+Public Sub main()
+  
+  With SharedMem
+    .Begin(26000)
+    
+    .["this"] = "that"
+    .["sub.fast"] = "what"
+    .["past"] = "past"
+    
+    Dim l As String[] = .Variables("sub.*")
+    lprint(l)
+    Print "all"
+    l = .Variables()
+    lprint(l)
+
+    .End()
+    
+  End With
+  
+End
+
+Sub lprint(list As String[])
+  
+  For Each s As String In list
+    Print s
+  Next
+  
+End
+
+
+

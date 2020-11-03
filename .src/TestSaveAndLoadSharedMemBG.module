@@ -1,0 +1,43 @@
+' Gambas module file
+
+Public Sub main()
+Print "Begin test"
+SharedMem.beginnamed("BriBlock", 128000)
+Dim MySync As Integer = 1
+
+SharedMem["SyncMe"] = 0
+SharedMem["TestString"] = "Hello"
+
+While SharedMem["TestString"] <> "quit"
+		While SharedMem["SyncMe"] < MySync
+				Wait
+		Wend
+		Inc MySync
+		SharedMem["Result"] = SharedMem["TestString"]
+		Inc SharedMem["SyncYou"]
+		
+Wend
+Print "Completed Part One"
+With SharedMem
+      Dim pSyncMe As Pointer = ._varptr("SyncMe")
+      Dim pSyncYou As Pointer = ._varptr("SyncYou")
+      Dim pTestString As Pointer = ._varptr("TestString")
+      Dim pResult As Pointer = ._varptr("Result")
+      
+      .usermem[pTestString] = "Ready"
+Dim j As Integer = 0
+While .usermem[pTestString] <> "quit" And j < 3
+    Dim i As Integer = 0 
+		While .usermem[pSyncMe] < MySync And i < 20
+				Wait 0.01
+				Inc i
+		Wend
+		Inc MySync
+		.usermem[pResult] = .usermem[pTestString]
+		Inc .usermem[pSyncYou]
+		Inc j
+Wend
+Print "end test"
+End With
+SharedMEm.end()
+End

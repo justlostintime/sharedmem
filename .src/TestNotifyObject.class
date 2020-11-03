@@ -1,0 +1,25 @@
+' Gambas class file
+
+Private Ocount As Integer = Object.Class(Me).count
+Private sName As String = Object.Class(Me).Name & Str(Ocount)
+
+
+Public Sub _new()
+    
+  SharedMem.NotifyChange("WaitTest", Me, -1)
+  
+End
+
+
+Public Sub WaitTest_changed(Newvalue As Variant, symname As String)
+  
+  Print sName; " Got signal variable changed = "; Newvalue
+  
+End
+
+Public Sub _free()
+  
+  Print sName;; "Ending"
+  SharedMem.NotifyCancel("WaitTest", Me)
+  
+End

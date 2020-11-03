@@ -1,0 +1,34 @@
+' Gambas module file
+
+Public Sub main()
+  
+  With sharedmem
+  
+  .Begin(128000)
+  
+  .["$execprog"] = "print \"Gambas Shell \""
+  .["$prompt"] = "->"
+  .["$result"] = "OK"
+  .["$maxhistory"] = 300    ' define the max history length
+  .["$historycurrent"] = 0  ' defines the current history level
+  .["$pwd"] = application.dir
+  .["$history"] = ["!ls"]
+  .["$editor"] = "/usr/bin/vi"
+  .["$env"] = ["PWD=" & .["$pwd"], "LastPlace=EndOfTheEarth"]
+  .PrintSummary()
+  .["$history"] = ["!ls", "!ls"]
+  .PrintSummary()
+  .["$execprog"] = "asdddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  .PrintSummary()
+  .["$history"] = ["!ls", "Dogs", "Cats", "Rats"]
+  .PrintSummary()
+  .["$history"] = ["!ls", "Dogs", "Cats", "Rats", "Elephants"]
+  
+  
+  ._print()
+  
+  .End()
+  
+ End With
+  
+End

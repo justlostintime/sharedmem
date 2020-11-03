@@ -1,0 +1,34 @@
+' Gambas class file
+
+Inherits Task
+Public MySymbol As String = ""
+Public MyInc As Integer = 1
+Public MyDelay As Float = 0.8
+
+Public Sub main()
+
+  Wait 1
+
+  SharedMem.NotifyChange(MySymbol, Me, -1, "Counter_changed")
+  
+  Print MySymbol; " running "; Application.ID; " Symbol="; MySymbol
+  Wait
+  
+  While True
+    'Print "inc " & MySymbol
+    SharedMem[MySymbol] += MyInc
+    'Print "Inc done " & MySymbol
+    Wait MyDelay
+  Wend
+  
+  Catch
+    Print Error.text
+End
+
+Fast Unsafe Public Sub Counter_changed(Val As Variant)
+  
+  'Print "BG :" & MySymbol & " id=", Application.Id, " Val= "; val
+  
+End
+
+

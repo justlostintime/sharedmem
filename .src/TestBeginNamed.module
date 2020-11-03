@@ -1,0 +1,14 @@
+' Gambas module file
+
+Public Sub main()
+  
+  With SharedMem
+    .BeginNamed("/testthis", 1512000)
+    
+    Dim a As String[] = ["a", "b", "c"]
+    .a = a
+    
+    .End(".")
+  End With
+  
+End

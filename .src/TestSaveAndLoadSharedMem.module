@@ -1,0 +1,180 @@
+' Gambas module file
+
+' Fast Unsafe
+
+Extern sched_yield() As Integer In "libpthread-2.27"
+
+Public Sub main()
+ 
+  Print "Test Save and Load Shared memory block ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  SharedMem.begin(250000) ' create a fixed shared memory segment
+  
+  SharedMem["MyVar1"] = 1
+  SharedMem["MyVar2"] = CLong(20)
+  SharedMem["MyAry1"] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4]
+  SharedMem["MyAry2"] = ["adsadsasd", "asdasdasdwrwwqwqweqweqweqweqweqwewe", "sfeewetrergfweqwegfergerergergergerg", "34t34t3t34t34t34tt434t3t4t3t"]
+  SharedMem["MyVarAry1"] = [SharedMem["MyVar1"], SharedMem["MyVar2"], SharedMem["MyAry1"]]
+  'Print "Before Save Default save = ", SharedMem["MyVar1"], SharedMem["MyVar2"], SharedMem["MyAry1"][1], SharedMem["MyAry2"][1], SharedMem["MyVarAry1"][2][0]
+  Dim VarList As String = SharedMem.VariableList()
+  'Print " Variable name ["; SharedMem.VariableList(); "]"
+  
+  
+  SharedMem.End(".")  ' save to default file
+
+  
+  SharedMem.begin()   ' load from default file
+  
+ ' Print "After Restore default save" & SharedMem["MyVar1"], SharedMem["MyVar2"], SharedMem["MyAry1"], SharedMem["MyAry2"], SharedMem["MyVarAry1"]
+  'Print " Variable name ["; SharedMem.VariableList(); "]"
+  
+  SharedMem.End()     ' stop and dont save the memory
+  
+  SharedMem.begin(160000)  ' define a new block of memory
+  SharedMem["My2Var1"] = 1
+  SharedMem["My2Var2"] = CLong(20)
+  SharedMem["My2Ary1"] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4]
+  SharedMem["My2Ary2"] = ["adsadsasd", "asdasdasdwrwwqwqweqweqweqweqweqwewe", "sfeewetrergfweqwegfergerergergergerg", "34t34t3t34t34t34tt434t3t4t3t"]
+  SharedMem["My2VarAry1"] = [SharedMem["My2Var1"], SharedMem["My2Var2"], SharedMem["My2Ary1"]]
+  'Print "Before Save named save  ", SharedMem["My2Var1"], SharedMem["My2Var2"], SharedMem["My2Ary1"], SharedMem["My2Ary2"], SharedMem["My2VarAry1"]
+  
+  Dim Var2List As String = SharedMem.VariableList()
+  
+  'Print " Variable name ["; SharedMem.VariableList(); "]"
+  
+  SharedMem.End("MyMemory.mem")
+  
+  SharedMem.begin()       ' load the default memory
+  
+  'Print "After Restore default save reloaded" & SharedMem["MyVar1"], SharedMem["MyVar2"], SharedMem["MyAry1"], SharedMem["MyAry2"], SharedMem["MyVarAry1"]
+  Dim VarListReload As String = SharedMem.VariableList()
+  SharedMem["MyNewStore"] = "this string"
+  'Print "Added new variable and save memory MyNewStore ", SharedMem["MyNewStore"]
+  Dim VarCList As String = SharedMem.VariableList()
+
+  'Print " Variable name ["; SharedMem.VariableList(); "]"
+  
+  SharedMem.End(".")      ' save it to the default file
+  
+  SharedMem.begin("MyMemory.mem") ' load from other shared memory
+  
+  'Print "After Restore named save " & SharedMem["My2Var1"], SharedMem["My2Var2"], SharedMem["My2Ary1"], SharedMem["My2Ary2"], SharedMem["My2VarAry1"]
+  Dim Var2ListReload As String = SharedMem.VariableList()
+  'Print " Variable name ["; SharedMem.VariableList(); "]"
+  SharedMem.End()            ' close release shared memory
+  
+  SharedMem.Begin() ' load default file
+  
+  SharedMem.Merge("MyMemory.mem")
+  Dim VarCombined As String = SharedMem.VariableList()
+  'Print SharedMem.VariableList()
+  SharedMem.Sync()
+  
+  SharedMem.End()
+  
+  Dim NamedConsume As String = ""
+  'Print "Start consumer then press enter"
+  'Input NamedConsume
+  Dim starttime As Float
+  starttime = Timer
+  Print "Begin Task Message test "
+  If SharedMem.BeginNamed("BriBlock", 128000, True) Then
+       Dim MySync As Integer = 1
+       Dim TimeOut As Integer = 0
+       Dim loopcount As Integer = 10000
+  
+       Dim Words As String[] = ["one.....", "two.....", "three...", "four....", "five....", "six.....", "seven...", "eight..."]
+       Print "Waiting for Echo Server to start"
+       
+       While Not SharedMem.Exist("TestString")
+         sched_yield()
+       Wend
+       
+       
+  
+       SharedMem.DumpMem(Null, 300, "ServerDump")
+       'SharedMem._print()
+       'Print "Ready > begin sending"
+       starttime = Timer
+       SharedMem["SyncYou"] = 0
+       SharedMem["Result"] = "Hello"
+       
+       For j As Integer = 0 To loopcount
+ 
+          NamedConsume = Words[loopcount Mod 7]
+
+          SharedMem["TestString"] = NamedConsume
+          Inc SharedMem["SyncMe"]   ' notify other process that we sent message
+            
+          While SharedMem["SyncYou"] < mysync
+              sched_yield()
+          Wend
+          Inc MySync
+          If NamedConsume <> SharedMem["Result"] Then
+            Print "Named test Failed at count = "; loopcount
+            Break
+          Endif
+    
+       Next
+     
+      Print "Transfer complete in "; Timer - starttime; " for ("; LoopCount * 9; ") transfers cycles level 3 with mutex protection"
+      SharedMem["TestString"] = "quit"
+      Inc SharedMem["SyncMe"]
+      
+      While SharedMem["TestString"] <> "Ready"
+              sched_yield()
+      Wend
+      
+    
+      With SharedMem
+      Dim pSyncMe As Pointer = ._varptr("SyncMe")
+      Dim pSyncYou As Pointer = ._varptr("SyncYou")
+      Dim pTestString As Pointer = ._varptr("TestString")
+      Dim pResult As Pointer = ._varptr("Result")
+      Dim iSyncMe As Integer
+      
+      loopcount = 10000
+      starttime = Timer
+      For i As Integer = 1 To loopcount 
+ 
+          NamedConsume = Words[loopcount Mod 7]
+          Dim sTest As String = .usermem[pTestString]
+          .usermem[pTestString] = NamedConsume
+          Inc .usermem[pSyncMe]                         ' notify other process that we sent message
+            
+          While .usermem[pSyncYou] < mysync
+              sched_yield()
+          Wend
+          Inc MySync
+
+          If NamedConsume <> .usermem[pTestString] Then
+            Print "Named test Failed at count = "; loopcount
+            Break
+          Endif
+    
+      Next
+       .UserMem[pTestString] = "quit"
+       Inc .UserMem[pSyncMe]
+       End With
+       Print "Transfer complete in "; Timer - starttime; " for ("; loopcount * 9; ") cycles level 1 with no mutex protection"
+       SharedMem["TestVar"] = "This string"
+       Dim NamedTest As String = SharedMem["TestVar"]
+  
+       SharedMem.End()
+  Endif
+  
+  Print "Test Reload Section 1    ", If(VarList = VarListReload, "Pass", "Fail")
+  Print "Test Reload Section 2    ", If(Var2List = Var2ListReload, "Pass", "Fail")
+  Print "Test Reload Differential ", If(Var2ListReload = VarListReload, "Fail", "Pass")
+  Print "Test After adding var    ", If(VarList = VarClist, "Fail", "Pass")
+  Print "Test Merge  variables    ", If(VarClist & " , " & Var2List = VarCombined, "Pass", "Fail")
+  Print "Test Named Shared Mem    ", If(NamedTest = "This string", "Pass", "Fail")
+  
+  
+  Print "Test Save and Load Shared memory block ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  Catch
+    Print "Failed Error = ", Error.text, Error.where
+    Print "Test Save and Load Shared memory block ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  
+End
+
+

@@ -1,0 +1,65 @@
+' Gambas class file
+
+Export
+
+Inherits Task
+
+Public BufferName As String = "buffer"
+Public ErrBuff As String = "errbuffer"
+Public HostName As String = "localhost"
+Public Port As Integer = 22
+Public Password As String = ""
+Public shmName As String = User.name & "gsh"
+Public BlockSize As Integer = 4512000
+
+
+Public Sub main()
+With sharedmem
+  
+.BeginNamed(shmName, BlockSize)
+If Not .Exist(Buffername) Then .[buffername] = ""
+
+Dim RemoteData As New SharedRemote(Hostname, password, port) As "Service"
+'RemoteData.ExecuteCommand("gsh")
+
+'RemoteData.OpenShell(BufferName)
+RemoteData.ShellLink(BufferName)
+
+.End()
+
+End With
+Catch 
+  Print "Service task error ";; Error.text;; error.where
+  sharedmem.End()
+  Error.Propagate()
+End
+
+Public Sub Service_errdata(buffer As Byte[], len As Integer)
+  With sharedmem
+    .[Errbuff] = Buffer.toString
+  End With
+End
+
+Public Sub Service_indata(buffer As Byte[], len As Integer)
+  Dim mSymbol As SharedMemSymbol
+  Dim mfile As File
+  
+  With sharedmem
+  mfile = Memory Buffer.data
+  mSymbol = New SharedMemSymbol
+  mSymbol._read(mFile, True)
+  Close mfile
+  
+  If .Exist(mSymbol.symname) Then .free(mSymbol.symname)
+  .add(mSymbol)
+  
+  End With
+End
+
+Public Sub Service_kill(data As Integer)
+  
+  Quit data
+  
+End
+
+

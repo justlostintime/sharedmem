@@ -1,0 +1,53 @@
+' Gambas module file
+
+Const LoopCount As Integer = 100000
+Public starttime As Float = 0.0
+Public rTester As Integer
+
+Public Sub main()
+  
+  Dim MyIntArray As Integer[] = New Integer[]
+  For i As Integer = 0 To 800
+    MyIntArray.Add(i)
+  Next
+  
+  Dim MyStringArray As String[] = ["asdasdsdaasd", "xcvxcvxcvxcvxcv", "rfrrervvefvefvevef"]
+  
+  SharedMem.begin(4280000)
+  Print "Begin TestSubScript <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+  
+  SharedMem["dtest"] = MyIntArray
+  SharedMem["stest"] = MyStringArray
+  
+  Print SharedMem["dtest", 4];;
+  SharedMem["dtest", 4] = 36
+  Print SharedMem["dtest", 4]
+  
+  Print "Start Write test beginning value = "; SharedMem["dtest", 9]
+  starttime = Timer
+  For i As Integer = 1 To LoopCount
+    Inc SharedMem["dtest", 9]
+  Next
+  Print "Ending time = "; Timer - starttime; " Ending value = "; SharedMem["dtest", 9]
+  
+  Print "Start Read test beginning value = "; SharedMem["dtest", 9]
+  starttime = Timer
+  For i As Integer = 1 To LoopCount
+    rTester = SharedMem["dtest", 9]
+  Next
+  Print "Ending time = "; Timer - starttime; " Ending value = "; SharedMem["dtest", 9]
+  
+  Print SharedMem["stest", 1] ' very very slow dont use if can be helped
+  
+  SharedMem._print()
+  Print "End   TestSubScript Bad <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+  SharedMem.End()
+  
+  Catch
+    Print Error.text
+    SharedMem._print()
+    Print "End   TestSubScript Good <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+    SharedMem.End()
+
+End
+

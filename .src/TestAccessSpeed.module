@@ -1,0 +1,66 @@
+' Gambas module file
+
+Public Const LoopCount As Integer = 1000000
+Private MySym As SharedObjectExample = New SharedObjectExample
+
+
+Public Sub main()
+  Dim tstart As Float
+  Dim tStop As Float
+  Dim j As Integer 
+  With sharedmem
+  Print "Begin Speed Access Test ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+  
+  SharedMem.begin(128000)
+
+Print "Set value to zero"
+  SharedMem["integer"] = CInteger(0)
+  'SharedMem._print() 
+'************************************************************************************************************************** 
+Print "Start"
+  tstart = Timer
+  For i As Integer = 0 To loopcount
+    SharedMem["integer"] = i
+    '.integer = i   ' this format adds 3 seconds to time
+  Next
+  tstop = Timer
+  Print "i = "; SharedMem["integer"]
+  Print "Loop 1 integer save test ", tstop - tstart, " loops(" & Str(LoopCount) & ") = "; SharedMem["integer"]
+  'SharedMem._print()
+  
+'************************************************************************************************************************** 
+  Print "Start"
+  tstart = Timer
+  For i As Integer = 0 To loopcount
+    'j = SharedMem["integer"]
+     j = .integer  ' adds two seconds to time
+  Next
+
+  tstop = Timer
+  Print "Loop 2 integer read test ", tstop - tstart, " loops(" & Str(LoopCount) & ") = "; SharedMem["integer"]
+  'SharedMem._print()
+'************************************************************************************************************************** 
+  Print "Start"
+  tstart = Timer
+  For i As Integer = 0 To loopcount
+    MySym.ThisNumber = i
+  Next
+  tstop = Timer
+  Print "Loop 3 integer write test ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
+'************************************************************************************************************************** 
+  Print "Start"
+  tstart = Timer
+  For i As Integer = 0 To loopcount
+    j = MySym.ThisNumber
+  Next
+  tstop = Timer
+  Print "Loop 4 integer read test ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
+  
+  Print "Number of shared variables =", SharedMem.length(), "\nSymbols list "
+  SharedMem._print()
+  
+  SharedMem.End()
+  Print "End Speed Access Test ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+  End With
+End
+

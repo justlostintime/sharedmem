@@ -1,0 +1,31 @@
+' Gambas module file
+
+Public Sub main()
+
+  Dim AClass As TestSymAsPropClass = New TestSymAsPropClass
+  Dim iArry As Integer[] = [1, 2, 3, 4, 5, 6, 7, 8]
+  
+  SharedMem.Begin(128000)
+  
+  SharedMem["ThisInt"] = [23, 4, 5, 6, 7, 8, 9, 0]
+  
+  Dim smo As SharedMemSymbol = SharedMem._Symbol("ThisInt")
+
+  SharedMem["Counter"] = CLong(0)
+  SharedMem.ThisInt = [84, 96, 43, 89, 34, 89]
+  SharedMem.ThisInt[2] += 2
+  AClass.TheAry[2] += 100
+  Print "Compare class Array to _unknown Arry -> "; AClass.TheAry[2], SharedMem.ThisInt[2]
+  Inc SharedMem.Counter
+  SharedMem.x = 1
+  SharedMem.x += 3945
+  
+  Print "Element 4 = "; SharedMem.ThisInt[4]; " Counter = "; SharedMem.Counter, SharedMem.x
+  
+  For Each i As Integer In SharedMem.ThisInt
+    Print i;;
+  Next
+  
+  SharedMem.End()
+  
+End

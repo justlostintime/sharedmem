@@ -1,0 +1,41 @@
+' Gambas module file
+
+Public Sub main()
+  
+  Print "Begin TestSetChangeLength @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+  
+  SharedMem.begin(10000000)
+  
+  SharedMem["ThisString"] = "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP"
+  SharedMem._print()
+  
+  SharedMem["ThisString"] = "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP"
+  SharedMem._print()
+  
+  SharedMem["ThisString"] = "PPPPPPPPPPPPPPPPP"
+  SharedMem._print()
+  
+  SharedMem["ThisString"] = "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPoooooooooooooooooooooooooo"
+  SharedMem._print()
+  
+  SharedMem["ThisString"] = "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP000000000"
+  SharedMem._print()
+  
+  SharedMem["ThisString"] = "P"
+  SharedMem._print()
+  
+  SharedMem["ThisString"] = "PPPPPPPPPPPPPPPPPPPPPPPPPPPPP"
+  SharedMem._print()
+  
+  SharedMem["ThisArray"] = [0, 1, 2]
+  SharedMem._print()
+  
+  SharedMem["ThisArray"] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0]
+  SharedMem._print() 
+  
+  SharedMem.End()
+  
+  Print "End TestSetChangeLength  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+  
+End
+

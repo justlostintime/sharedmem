@@ -1,0 +1,64 @@
+' Gambas module file
+
+Const LoopCount As Integer = 500
+Private starttime As Float
+
+Public Sub main()
+With sharedmem
+SharedMem.Begin(128000)
+Print "Begin TestSetFree _____________________________________________________________________________________________________________________________"
+Print "Will run : Iterations = "; LoopCount; " Total of "; LoopCount * 6; " Set and free operations"
+starttime = Timer
+
+'begin does some stuff to remove for this test See- SharedMemWaitQueue _Begin
+.ShmFree(.["NotifyList"])
+.free("notifylist")
+ 
+For i As Integer = 1 To LoopCount
+
+    SharedMem["ThisString"] = "This is a test string of this size"
+    SharedMem["ThisFloat"] = 0.0 
+    SharedMem["ThisLong"] = CLong(0)
+    SharedMem["ThisInt"] = 0
+    SharedMem["ThatString"] = "************************************************************************************************"
+    SharedMem["MyARRAY"] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+    'SharedMem._print()
+
+    SharedMem.Free("ThisLong")
+    SharedMem.Free("ThisInt")
+    SharedMem.Free("ThisFloat")
+
+    'SharedMem._print()
+
+    SharedMem.free("ThatString")
+
+
+    'SharedMem._print()
+
+    SharedMem.free("ThisString")
+
+    'SharedMem._print()
+
+    SharedMem.free("MyARRAY")
+   
+    
+    If SharedMem.used() <> 0 Then 
+       Print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+       Print "Used Amount reports "; .used();; " After "; i;; "Loops"
+       SharedMem._print()
+       Print "\n\nFailed Total time = "; Timer - starttime; " total operations per second ="; (LoopCount * 6) / (Timer - starttime)
+       Print "End TestSetFree _______________________________________________________________________________________________________________________________"
+       Stop
+       Quit -1
+    Endif
+    
+Next
+
+Print "End TestSetFree _______________________________________________________________________________________________________________________________"
+SharedMem._print()
+Print "\n\nPassed Total time = "; Timer - starttime; " total operations per second ="; (LoopCount * 6) / (Timer - starttime)
+
+SharedMem.End()
+End With
+End
