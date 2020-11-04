@@ -37,7 +37,7 @@ Dim mFile As File = Null
       Return
     Endif
 
-'' If the types are the same of the object is of a sharedclass parent
+'' If the types are the same and the object is of a sharedclass parent
 '' Copy all fields with matching names and types
 '' will fail if property types dont match, will ignore any extra fields in the 
 '' otherobject. So be carefull in how you use this for objects
@@ -61,7 +61,7 @@ End
 
 '' This will find every property of the object and try to\
 '' write it to the output stream
-'' Note: remeber formats to a buffer ie memory stream
+'' Note: remember formats to a buffer ie memory stream
 ''       are not the same as to a file stream
 Public Sub _write(mFile As File) 'do nothing by default
   Dim v As Variant
