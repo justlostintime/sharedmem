@@ -388,7 +388,7 @@ End
 
 '' This function creates a named shared memory space see Begin above for details\
 '' If you want to load a symbol table from disk then use Merge after this call
-Static Public Sub BeginNamed(MemName As String, MemSize As Integer, Optional forceCleanup As Boolean = False) As Boolean
+Static Public Sub BeginNamed(Optional MemName As String = User.Name & "gsh", MemSize As Integer = 4512000, forceCleanup As Boolean = False) As Boolean
 Dim firstuse As Boolean = False
 If InSession Then
   Error.Raise("Already in Begin-end session")
