@@ -1,7 +1,5 @@
 ' Gambas module file
 
-Fast Unsafe
-
 Const LoopCount As Integer = 1000000
 
 

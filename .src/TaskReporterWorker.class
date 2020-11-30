@@ -25,7 +25,7 @@ Public Sub main()
     Print Error.text
 End
 
-Fast Unsafe Public Sub Counter_changed(Val As Variant)
+Public Sub Counter_changed(Val As Variant)
   
   'Print "BG :" & MySymbol & " id=", Application.Id, " Val= "; val
   
