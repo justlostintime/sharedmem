@@ -1,5 +1,6 @@
 ' Gambas module file
 
+' Test the speed of the access
 Const LoopCount As Integer = 1000000
 
 
