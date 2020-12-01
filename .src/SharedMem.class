@@ -1539,9 +1539,9 @@ Dim blkPointer As Pointer
     blkPointer = UserMem[MemoryAddress]
     While blkPointer < UserMem[NextFree]
       
-      Print "Address:"; CLong(blkPointer), "End:"; CLong(blkpointer + UserMem[blkPointer + lenOffset] - 1),
-      Print " Length = "; UserMem[blkPointer + lenOffset], 
-      Print " DataType = "; DataTypes[Byte@(UserMem.AddrReal(blkPointer + DataOffset))],
+      Print "Address:"; Format(CLong(blkPointer), "##########0");; "End:"; Format(CLong(blkpointer + UserMem[blkPointer + lenOffset] - 1), "##########0");;
+      Print " Length = "; Format(UserMem[blkPointer + lenOffset], "##########0");; 
+      Print " DataType = "; Left(DataTypes[Byte@(UserMem.AddrReal(blkPointer + DataOffset))] & Space(10), 15);;
       Print " Var = "; GetVarByAddress(blkpointer)
       'If(Byte@(UserMem.AddrReal(blkPointer + DataOffset)) > DataTypes.max, Byte@(UserMem.AddrReal(blkPointer + DataOffset)), DataTypes[Byte@(UserMem.AddrReal(blkPointer + DataOffset))])
       

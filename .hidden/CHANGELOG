@@ -1,4 +1,7 @@
 * Tue Dec 01 2020 brian <brian@westwoodsvcs.com> 3.15.3
+- fixed data address calculation in _print
+
+* Tue Dec 01 2020 brian <brian@westwoodsvcs.com> 3.15.3
 - Added that _print will also put the variable name next to each storage location
 
 * Sun Nov 29 2020 brian <brian@westwoodsvcs.com> 3.15.3

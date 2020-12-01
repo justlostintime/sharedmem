@@ -41,8 +41,6 @@ For i As Integer = 1 To LoopCount
     'SharedMem._print()
 
     SharedMem.free("MyARRAY")
-    .a = 2
-    .b = "asasdasdasdasdasasd"
     
     If SharedMem.used() <> 0 Then 
        Print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
