@@ -1,6 +1,6 @@
 # Gambas Project File 3.0
 Title=Shared Memory object
-Startup=TestBeginNamed
+Startup=TestSetFree
 Version=3.15.3
 Component=gb.args
 Component=gb.eval
@@ -20,7 +20,7 @@ Url=www.westwoodsvcs.com
 License=General Public License
 Prefix=1
 PackageName=gambas3-gb-sharedmem-3.15.3
-PackageVersion=33
+PackageVersion=34
 CreateEachDirectory=1
 Packager=1
 Systems=autotools,debian,fedora,mageia,suse,slackware,ubuntu

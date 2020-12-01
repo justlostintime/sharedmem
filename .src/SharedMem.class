@@ -1541,7 +1541,8 @@ Dim blkPointer As Pointer
       
       Print "Address:"; CLong(blkPointer), "End:"; CLong(blkpointer + UserMem[blkPointer + lenOffset] - 1),
       Print " Length = "; UserMem[blkPointer + lenOffset], 
-      Print " DataType = "; DataTypes[Byte@(UserMem.AddrReal(blkPointer + DataOffset))]
+      Print " DataType = "; DataTypes[Byte@(UserMem.AddrReal(blkPointer + DataOffset))],
+      Print " Var = "; GetVarByAddress(blkpointer)
       'If(Byte@(UserMem.AddrReal(blkPointer + DataOffset)) > DataTypes.max, Byte@(UserMem.AddrReal(blkPointer + DataOffset)), DataTypes[Byte@(UserMem.AddrReal(blkPointer + DataOffset))])
       
       blkPointer += UserMem[blkPointer + LenOffset]
@@ -1570,6 +1571,15 @@ Dim blkPointer As Pointer
         Next
   Endif
   Print "Dump Shared Memory End ***********************************************************************************************"
+End
+
+Static Sub GetVarByAddress(Addr As Long) As String
+ If SymbolTable.length > 0 Then
+        For Each s As SharedMemSymbol In SymbolTable
+          If s.RootAddress = addr Then Return s.SymName
+        Next
+  Endif
+  Return "***"
 End
 
 Static Public Sub PrintSummary()
