@@ -1524,7 +1524,7 @@ End
 ' Static Public LastWriteOffset As Integer = SizeOf(gb.pointer + (SizeOf(gb.long * 5))) + 6
 ' Static Public DataOffset As Integer = (SizeOf(gb.pointer) + (SizeOf(gb.long) * 6)) + 7 
 '' Prints the contents in detail of the Shared memory
-Static Public Sub _print()
+Static Public Sub _print(Optional ShortForm As Boolean = False)
 
 Dim blkPointer As Pointer
 'Dim FreePointers As Pointer[]
@@ -1563,20 +1563,24 @@ Dim blkPointer As Pointer
      
   Endif
   
-  Print "Symbol Table list contains "; SymbolTable.length; " Entries"
-  If SymbolTable.length > 0 Then
+  If Not ShortForm Then
+    Print "Symbol Table list contains "; SymbolTable.length; " Entries"
+    If SymbolTable.length > 0 Then
         Print "Symbol Table Entries follow:"
         For Each s As SharedMemSymbol In SymbolTable
           s._print()
         Next
+    Endif
   Endif
+  
   Print "Dump Shared Memory End ***********************************************************************************************"
 End
 
-Static Sub GetVarByAddress(Addr As Long) As String
+Static Public Sub GetVarByAddress(Addr As Long) As String
  If SymbolTable.length > 0 Then
         For Each s As SharedMemSymbol In SymbolTable
           If s.RootAddress = addr Then Return s.SymName
+          If s.DataAddress = addr - SizeOf(gb.long) - 1 Then Return s.SymName & ":data"
         Next
   Endif
   Return "***"
