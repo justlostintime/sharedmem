@@ -481,12 +481,16 @@ Public Sub DataOffsetPtr() As Pointer
 End
 
 
+''Returns the real address of the variable header, ie containing the 
+'' basic information And pointer To storage For strings, And objects
 Public Sub AddressPtr() As Pointer
   
   Return SharedMem.UserMem.AddrReal(RootAddress)
   
 End
 
+''Returns the real address of the data storage of the
+'' object or string or base data types
 Public Sub DataPtr() As Pointer
   
   Return SharedMem.UserMem.AddrData(DataAddress, SymType)
@@ -506,7 +510,8 @@ Public Sub _print()
   Print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
   Print "Symbol Name: "; Me.SymName, "SymType: "; SharedMem.DataTypes[Me.SymType]
   Print "Special Type:", If(Me.SpecialType = 1, "Yes", "No"), "Class("; Me.ClassName; ")", "ObjectName("; Me.ObjectName; ")"
-  Print "Address:"; CLong(Me.RootAddress); "/"; CLong(Me.DataAddress); "/"; If(Me.SymType = gb.string Or Symtype = gb.object, CLong(SharedMem.usermem[DataAddress + 1, gb.pointer, True]), " - "),
+  Print "Address:"; CLong(Me.RootAddress); "/"; CLong(Me.DataAddress); "/"; 
+  Print If(Me.SymType = gb.string Or Symtype = gb.object, CLong(SharedMem.usermem[DataAddress + 1, gb.pointer, True]), " - "),
   Print "Length:"; Me.dataLength, "Storage len: "; Me.storageLength
   Print "Last Write length : "; LastWriteLength, "ElementCount :"; ElementCount, "ElementType : "; SharedMem.DataTypes[ElementType]
   Print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"

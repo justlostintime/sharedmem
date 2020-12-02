@@ -42,6 +42,13 @@ For i As Integer = 1 To LoopCount
 
     SharedMem.free("MyARRAY")
     
+    .a = "asdasdasd"
+    .b = "hhhhhhhhhhhh"
+    .e = ""
+    .d = 6
+    .free("b")
+    .b = "wqewweweqwe"
+    
     If SharedMem.used() <> 0 Then 
        Print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
        Print "Used Amount reports "; .used();; " After "; i;; "Loops"

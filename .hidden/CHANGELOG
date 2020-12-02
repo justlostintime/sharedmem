@@ -1,4 +1,9 @@
 * Tue Dec 01 2020 brian <brian@westwoodsvcs.com> 3.15.3
+
+* Tue Dec 01 2020 brian <brian@westwoodsvcs.com> 3.15.3
+- Added formatting to _print output
+
+* Tue Dec 01 2020 brian <brian@westwoodsvcs.com> 3.15.3
 - fixed data address calculation in _print
 
 * Tue Dec 01 2020 brian <brian@westwoodsvcs.com> 3.15.3

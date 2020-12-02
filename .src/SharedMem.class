@@ -1540,9 +1540,10 @@ Dim blkPointer As Pointer
     While blkPointer < UserMem[NextFree]
       
       Print "Address:"; Format(CLong(blkPointer), "##########0");; "End:"; Format(CLong(blkpointer + UserMem[blkPointer + lenOffset] - 1), "##########0");;
-      Print " Length = "; Format(UserMem[blkPointer + lenOffset], "##########0");; 
-      Print " DataType = "; Left(DataTypes[Byte@(UserMem.AddrReal(blkPointer + DataOffset))] & Space(10), 15);;
-      Print " Var = "; GetVarByAddress(blkpointer)
+      Print "Length = "; Format(UserMem[blkPointer + lenOffset], "##########0");; 
+      Print "LastUsed = "; Format(UserMem[blkPointer + LastWriteOffset, gb.float], "##########0.00");;
+      Print "DataType = "; Left(DataTypes[Byte@(UserMem.AddrReal(blkPointer + DataOffset))] & Space(10), 10);;
+      Print "Var = "; GetVarByAddress(blkpointer)
       'If(Byte@(UserMem.AddrReal(blkPointer + DataOffset)) > DataTypes.max, Byte@(UserMem.AddrReal(blkPointer + DataOffset)), DataTypes[Byte@(UserMem.AddrReal(blkPointer + DataOffset))])
       
       blkPointer += UserMem[blkPointer + LenOffset]
@@ -1577,10 +1578,12 @@ Dim blkPointer As Pointer
 End
 
 Static Public Sub GetVarByAddress(Addr As Long) As String
+ Dim s As SharedMemSymbol
+ 
  If SymbolTable.length > 0 Then
-        For Each s As SharedMemSymbol In SymbolTable
+        For Each s In SymbolTable
           If s.RootAddress = addr Then Return s.SymName
-          If s.DataAddress = addr - SizeOf(gb.long) - 1 Then Return s.SymName & ":data"
+          If CLong(SharedMem.usermem[s.DataAddress + 1, gb.pointer, True]) = addr Then Return s.SymName & ":data"
         Next
   Endif
   Return "***"
