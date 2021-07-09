@@ -1,6 +1,7 @@
 ' Gambas module file
 
 Export
+'Fast Unsafe
 Extern strncpy(dest As String, src As String, count As Integer) As Pointer In "libc:6"
 Extern memcpy(dest As Pointer, src As Pointer, count As Integer) As Pointer In "libc:6"
 

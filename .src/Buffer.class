@@ -2,7 +2,7 @@
 
 Export
 
-' Fast Unsafe 
+'Fast Unsafe 
 
 
 Public RootAddress As Pointer = 0

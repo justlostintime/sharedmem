@@ -6,8 +6,8 @@ Export
 Private WaitQueue As Variant[] = New Variant[]        ' we will queue wait requests here
 Private InitSignal As Integer = 0                     ' force the init on first call of wait
 Private PidList As Mem                                ' pointer to shared memory
-Private Const pidlistlen As Integer = 500              ' Number of entries in the list
-Private Const ChangeSignal As Integer = 31
+Private Const pidlistlen As Integer = 500             ' Number of entries in the list
+Public Const ChangeSignal As Integer = 16             ' Sigsys = 31, SigUSr2 = 12, sig16 is unused too
 
 Public Struct WaitHeader
     pid As Integer
@@ -256,7 +256,7 @@ Public Sub _signal(Sig As Integer) ' signal handler for waiting
      
   Next
   
-  'If WaitQueue.Length = 0 Then Signal(31, zValue)
+  'If WaitQueue.Length = 0 Then Signal(ChangeSignal, zValue)
   
   Catch 
     Error.Raise("SharedMem Changed _Signal pid = " & Str(getpid()) & Error.text & " " & Error.where)

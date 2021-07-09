@@ -5,10 +5,10 @@ Public MyFile As File
 Public Cycles As Integer = 10
 
 Public Sub main() As Integer
-   MyFile = Open "/tmp/gambas.BGFile.txt" For Write Create
+   MyFile = Open User.home &/ "Desktop/gambas.BGFile.txt" For Write Create
    
    Print #MyFile, "BG: Testing Change notify Function ", Application.id
-     
+
    SharedMem.NotifyChange("WaitTest", Me, -1)
    
    SharedMem["WaitTest"] += 1

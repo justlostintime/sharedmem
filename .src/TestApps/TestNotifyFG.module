@@ -21,13 +21,14 @@ Extern getpid() As Integer In "libc:6"
 
 
 Public Sub main()
+
   Dim MyTask As TestNotifyBG
   Dim MyObject As TestNotifyObject
   Dim MyObjects As Variant[] = New Variant[] 
   Dim MyStatus As Integer = 0
   Dim MyResult As Integer = 0
   Dim listing As File
-  listing = Open User.home &/ "Lofile" For Write Create
+  listing = Open User.home &/ "Desktop/Lofile" For Write Create
   
   Output To listing
   
@@ -36,9 +37,11 @@ Public Sub main()
   SharedMem.begin(120000)
    
   Error "FG : Testing Change notify Function Pid="; Application.id;; "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  Print "BG : Writing to log file \"/tmp/gambas.BGFile.txt\""
+  Print "BG : Writing to log file \"" & user.home & "Desktop/gambas.BGFile.txt\""
   
   SharedMem["WaitTest"] = 1
+
+  Wait
   
   For i As Integer = 0 To 50
    MyObject = New TestNotifyObject ' this will just monitor the value

@@ -3,7 +3,7 @@
 Export
 
 Inherits Buffer
-
+'Fast Unsafe
 ' Public Sub _get(index As Integer) As Variant
 '   
 '   

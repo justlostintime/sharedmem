@@ -74,7 +74,11 @@
 
 Export
 
-'Fast Unsafe
+' Fast Unsafe
+'' Notify every time value changes
+Public Const Repeat As Integer = -1 
+'' Notify app once when value changes
+Public Const Once As Integer = 0
 Static Public DataTypes As String[] = ["Binary", "Boolean", "Byte", "Short", "Integer", "Long", "Single", "Float", "Date", "String", 
                                 "LongDate", "Pointer", "Variant", "Function", "Class", "NULL", "Object", "Not Array", "Type 19", "Type 20"
                                 "type 21", "type 22", "type 23", "type 24", "type 25"]
@@ -262,7 +266,7 @@ End
 '' > 0 is a one shot notification, the object will recive a message when the variable changes only once\
 '' > -1 the object is notified everytime the Variable changes\
 '' > any value greater than zero, the object is notified any time before the timeout expires
-Static Public Sub NotifyChange(Symbol As String, NotifyObject As Object, Optional iTimeOut As Long = 0, FunctionName As String = "") As Boolean
+Static Public Sub NotifyChange(Symbol As String, NotifyObject As Object, Optional iTimeOut As Long = -1, FunctionName As String = "") As Boolean
   
     Return WaitQueue.NotifyChange(Symbol, NotifyObject, iTimeOut, FunctionName)
   
@@ -633,8 +637,7 @@ Static Public Sub End(Optional FileName As String = "\t\t") ' free all the block
   
   Dim testa As Integer = usermem[MemoryInUse]
   
-  signal(31, NullPointer)
-  
+  Signal(SharedMemWaitQueue.ChangeSignal, NullPointer)
   
   sem_destroy(UserMem.AddrReal(MemMutex))
   sem_destroy(ColMem.AddrReal(Mutex))
@@ -1979,7 +1982,7 @@ Static Public Sub _property(...) As Boolean
 End
 
 Static Public Sub _unknown(...) As Variant ' this will only work for simple datatypes and reading arrays
-  Dim x As SharedMemSymbol
+  'Dim x As SharedMemSymbol
   
 If Not InSession Then
   Error.Raise("Attempt to access variable before BEGIN()")

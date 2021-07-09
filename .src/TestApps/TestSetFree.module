@@ -1,6 +1,6 @@
 ' Gambas module file
 
-Const LoopCount As Integer = 500
+Const LoopCount As Integer = 1000
 Private starttime As Float
 
 Public Sub main()
@@ -44,10 +44,15 @@ For i As Integer = 1 To LoopCount
     
     .a = "asdasdasd"
     .b = "hhhhhhhhhhhh"
+    .free("b")
     .e = ""
     .d = 6
-    .free("b")
+
     .b = "wqewweweqwe"
+    .free("b")
+    .free("a")
+    .free("e")
+    .free("d")
     
     If SharedMem.used() <> 0 Then 
        Print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
