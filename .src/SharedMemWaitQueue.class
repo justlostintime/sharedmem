@@ -24,6 +24,7 @@ Extern sKill(sigpid As Integer, Sig As Integer) As Integer In "libc:6" Exec "kil
 Extern getpid() As Integer In "libc:6"
 Extern sched_yield() As Integer In "libpthread:0"
 
+'' return a printable list of objects waiting for a notification of value change
 Public Sub GetWhoWaiting(sym As String) As String
   Dim result As String = " "
   result = "\n  [ Timeout, Last Write Time, PID of requesting Task, Callback Method,  Object Class Name ]"
@@ -39,13 +40,12 @@ Public Sub GetWhoWaiting(sym As String) As String
   Return result
 End
 
-
-  'NotifyChange(Symbol As String, NotifyObject As Object, Optional iTimeOut As Long = 0, FunctionName As String = "") As Boolean
-  ' timeout can be  = 0 = wait forever until first occurance          call _change      
-  '                 < 0 = notify me everytime a location changes      call _change
-  '                 > 0 wait for timeout and                          call _nochange
-  ' call function names can be overridden by providing function name
-  ' waiting for a timeout is very slow and you must execute a wait in your bg task to dispatch the timeout
+''NotifyChange(Symbol As String, NotifyObject As Object, Optional iTimeOut As Long = 0, FunctionName As String = "") As Boolean
+'' timeout can be  = 0 = wait forever until first occurance          call _change      
+''                 < 0 = notify me everytime a location changes      call _change
+''                 > 0 wait for timeout and                          call _nochange
+'' call function names can be overridden by providing function name
+'' waiting for a timeout is very slow and you must execute a wait in your bg task to dispatch the timeout
 Public Sub NotifyCancel(Symbol As String, NotifyObject As Object)
   
   Dim MyWait As WaitHeader
@@ -102,7 +102,7 @@ Private Sub removepid(pid As Integer)
 End
 
 
-Public Sub _begin() ' we will allocate a fixed table of pids to be used for notification
+Public Sub _begin() '' we will allocate a fixed table of pids to be used for notification
   With sharedmem
   
   Dim memoryloc As Pointer
@@ -121,6 +121,7 @@ End With
 End
 
 
+'' Remove the Application from the list of applications waiting for a notification
 Public Sub Dofree()
  
  removepid(Application.id)
@@ -134,6 +135,7 @@ Private Sub SetSignal()
 
 End
 
+'' Dispatch the signal to each application waiting for a change in the variable
 Public Sub dispatch()
 Dim result As Integer 
 For i As Integer = 0 To pidlistlen
@@ -153,6 +155,7 @@ Next
 
 End
 
+'' Place an entry into the list of applications waiting to be notifies of a change in a variable
 Public Sub NotifyChange(Symbol As String, NotifyObject As Variant, Optional iTimeOut As Long = 0, FunctionName As String = "") As Boolean
 Dim FuncName As String = FunctionName
 Dim MyWait As WaitHeader = New WaitHeader
@@ -209,7 +212,8 @@ Catch
     
 End
 
-Public Sub _signal(Sig As Integer) ' signal handler for waiting
+
+Public Sub _signal(Sig As Integer) '' signal handler for waiting applications
 
   Dim MyWait As WaitHeader 
   Dim Counter As Integer = 0

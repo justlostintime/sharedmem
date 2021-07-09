@@ -808,7 +808,7 @@ Static Private Sub PointerAlloc(symbol As String, MyObject As Object, Rootaddr A
   
 End
 
-'' Create a named block of memeory or one which is given a variable name and can be locked during update or read opertation\
+'' Create a named block of memory or one which is given a variable name and can be locked during update or read opertation\
 '' Symbol is the name which the memory block will have\
 '' Memsize is the size of the memory to allocate\
 '' the object which will have it's own this shared memory

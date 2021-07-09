@@ -32,7 +32,9 @@ Public Sub _new(Optional BaseAddress As Pointer = 0, UsingRealMemoryAddress As B
   
 End
 
-                                                 
+
+'' return the actual storage required for any data type
+'' objects must have a _write public function                                                
 Static Public Sub _SizeOf(data As Variant) As Integer
 
   Dim rdType As Integer = TypeOf(Data)
@@ -58,6 +60,7 @@ Static Public Sub _SizeOf(data As Variant) As Integer
 
 End
 
+'' Used the Objects _write function to get the size of the object
 Static Private Sub ObjectSizeOf(data As Variant) As Integer
   Dim mFile As File 
   Dim rdLen As Integer = 0
@@ -83,8 +86,12 @@ Public Sub SetType(Mempointer As Pointer, rdType As Integer)
   
 End
 
-
-Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean) ' if is fast value is 2 4 8 then the storage is there and created already
+'' Object entry point when used as array in user program
+''  Data - data as any data type
+''  MemPointer - Actual memory address to store the value
+''  rdType - override the datatype of the passed in variant
+''  notype - the memoryy location does not contain a memory variable type definition
+Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False) ' if fast value is 2 4 8 then the storage is there and created already
 
   Dim mfile As File
   Dim cvByte As Byte
@@ -186,16 +193,19 @@ Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integ
    
 End
 
-
+'' Put variable into memory
+''  
+'' Mempointer - the location to get the daya from
+'' rdType - the type of data to be read, this is an over ride for the stored data type or used when no datatype stored
+'' notype - the storgae location first has to data type specified
 Public Sub _get(MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False) As Variant
-
 
 Dim cvVariant As Variant
 Dim mFile As File
   
   '' print"MEM GET request: prt="; MemPointer; " RDTYPE = "; rdType
   If Not notype Then
-    If rdtype = -1 And Not notype Then
+    If rdtype = -1 Then   ' and not notype
       rdType = Byte@(RootAddress + MemPointer)  ' get the data type
     Endif
     Inc mempointer
@@ -281,7 +291,7 @@ End
 '' This function return the address of the data portion of the memory location
 '' notype will always assume binary type and return the address of binary blob at the address
 '' The read type can override the normal value for the variable
-Public Sub AddrData(MemPointer As Pointer, Optional rdtype As Integer, notype As Boolean = False) As Pointer
+Public Sub AddrData(MemPointer As Pointer, Optional rdtype As Integer = -1, notype As Boolean = False) As Pointer
           
          If RealPointers Then 
             Error.Raise("AddrData is not valid in realAddressMode")
@@ -289,7 +299,7 @@ Public Sub AddrData(MemPointer As Pointer, Optional rdtype As Integer, notype As
          Endif
          
          If Not notype Then
-            If rdtype = -1 And Not notype Then
+            If rdtype = -1 Then ' And Not notype Then
               rdType = Byte@(RootAddress + MemPointer)  ' get the data type
             Endif
             Inc mempointer
@@ -311,7 +321,7 @@ End
 '' notype will always assume binary type and return the address of binary blob at the address
 '' The read type can override the normal value for the variable
 
-Public Sub DataOffset(MemPointer As Pointer, Optional rdtype As Integer, notype As Boolean = False) As Pointer
+Public Sub DataOffset(MemPointer As Pointer, Optional rdtype As Integer = -1, notype As Boolean = False) As Pointer
           
         Dim addrptr As Pointer = AddrData(Mempointer, rdtype, notype)
           

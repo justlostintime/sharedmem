@@ -42,7 +42,8 @@ Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "li
 ' Extern rRead(handel As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "read"
 ' Extern rClose(Handle As Integer) As Integer In "libc:6" Exec "close"
 
-
+'' Write the variable def  to the and format information to an output file
+'' Optionally write the variables value as well
 Public Sub _write(mFile As File, Optional WithData As Boolean = False)
   
   Write #Mfile, SymName As String
@@ -72,6 +73,7 @@ Public Sub _write(mFile As File, Optional WithData As Boolean = False)
     Error.raise("_write symbol read error " & Error.text & " " & Error.where)
     Stop
 End
+
 '' This return the total amount of space required to store the\
 '' symbol to a file
 Public Sub _serialize(Optional withData As Boolean = False) As Integer
@@ -88,8 +90,8 @@ Public Sub _serialize(Optional withData As Boolean = False) As Integer
   
 End
 
-
-
+'' Read a variable def And control information From an Input file
+'' Optionall load the data as well in to the shared memory
 Public Sub _read(MFile As File, Optional WithData As Boolean = False)
 
   If WithData Then
@@ -339,7 +341,7 @@ End
 Public Sub ShmWrite(mdata As Variant) As Integer
    
    If TypeOf(mdata) <> SymType   ' this is done to prevent the need to save and reload table while other task may be using this variable
-     Error.Raise("ShmWrite: Can not change memory storage type after creation from " & SharedMem.DataTypes[SymType] & " to " & SharedMem.DataTypes[TypeOf(mdata)])
+     Error.Raise("ShmWrite: Can not change memory storage type after creation when Notify requested from " & SharedMem.DataTypes[SymType] & " to " & SharedMem.DataTypes[TypeOf(mdata)])
      Return 0
    Endif
    
@@ -498,7 +500,7 @@ Public Sub DataPtr() As Pointer
 End
 
 
-
+'' Dumps the variables value to an output file
 Public Sub DumpMem()
 Dim Src As Pointer = DataPtr()
 
@@ -506,6 +508,7 @@ mem.DumpMem(Src, DataLength, User.home &/ "Desktop/" &/ SymName & ".dump")
 
 End
 
+'' Prints the details of this variable to the current output sink
 Public Sub _print()
   Print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
   Print "Symbol Name: "; Me.SymName, "SymType: "; SharedMem.DataTypes[Me.SymType]
