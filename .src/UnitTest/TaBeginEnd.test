@@ -1,0 +1,89 @@
+' Gambas test file
+
+
+
+Public Sub aNoBeginSet()
+  Dim d As String
+
+With SharedMem
+  
+  Try .["a"] = "asasdasdj"
+  Assert.Error(".[\"a\"] : " & Error.Text)
+  Try .a = "asdf"
+  Assert.Error(".a : " & Error.Text)
+  Try d = .a
+  Assert.Error("d =.a : " & Error.Text)
+  Try d = .["a"]
+  Assert.Error("d = .[\"a\"] : " & Error.Text)
+  
+End With
+
+End
+
+Public Sub bBeginTwice()
+
+  
+  With SharedMem
+    Try .Begin(123456)
+    Assert.NotError("First Begin functions")
+    Try .Begin(123456)
+    Assert.Error("Second Begin Fails : " & Error.Text & ":" & Error.where)
+    
+    .a = 24
+    
+    Try .End()
+    Assert.Noterror("First end works")
+    Try .End()
+    Assert.Error("Second end fails : " & Error.Text & ":" & Error.where)
+  End With
+  
+End
+
+Public Sub cBeginTwiceAgain()
+
+  
+  With SharedMem
+    Try .Begin(123456)
+    Assert.NotError("First Begin functions")
+    Try .Begin(123456)
+    Assert.Error("Second Begin Fails : " & Error.Text & ":" & Error.where)
+    
+    .a = 24
+    
+    Try .End()
+    Assert.Noterror("First end works")
+    Try .End()
+    Assert.Error("Second end fails : " & Error.Text & ":" & Error.where)
+  End With
+  
+End
+
+Public Sub dBeginNamed()
+  
+  With SharedMem
+    Try .BeginNamed()
+    Assert.Noterror("Create shared Named memory default name")
+    Dim a As String[] = ["a", "b", "c"]
+    .a = a
+    Assert.Equals(.a[0], a[0], "Verify Begin works and assign works")
+    
+    Try .End(".")
+    If Error Then 
+        Assert.Noterror("End Fails : " & Error.text & ":" & error.where)
+    Else
+        Assert.noterror("Verify End of named shared memory works")
+    Endif
+    
+    Try .BeginNamed()
+    Assert.Noterror("Create shared Named memory default name again")
+    
+    Try .End(".")
+    If Error Then 
+        Assert.Noterror("End Fails again : " & Error.text & ":" & error.where)
+    Else
+        Assert.noterror("Verify End of named shared memory works again")
+    Endif
+    
+  End With
+  
+End

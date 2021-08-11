@@ -106,16 +106,15 @@ Public Sub _begin() '' we will allocate a fixed table of pids to be used for not
   With sharedmem
   
   Dim memoryloc As Pointer
+  Dim memlen As Integer = PidListLen * SizeOf(gb.integer) + SizeOf(gb.integer) + .AllocHeaderLen
   
   If Not .Exist("notifylist") Then 
-      memoryloc = .ShmAlloc(PidListLen * SizeOf(gb.integer) + SizeOf(gb.integer) + .AllocHeaderLen)
+      memoryloc = .ShmAlloc(memlen)
       .["notifylist"] = memoryloc
-      PidList = New Mem(.UserMem.AddrData(memoryloc) + .AllocHeaderLen)
+      PidList = New Mem(.UserMem.AddrData(memoryloc) + .AllocHeaderLen, False, memlen - .AllocHeaderLen)
   Else
-      If IsNull(PidList) Then PidList = New Mem(.UserMem.AddrData(.["notifylist"]) + .AllocHeaderLen)
+      If IsNull(PidList) Then PidList = New Mem(.UserMem.AddrData(.["notifylist"]) + .AllocHeaderLen, False, memlen - .AllocHeaderLen)
   Endif
-  
- ' addpid(Application.id) 
   
 End With
 End

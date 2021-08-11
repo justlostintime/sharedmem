@@ -100,7 +100,7 @@ End
 
 Public Sub set(a As String[]) As SharedObjectExample
   
-  ThisArray = a
+  ThisArray = a.Copy()
   
   Return Me
   

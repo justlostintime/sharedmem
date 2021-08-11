@@ -77,7 +77,7 @@ End
 
 '' This will find every property of the object and try
 '' to read from the stream for any valid properties
-'' Note: remeber formats to a buffer ie memory stream
+'' Note: remember formats to a buffer ie memory stream
 ''       are not the same as to a file stream
 Public Sub _read(mFile As File)  'do nothing by default
   Dim v As Variant
@@ -179,7 +179,7 @@ End
 '' read process can continue
 '' if this function returns true then the conversion function
 '' completed the loading of the object and mainline should not
-'' read anything more. Thi can convert from lower class version
+'' read anything more. This can convert from lower class version
 '' needs to decide what to do with a higher class version
 Private Sub _convertStream(versionnumber As Integer, mFile As File) As Boolean 
   
@@ -219,7 +219,6 @@ Public Sub GetObjectVersion() As Integer
   Return objectversion
   
 End
-
 
 
 '' does the conversion to the new format and returns the new object

@@ -104,18 +104,18 @@ Static Private Mutex As Pointer = Null                          ' Mutex for lock
 Static Private CollectionAddress As Pointer = Null              ' pointer to where we will store the collection in shared memory
 Static Private CollectionChangedIndicator As Pointer = Null     ' pointer to changed indicator
 Static Private CollectionEntries As Pointer = Null              ' points to the number of entries in the symbol table 
-Static Public CollectMemLen As Integer = 1512000                 ' the length of space reserved for storing the collection of items
+Static Public CollectMemLen As Integer = 1512000                ' the length of space reserved for storing the collection of items
 Static Private CollectionLastUpdate As Float = 0.0              ' the time the last addition of item to collection happened
 
 '' Collection of the Symbols defined in the Shared Memory Area
-Static Public SymbolTable As New Collection(gb.IgnoreCase)                         ' as symbols must be defined before a new task is started
+Static Public SymbolTable As New Collection(gb.IgnoreCase)         ' as symbols must be defined before a new task is started
 Static Public DefaultSaveLocation As String = User.Home & "/vars/" ' the default location for creating stored variables or mem
-Static Public LastMemorySync As String = "."                     ' The Last file that was restored for memory
-Static Public NamedMemHandle As Integer = -1                    ' Handle of the named memory area
-Static Public NamedMemName As String = ""                       ' Name of the shared memory created
-Static Public NamedMemCollectionHandle As Integer = -1          ' Handle to collection area
+Static Public LastMemorySync As String = "."                       ' The Last file that was restored for memory
+Static Public NamedMemHandle As Integer = -1                       ' Handle of the named memory area
+Static Public NamedMemName As String = ""                          ' Name of the shared memory created
+Static Public NamedMemCollectionHandle As Integer = -1             ' Handle to collection area
 
-Static Private InSession As Boolean = False                     ' Set to true when in Begin - end session
+Static Private InSession As Boolean = False                        ' Set to true when in Begin - end session
       
 Static Private Const PROT_READ As Integer = &H01
 Static Private Const PROT_WRITE As Integer = &H02
@@ -224,7 +224,7 @@ Static Public Sub DoInit()
 End
 
 Static Public Sub _init()
-     Try Component.Load("gb.signal")
+    Try Component.Load("gb.signal")
     If Error Then Print #File.err, "Unable to load component gb.signal"   
      Try Class.Load("SharedMemWaitQueue")
      Try Class.Load("SharedMemSymbol")
@@ -326,6 +326,7 @@ If MemoryStorage = Null Then
      Endif
      
       UserMem.RootAddress = MemoryStorage                                     ' All internal address are now offsets to addresses
+      UserMem.MemoryLength = BlockSize                                        ' The length of the memory created
       MemoryRoot = 0                                                          ' measured offset is always zero
       MemoryLength = MemoryRoot + SizeOf(gb.long) + 1                         ' As Integer = 0     ' total length of memory we allocate changed so all of these are offsets not pointers
       ChunkLength = MemoryLength + SizeOf(gb.long) + 1                        ' As Integer
@@ -368,6 +369,7 @@ If CollectionStorage = Null Then  ' take care of storage for this collection fir
      Endif 
      
      ColMem.RootAddress = CollectionStorage
+     ColMem.MemoryLength = CollectMemLen
      Mutex = 0 ' we will now use offsets CollectionStorage
      CollectionChangedIndicator = Mutex + (SizeOf(gb.long) * 8) + 8
      CollectionEntries = CollectionChangedIndicator + SizeOf(gb.long) + 1
@@ -638,9 +640,11 @@ Static Public Sub End(Optional FileName As String = "\t\t") ' free all the block
   Dim testa As Integer = usermem[MemoryInUse]
   
   Signal(SharedMemWaitQueue.ChangeSignal, NullPointer)
+  WaitQueue = New SharedMemWaitQueue
   
   sem_destroy(UserMem.AddrReal(MemMutex))
   sem_destroy(ColMem.AddrReal(Mutex))
+  InitSemaphors = True
   
   If FileName <> "\t\t" Then
     If filename = "." Then 
@@ -667,8 +671,7 @@ Static Public Sub End(Optional FileName As String = "\t\t") ' free all the block
   CollectionStorage = Null
   
   SymbolTable = New Collection(gb.ignorecase)
-  'WaitQueue = New SharedMemWaitQueue
-  WaitQueue.reset()
+  'WaitQueue.reset()
   LastMemorySync = ""
   
   If NamedMemHandle > 0 Then ' lets close the mem shared with me and unlink it

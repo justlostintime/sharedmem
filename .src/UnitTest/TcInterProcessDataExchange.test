@@ -1,0 +1,101 @@
+' Gambas test file
+
+ Extern sched_yield() As Integer In "libpthread"
+ Public Sub aInterTaskCommunications()
+With sharedmem
+ Dim NamedConsume As String = ""
+  'Print "Start consumer then press enter"
+  'Input NamedConsume
+  Dim starttime As Float
+  starttime = Timer
+  Print "Begin Task Message test "
+  Dim MyTask As New SaveAndLoadSharedMemBG
+  Wait
+  If SharedMem.BeginNamed("BriBlock", 128000, True) Then
+       Dim MySync As Integer = 1
+       Dim TimeOut As Integer = 0
+       Dim loopcount As Integer = 10000
+  
+       Dim Words As String[] = ["one.....", "two.....", "three...", "four....", "five....", "six.....", "seven...", "eight..."]
+       Print "Waiting for Echo Server to start"
+       
+       While Not SharedMem.Exist("TestString")
+         sched_yield()
+       Wend
+       
+       SharedMem.DumpMem(Null, 300, "ServerDump")
+       'SharedMem._print()
+       'Print "Ready > begin sending"
+       starttime = Timer
+       SharedMem["SyncYou"] = 0
+       SharedMem["Result"] = "Hello"
+       
+       For j As Integer = 0 To loopcount
+ 
+          NamedConsume = Words[loopcount Mod 7]
+
+          SharedMem["TestString"] = NamedConsume
+          Inc SharedMem["SyncMe"]   ' notify other process that we sent message
+            
+          While SharedMem["SyncYou"] < mysync
+              sched_yield()
+          Wend
+          Inc MySync
+          If NamedConsume <> SharedMem["Result"] Then
+            Print "Named test Failed at count = "; loopcount
+            Break
+          Endif
+    
+       Next
+     
+      Print "Transfer complete in "; Timer - starttime; " for ("; LoopCount * 9; ") transfers cycles level 3 with mutex protection"
+      SharedMem["TestString"] = "quit"
+      Inc SharedMem["SyncMe"]
+      
+      Print "Wait for ready message"
+      While SharedMem["TestString"] <> "Ready"
+              sched_yield()
+      Wend
+      
+      Print "Next test begins"
+      
+   
+      Dim pSyncMe As Pointer = ._varptr("SyncMe")
+      Dim pSyncYou As Pointer = ._varptr("SyncYou")
+      Dim pTestString As Pointer = ._varptr("TestString")
+      Dim pResult As Pointer = ._varptr("Result")
+      Dim iSyncMe As Integer
+      
+      loopcount = 10000
+      starttime = Timer
+      For i As Integer = 1 To loopcount 
+ 
+          NamedConsume = Words[loopcount Mod 7]
+          Dim sTest As String = .usermem[pTestString]
+          .usermem[pTestString] = NamedConsume
+          Inc .usermem[pSyncMe]                         ' notify other process that we sent message
+            
+          While .usermem[pSyncYou] < mysync
+              sched_yield()
+          Wend
+          Inc MySync
+
+          If NamedConsume <> .usermem[pTestString] Then
+            Print "Named test Failed at count = "; loopcount
+            Break
+          Endif
+    
+      Next
+       .UserMem[pTestString] = "quit"
+       Inc .UserMem[pSyncMe]
+
+       Print "Transfer complete in "; Timer - starttime; " for ("; loopcount * 9; ") cycles level 1 with no mutex protection"
+       SharedMem["TestVar"] = "This string"
+       Dim NamedTest As String = SharedMem["TestVar"]
+  
+       SharedMem.End()
+  Endif' Gambas test file
+  
+  Assert.equals(NamedTest, "This string", "Test Named Shared Mem")
+  End With
+End

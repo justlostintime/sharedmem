@@ -17,6 +17,7 @@ Dim shortArray As Short[] = [2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 3, 4, 5, 6, 7, 8]
 Dim MyStruct As TestStruct = New TestStruct
 
 Dim intTest As Integer = 800
+Dim NullTest As Variant = Null
 Dim ptrTest As Pointer = 10000
 Dim longTest As Long = 1
 Dim dateTest As Date = Now
@@ -37,18 +38,19 @@ Print "Begin TestMemSizeof #####################################################
 MyStruct.MyString = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 Dim TestCases As Collection = New Collection
-TestCases.Add(intTest, "Int Test")
-TestCases.Add(ptrTest, "Pointer Test")
-TestCases.Add(LongTest, "Long Test")
-TestCases.Add(dateTest, "Date Test")
-TestCases.Add(FloatTest, " Float test")
-TestCases.Add(strArray, "String Array Test")
-TestCases.Add(intArray, "Integer Array Test")
-TestCases.Add(longArray, "Long Array Test")
-TestCases.Add(shortArray, "Short Array Test")
-TestCases.Add(myObject, "MyObject Test")
-TestCases.Add(CollectionTest, "Variable Type collection Test")
-TestCases.Add(MyStruct, "Struct type test")
+TestCases.Add(intTest, "Int")
+TestCases.Add(nullTest, "Null")
+TestCases.Add(ptrTest, "Pointer")
+TestCases.Add(LongTest, "Long")
+TestCases.Add(dateTest, "Date")
+TestCases.Add(FloatTest, "Float")
+TestCases.Add(strArray, "String Array[]")
+TestCases.Add(intArray, "Integer Array[]")
+TestCases.Add(longArray, "Long Array[]")
+TestCases.Add(shortArray, "Short Array[]")
+TestCases.Add(myObject, "MyObject[]")
+TestCases.Add(CollectionTest, "Variable collection[]")
+TestCases.Add(MyStruct, "Struct type")
 
 
 
@@ -56,9 +58,9 @@ TestCases.Add(MyStruct, "Struct type test")
 
 For Each i As Variant In TestCases
   
-  Print "********************************************************************* Test Case Begins for " & TestCases.key
+  'Print " Test Case Begins for " & TestCases.key
   iLen = mem._SizeOf(i)
-  Print "**********************************************************************Test Case " & TestCases.key & " returned length of ", ilen
+  Print Subst("    Sizeof for &1 returned length of &2", Left(TestCases.key & Space(25), 25), Format(ilen, "###0"))
 Next
 
 Print "End TestMemSizeof #########################################################################################"
