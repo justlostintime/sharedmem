@@ -3,19 +3,46 @@
 Public Sub aStringGetsbigger()
   
   With SharedMem
-    .Begin(450000)
+    .Begin(1450000)
+    
     .myString = "..........................................................................................."
-    .myint = 1
-    Dim mystring As SharedMemSymbol = ._Symbol("myString")
-    Print .mystring.len, .len("myString"), Len(.mystring), mystring.LastWriteLength, MyString.storageLength, MyString.dataLength
-    For i As Integer = 0 To 1000
-      .myString = .MyString & "++ "
-      Print .mystring.len, .len("myString"), Len(.mystring), mystring.LastWriteLength, MyString.storageLength, MyString.dataLength
+    
+    Dim mystring As SharedMemSymbol = ._Symbol("myString")            ' work with the symbol information
+    
+    'Print .mystring.len, .len("myString"), Len(.mystring), mystring.LastWriteLength, MyString.storageLength, MyString.dataLength
+    Dim starttime As Float = Timer
+    For i As Integer = 0 To 100000
+      .["myString"] = .["MyString"] & "++ "
+      If MyString.storageLength < MyString.dataLength Then 
+        Assert.Fail("invalid memory allocation for string")
+      Else If mystring.LastWriteLength <> .mystring.len Then 
+        Assert.Fail("Invalid write length/possible data corruption")
+      Endif
     Next
+    Assert.Equals(MyString.LastWriteLength, .mystring.len, "Grow String Time=" & Str(Timer - starttime) & " : " & .mystring.len & "," & .len("myString") & "," & Len(.mystring) & "," & mystring.LastWriteLength & "," & MyString.storageLength)
+    Dim oldstoragelen As Integer = MyString.storageLength
     .MyString = "Hello"
-    Print .mystring.len, .len("myString"), Len(.mystring), mystring.LastWriteLength, MyString.storageLength
+    Assert.equals(oldStorageLen, MyString.storageLength, "Grow Shrink" & " : " & .mystring.len & "," & .len("myString") & "," & Len(.mystring) & "," & mystring.LastWriteLength & "," & MyString.storageLength)
+    Assert.equals(MyString.LastWriteLength, .mystring.len, "Verify that variable size shrinks")
     '._print()
-    .End()
-  End With
+
+
+  Dim testString As String = "......................................."
+  Starttime = Timer
+  For i As Integer = 0 To 100000
+      testString = testString & "++ "
+  Next
   
+  Assert.Pass("Native String time = " & Str(Timer - starttime))
+  
+  MyString.value = "................................................"
+  starttime = Timer
+  For i As Integer = 0 To 100000
+      MyString.value = MyString.value & "++ "
+  Next
+  
+  Assert.Pass("ShmSymbolEntry no mutex protection time = " & Str(Timer - starttime))
+
+  .End()
+  End With
 End

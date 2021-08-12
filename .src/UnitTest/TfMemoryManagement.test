@@ -1,19 +1,20 @@
+' Gambas test file
+
 ' Gambas module file
 
 Const LoopCount As Integer = 1000
 Private starttime As Float
 
-Public Sub main()
+Public Sub aALLOCFree()
 With sharedmem
-SharedMem.Begin(128000)
-Print "Begin TestSetFree _____________________________________________________________________________________________________________________________"
-Print "Will run : Iterations = "; LoopCount; " Total of "; LoopCount * 6; " Set and free operations"
-starttime = Timer
+  
+.Begin(128000)
 
 'begin does some stuff to remove for this test See- SharedMemWaitQueue _Begin
 .ShmFree(.["NotifyList"])
 .free("notifylist")
- 
+
+starttime = Timer
 For i As Integer = 1 To LoopCount
 
     SharedMem["ThisString"] = "This is a test string of this size"
@@ -55,20 +56,15 @@ For i As Integer = 1 To LoopCount
     .free("d")
     
     If SharedMem.used() <> 0 Then 
-       Print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-       Print "Used Amount reports "; .used();; " After "; i;; "Loops"
-       SharedMem._print()
-       Print "\n\nFailed Total time = "; Timer - starttime; " total operations per second ="; (LoopCount * 6) / (Timer - starttime)
-       Print "End TestSetFree _______________________________________________________________________________________________________________________________"
-       Stop
-       Quit -1
+       'Print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+       'Print "Used Amount reports "; .used();; " After "; i;; "Loops"
+       'SharedMem._print()
+       Assert.Fail("Used(" & .used() & ") Not zero Total time = " & Str(Timer - starttime) & " Ops/Sec =" & Str((LoopCount * 6) / (Timer - starttime)))
     Endif
     
 Next
 
-Print "End TestSetFree _______________________________________________________________________________________________________________________________"
-SharedMem._print()
-Print "\n\nPassed Total time = "; Timer - starttime; " total operations per second ="; (LoopCount * 6) / (Timer - starttime)
+Assert.Pass("Alloc/Free time = " & Str(Timer - starttime) & "Total Ops=" & Str(LoopCount * 6) & " Ops/Sec =" & Str((LoopCount * 6) / (Timer - starttime)))
 
 SharedMem.End()
 End With
