@@ -8,6 +8,7 @@ Private InitSignal As Integer = 0                     ' force the init on first 
 Private PidList As Mem                                ' pointer to shared memory
 Private Const pidlistlen As Integer = 500             ' Number of entries in the list
 Public Const ChangeSignal As Integer = 16             ' Sigsys = 31, SigUSr2 = 12, sig16 is unused too
+Public $oShm As Variant = Null                        ' The SharedMemory object
 
 Public Struct WaitHeader
     pid As Integer
@@ -51,7 +52,7 @@ Public Sub NotifyCancel(Symbol As String, NotifyObject As Object)
   Dim MyWait As WaitHeader
   Dim i As Integer = 0
   For Each mywait In WaitQueue
-    If mywait.CallBack = NotifyObject And If mywait.sym.SymName = symbol Then
+    If (mywait.CallBack = NotifyObject Or NotifyObject = Null) And If mywait.sym.SymName = symbol Then
       WaitQueue.Remove(i)
       MyWait.sym._ClearWait()
       Break
@@ -61,10 +62,11 @@ Public Sub NotifyCancel(Symbol As String, NotifyObject As Object)
   
 End
 
-Public Sub _new()
+Public Sub _new(Optional shm As Variant)
   'Print "init wait queue"
   WaitQueue = New Variant[]
   SetSignal()
+  $oShm = shm
  
 End
 

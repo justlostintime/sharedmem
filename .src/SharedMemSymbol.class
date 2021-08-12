@@ -5,6 +5,7 @@ Export
 'Fast Unsafe
 
 Public SymName As String = ""
+Public $oShm As Variant = Null
 
 Public SpecialType As Integer = 0
 Public SpecialObject As Variant
@@ -29,7 +30,7 @@ Public dataLength As Integer = 0          ' Length of the data portion of the bl
 
 Public LastWriteLength As Integer = 0     ' Length of the last data written to the memory
 
-Public Const StringBufferExtra As Integer = 1024      ' extra memory used when string is allocated so we dont have to reallocate to offten
+Public Const StringBufferExtra As Integer = 1024      ' extra memory used when string is allocated so we dont have to reallocate to often
 
 Public ZeroPointer As Pointer = Null
 Public ZeroRef As Pointer = VarPtr(Zeropointer)
@@ -37,10 +38,20 @@ Public RootRef As Pointer = VarPtr(RootAddress)
 
 Public UnsupportedList As String[] = ["File", "Stream"]
 
+Property Value As Variant
+
+
 Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "libc:6"
 ' Extern rWrite(handle As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "write"
 ' Extern rRead(handel As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "read"
 ' Extern rClose(Handle As Integer) As Integer In "libc:6" Exec "close"
+
+Public Sub _new(Optional shm As Variant = Null)
+  
+  $oShm = shm
+  
+End
+
 
 '' Write the variable def  to the and format information to an output file
 '' Optionally write the variables value as well
@@ -248,6 +259,9 @@ Public Sub AllocStorage(iLength As Integer) As Boolean
         StorageLength = NewStorageLength
 
         If symtype = gb.string Or symtype = gb.object Then
+            If gb.string Then 
+              StorageLength += StringBufferExtra
+            Endif
             SharedMem.ShmFree(SharedMem.UserMem[DataAddress + 1, gb.pointer, True])
             newStorage = SharedMem.ShmAlloc(storageLength + 1)
             SharedMem.UserMem[DataAddress + 1, gb.pointer, True] = newstorage
@@ -325,6 +339,14 @@ Public Sub ShmReadSub(subscript As Integer) As Variant
                     Dim ElementAddress As Pointer = ShmElementAddress(subscript)
                     Return SharedMem.UserMem[ElementAddress, ElementType, True]
              Else
+                    Select Case ElementType
+                      Case gb.String
+                        Dim MyString As String[] = ShmRead()
+                        Return MyString[subscript]
+                      Case gb.object
+                        Dim MyObject As Object[] = ShmRead()
+                        Return MyObject[subscript]
+                    End Select
                     Error.Raise("Unsupported data type for subscript " & SymName)
              Endif
           Else
@@ -346,11 +368,12 @@ Public Sub ShmWrite(mdata As Variant) As Integer
    Endif
    
   If IsNull(RootAddress) Or SymType = gb.object Or symtype = gb.string Then 
-
+    
       If Not SetStorage(mdata) Then
         Error.Raise("ShmWrite : Unable to allocate required storage")
         Return 0
       Endif
+      
       'Print " Set storage done and about to store the data "
       SharedMem.UserMem[DataAddress] = mdata
       'Print " Set done"
@@ -375,7 +398,19 @@ Public Sub ShmWriteSub(data As Variant, subscript As Integer)
                 If Not ((ElementType = gb.object) Or (ElementType = gb.string)) Then
                     SharedMem.UserMem[ShmElementAddress(subscript), ElementType, True] = data
                 Else
-                  Error.Raise("Unsupported data type for subscript in " & SymName)
+                    Select Case ElementType
+                      Case gb.String
+                        Dim MyString As String[] = ShmRead()
+                        MyString[subscript] = data
+                        ShmWrite(MyString)
+                        Return
+                      Case gb.object
+                        Dim MyObject As Object[] = ShmRead()
+                        MyObject[subscript] = data
+                        ShmWrite(MyObject)
+                        Return
+                    End Select
+                    Error.Raise("Unsupported data type for subscript in " & SymName)
                 Endif
              Else
                 Error.Raise("Element Data type mismatch " & SymName)
@@ -443,15 +478,19 @@ Public Sub _call(Optional value As Variant) As Variant
     Endif
 End
 
-Public Sub _get(index As Variant) As Variant
-  
-  Return ShmReadSub(index)
+Public Sub _get(...) As Variant
+
+  If Param.count = 0 Then
+    Return ShmRead()
+  Else
+    Return ShmReadSub(Param[0])
+  Endif
   
 End
 
-Public Sub _put(data As Variant, index As Variant)
+Public Sub _put(value As Variant, index As Integer)
   
-  ShmWriteSub(data, index)
+    ShmWriteSub(Value, index)
   
 End
 
@@ -518,4 +557,16 @@ Public Sub _print()
   Print "Length:"; Me.dataLength, "Storage len: "; Me.storageLength
   Print "Last Write length : "; LastWriteLength, "ElementCount :"; ElementCount, "ElementType : "; SharedMem.DataTypes[ElementType]
   Print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+End
+
+Private Function Value_Read() As Variant
+
+  Return ShmRead()
+
+End
+
+Private Sub Value_Write(vValue As Variant)
+
+  ShmWrite(vValue)
+
 End

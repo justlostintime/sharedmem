@@ -1,11 +1,6 @@
 ' Gambas module file
 
-
-
 Public Const Exchanges As Integer = 5
-
-
-
 
 
 Public Sub main()

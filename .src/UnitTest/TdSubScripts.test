@@ -1,0 +1,81 @@
+' Gambas test file
+
+' Gambas module file
+
+Const LoopCount As Integer = 100000
+
+Public starttime As Float = 0.0
+
+Public rTester As Integer
+
+Public Sub aSubScripts()
+  With sharedmem
+    
+  Dim MyIntArray As New Integer[]
+  For i As Integer = 0 To 800
+    MyIntArray.Add(i)
+  Next
+  
+  Dim MyStringArray As String[] = ["EntryOne", "EntryTwo", "EntryThree"]
+  
+  SharedMem.begin(4280000)
+  
+  Try SharedMem["dtest"] = MyIntArray
+  SharedMem["stest"] = MyStringArray
+  .["stest", 2] = "dataentry 2"
+  Assert.Equals(.["stest", 2], "dataentry 2", "Verify can change string element")                ' very very slow dont use if can be helped
+    
+  Try SharedMem["dtest", 4] = 36
+  Assert.Equals(SharedMem["dtest", 4], 36, "Verify can change numeric element")
+
+  starttime = Timer
+  For i As Integer = 1 To LoopCount
+    SharedMem["dtest", 9] = i
+  Next
+  Assert.Equals(LoopCount, .dtest[9], "Write int Ending time = " & Str(Timer - starttime) & " Ending value = " & Str(SharedMem["dtest", 9]))
+  
+  starttime = Timer
+  For i As Integer = 1 To LoopCount
+    rTester = SharedMem["dtest", 9]
+  Next
+  Assert.Equals(LoopCount, .dtest[9], "Read int Ending time = " & Str(Timer - starttime) & " Ending value = " & Str(SharedMem["dtest", 9]))
+  
+  Dim dtest As SharedMemSymbol = SharedMem._symbol("dtest")
+  starttime = Timer
+  For i As Integer = 1 To LoopCount
+    dtest[9] = i
+    rTester = dtest[9]
+  Next
+  Assert.Equals(rTester, dtest[9], "R/W int Lev 2 Symbol: Time  = " & Str(Timer - starttime) & " value = " & Str(SharedMem["dtest", 9]))
+  
+
+  starttime = Timer
+  Dim a As Integer[] = dtest.value
+  For i As Integer = 1 To LoopCount
+    a[9] = i
+    rTester = a[9]
+  Next
+  dtest.Value = a
+  Assert.Equals(a[9], dtest[9], "Proxy R/W Int time = " & Str(Timer - starttime) & " Ending value = " & Str(dtest[9]))
+  
+  Dim stest As SharedMemSymbol = SharedMem._symbol("stest")
+  Dim sTester As String
+  starttime = Timer
+  For i As Integer = 1 To LoopCount
+    stest[1] = "This " & Str(i)
+    sTester = stest[1]
+  Next
+  Assert.equals(stest[1], .stest[1], "Symbol R/W String time = " & Str(Timer - starttime) & " Ending value = " & Str(stest[1]))
+  
+  .End()
+  End With
+  
+  Catch
+    Error Error.text, Error.where
+    SharedMem._print()
+    SharedMem.End()
+
+End
+
+
+

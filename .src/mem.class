@@ -1,7 +1,6 @@
 ' Gambas class file
 
 Export
-'Fast Unsafe
 
 'Extern memset(dest As Pointer, Val As Integer, len As Integer) As Pointer In "libc:6"
 'Extern strncpy(dest As Pointer, src As Pointer, len As Integer) As String In "libc:6" ' defined as string to force gambas to copy len 0 and return string type

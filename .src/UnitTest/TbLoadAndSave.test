@@ -100,138 +100,100 @@ End
 Public Sub bSaveAndLoadVariables()
   Dim iString As String[]
   Dim b As Variant
+  Dim a As New SharedObjectExample
+  Dim c As SharedObjectExample
+  Dim TheString As String[] 
   
   With SharedMem
   .begin(12800)
   
   .["TheInteger[]"] = [0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 100]
-  .["TheString[]"] = ["sfsdfsdfsdf", "sdfsergtergtergergergergerggrergerggerggrggr", "sdgdgdgsgddgsdgsgdsdgsdggsdsdgsdgsdgsgdsgd"]
-  .["TheObject"] = New SharedObjectExample
-  .["TheObject2"] = New SharedObjectExample
+  .["TheString[]"] = ["Validdata", "sdfsergtergtergergergergerggrergerggerggrggr", "sdgdgdgsgddgsdgsgdsdgsdggsdsdgsdgsdgsgdsgd"]
+  TheString = .["TheString[]"]
   .TheString = "abc"
   .TheString = ".Add................................\nabcdefghijklmnopqrstuvwxyz0123456789"
   .TheString = "Sub aaa()\nLabel1:\nprint \"hello\"\ngoto Label1\nend\n"
-  
   
   .TheNumber = 23
   Assert.Equals(.TheNumber, 23, "Verify Creation of variable")
   .TheNumber = "ThisEntry"
   Assert.Equals(.TheNumber, "ThisEntry", "Verify Auto DataType Change N->S of variable")
   .TheNumber = 25
-   Assert.Equals(.TheNumber, 25, "Verify Auto DataType Change s->n of variable")
+  Assert.Equals(.TheNumber, 25, "Verify Auto DataType Change s->n of variable")
   Try .End("/tmp/file1")
   Assert.Noterror("Save Image to temp file")
   
   Try .begin("/tmp/file1")
   Assert.Noterror("Reload the temp image")
-  
+  ' 
   .WriteVarTo("TheString")
   Dim BeforeLoad As String = .TheString
   .ReadVarFrom("TheString")
   Assert.Equals(BeforeLoad, .TheString, "Verify that Save and loading a singles Variable works")
   
+  
+  '' Work with objects
+  
+  .["TheObject"] = New SharedObjectExample
+  .["TheObject2"] = New SharedObjectExample
   .WriteVarTo("TheObject", "/tmp/file2")
   .ReadVarFrom("TheObject2", "/tmp/file2")
   Assert.Equals(.TheObject(), .TheObject2(), "Veryify we can save and load a single object")
   
+  .WriteVarTo("TheObject")
+  .ReadVarFrom("TheObject")
+  Assert.Equals(.TheObject.ThisArray[0], "bob", "Verify we load And saved object correctly")
   
-  ' Print "Save Variable default naming *****************************************"
-    .WriteVarTo("TheObject")
-    .ReadVarFrom("TheObject")
-   'Print .["TheObject"]()
+  .TheObject = .TheObject.Set(["a", "b", "c"])
+  a.set(["a", "b", "c"])
+  .Object3 = a
+  c = .Object3
+  Assert.Equals(a.ThisArray[0], c.ThisArray[0], "Verify that objects are copied to and from the memory database correctly")
   
-    .["TheObject"] = .["TheObject"].Set(["a", "b", "c"])
-'  .["TheObject"] = .["TheObject"].SetThisNumber(8)
-  
-    Dim a As New SharedObjectExample
-    Dim c As SharedObjectExample
-    a.set(["a", "b", "c"])
-    'Print a()
+  '' End of object testing  
     
-    .["Object3"] = a
+  .WriteVarTo("TheString[]")
+  .free("TheString[]")
+  .ReadVarFrom("TheString[]")
+  Assert.Equals(.["TheString[]"][0], TheString[0], "Verify we can save Var/delete from database/Recreate from file")
     
-    c = .["Object3"]
-    
-    'Print "B="; c()
-    'Print .["Object3"]()
   
-    .ReadVarFrom("TheObject2", "TheObject")
-    'Print .["TheObject"]()
-    'Print .["TheObject2"]()
-    'Print "\n Class tostring printed"
-    'Print .TheObject2.ToString()
-  
-    'Print "Test Save load array strings type ================================================"
-    .WriteVarTo("TheString[]")
-    .free("TheString[]")
-    .ReadVarFrom("TheString[]")
-  
-    iString = .["TheString[]"]
-    ' For Each j As String In iString
-    '  Print j
-    ' Next
+  iString = .["TheString[]"]
+  .TheString = "This is a test of the whole darn suite"
 
-    .TheString = "This is a test of the whole darn suite"
-    
-    .End(".")
-  
-  '============================================================
-  .Begin(".")
-  ' Print "Saved string :"; .TheString
-  ' Print "Saved Number :"; .TheNumber
-  .End()
-  '=======================================================================
-'Print "Test Named Shared Memory====================================================================="
-.BeginNamed("junk", 128000, True)
-.["test"] = "yesy"
-
-.End("junk")
-
-.BeginNamed("junk", 128000, True)
-If Not .exist("test") Then .Merge("junk")
-
-'Print "Named mem saved test=";; .test
-
-.End()
+  .End(".")
  
-
-  
   End With
-   ' Print "End   Test Save Load ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
-  Quit 0
+
 End
 
 Public Sub cClearMerge()
-  
+Dim firstVarList As String
 With SharedMem
   
   .Begin(128000)
-  
-  
-      .["This var"] = 100
-      .["ThatVar"] = "this String"
-      Print .VariableList()
+      .ThisVar = 100
+      .ThatVar = "This String"
+      Assert.Equals(.ThisVar, 100, "Verify we created the variables")
+      firstVarList = .VariableList()
   .End(".")
   
   .Begin(".")
   
-    Print .VariableList()
+    Assert.Equals(FirstVarList, .VariableList(), "Ensure we reloaded the same list")
     
     .ClearMem()
-    
-    Print "["; .VariableList(); "]"
-    
+    Assert.Notequals(FirstVarList, .VariableList(), "Ensure clear mem worked")
     .["Boss"] = "mean"
     .["Sassy"] = "girl"
     
-     Print "["; .VariableList(); "]"
-     
+     FirstVarList = .VariableList()
+    
      .Sync(".")
      
      .ClearMem()
-       Print "["; .VariableList(); "]"
      .merge(".")
-        Print "["; .VariableList(); "]"
+     Assert.Equals(FirstVarList, .VariableList(), "Ensure we can cleanmem and then merge an image with it")
   .End(".")
   
 End With

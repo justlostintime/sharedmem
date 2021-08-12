@@ -11,6 +11,7 @@ Public SymbolName As String = ""
 Public DataType As Integer = gb.byte
 Public CreatedByMe As Boolean = False
 Public Parent As Object = Null
+Public $oShm As Variant = Null
 
 
 Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "libc:6"
@@ -20,6 +21,12 @@ Extern memset(dest As Pointer, Value As Integer, Sizet As Integer) As Pointer In
 Extern rWrite(handle As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "write"
 Extern rRead(handel As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "read"
 
+
+Public Sub _new(Optional shm As Variant = Null)
+  
+  $oShm = shm
+  
+End
 
 Public Sub _read(mFile As File)
   Dim iLen As Integer
@@ -289,7 +296,7 @@ End
 
 Public Sub Duplicate(Symbol As String) As Buffer ' returns a pointer to the new storage area
   
-       Dim myBuff As Buffer = New Buffer
+       Dim myBuff As New Buffer($oShm)
        myBuff.Create(symbol, StorageLength)
        memcpy(myBuff(), Me(), storageLength)
        Return mybuff

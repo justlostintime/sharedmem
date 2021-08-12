@@ -2,7 +2,7 @@
 
 Public Sub main() 
   
-  Dim MyBuff As Buffer = New Buffer
+  Dim MyBuff As New Buffer
   Dim MyVar As Variant = "this"
   Dim MyString As String = ""
   Dim MyInt As Integer = 0
@@ -23,7 +23,7 @@ Public Sub main()
   
   SharedMem.DumpMem(MyBuff(), MyBuff.Len())
   
-  Dim MyStore As Buffer = New Buffer
+  Dim MyStore As New Buffer
   Dim MyBuff2 As Buffer 
   
   MyStore.Access("TheBuffer") 

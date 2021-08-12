@@ -11,7 +11,7 @@ Public Port As Integer = 22
 Public Password As String = ""
 Public shmName As String = User.name & "gsh"
 Public BlockSize As Integer = 4512000
-
+Public $oShm As SharedMem = Null
 
 Public Sub main()
 With sharedmem

@@ -1,0 +1,21 @@
+' Gambas test file
+
+Public Sub aStringGetsbigger()
+  
+  With SharedMem
+    .Begin(450000)
+    .myString = "..........................................................................................."
+    .myint = 1
+    Dim mystring As SharedMemSymbol = ._Symbol("myString")
+    Print .mystring.len, .len("myString"), Len(.mystring), mystring.LastWriteLength, MyString.storageLength, MyString.dataLength
+    For i As Integer = 0 To 1000
+      .myString = .MyString & "++ "
+      Print .mystring.len, .len("myString"), Len(.mystring), mystring.LastWriteLength, MyString.storageLength, MyString.dataLength
+    Next
+    .MyString = "Hello"
+    Print .mystring.len, .len("myString"), Len(.mystring), mystring.LastWriteLength, MyString.storageLength
+    '._print()
+    .End()
+  End With
+  
+End

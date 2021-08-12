@@ -83,12 +83,12 @@ Static Public DataTypes As String[] = ["Binary", "Boolean", "Byte", "Short", "In
                                 "LongDate", "Pointer", "Variant", "Function", "Class", "NULL", "Object", "Not Array", "Type 19", "Type 20"
                                 "type 21", "type 22", "type 23", "type 24", "type 25"]
                                        
-Static Private WaitQueue As SharedMemWaitQueue = New SharedMemWaitQueue        ' we will queue wait requests here
+Static Private WaitQueue As SharedMemWaitQueue                 ' we will queue wait requests here
 
 Static Private MemoryStorage As Pointer = Null                 ' actual storage address
 Static Private MemoryRoot As Pointer = Null                    ' then link address of this block
 Static Private MemoryOffset As Long = 0                        ' adjustment for all memory operations
-Static Public MemoryAddress As Pointer = Null                 ' As Pointer = Null  ' array of memory mapped blocks
+Static Public MemoryAddress As Pointer = Null                  ' As Pointer = Null  ' array of memory mapped blocks
 Static Private MemoryLength As Pointer = Null                  ' As Integer = 0     ' total length of memory we allocate
 Static Private MemoryInUse As Pointer = Null                     ' track how many applications are accessing this memory block
 Static Private ChunkLength As Pointer = Null                   ' As Integer
@@ -232,6 +232,8 @@ Static Public Sub _init()
         Try Class.Load("signal")
         If Error Then Print #File.err, "Error loading signal"; Error.where;; Error.text
      Endif
+     
+     WaitQueue = New SharedMemWaitQueue(Me)
 End
 
 Static Private Sub AllocChunk() As Pointer
@@ -485,29 +487,36 @@ Endif
    
 End
 
+Static Private ProtectedVariables As String[] = ["notifylist"]
 '' this function clears the memory and deletes all the variables
 Static Public Sub ClearMem()
 Dim s As Sharedmemsymbol
+Dim DeleteSet As New String[]
 
     While sem_trywait(UserMem.AddrReal(memMutex))
           sched_yield()
     Wend
   
     CollectionChanged()
-   
-           While SymbolTable.count > 0  ' delete all the symbols
-             s = SymbolTable[SymbolTable.last]
-             sem_post(UserMem.AddrReal(memMutex))
-             Me.Free(s.SymName)
-             While sem_trywait(UserMem.AddrReal(memMutex))
-                  sched_yield()
-             Wend
+    
+    For Each s In SymbolTable
+      If ProtectedVariables.Exist(s.SymName) Then Continue 
+      DeleteSet.add(SymbolTable.key) 
+    Next
+    
+           For Each ss As String In Deleteset
+             s = SymbolTable[ss]
+             'sem_post(UserMem.AddrReal(memMutex))
+             Me.Free(s.SymName, False)                              ' this tries to lock the mutex as well
+             'While sem_trywait(UserMem.AddrReal(memMutex))
+             '     sched_yield()
+             'Wend
              SymbolTable.Remove(s.SymName)
-           Wend
+           Next
            
     SaveCollection()
     
-     'WaitQueue = New SharedMemWaitQueue
+     ' WaitQueue = New SharedMemWaitQueue
      WaitQueue.reset()
      LastMemorySync = ""
      
@@ -590,7 +599,7 @@ End
 '' with no parameters restores all of memory, with symbol, restores the variable to shared memory
 '' . means all Memory
 Static Public Sub Restore(Optional Symbol As String = "", filename As String = "") As Boolean
-   Dim wFile As File
+   'Dim wFile As File
    
    If MemoryStorage = Null Then Return False   ' can only restore if the we have memory
    
@@ -637,10 +646,10 @@ Static Public Sub End(Optional FileName As String = "\t\t") ' free all the block
   
   WaitQueue.Dofree()  ' remove our pid from waiting list
   
-  Dim testa As Integer = usermem[MemoryInUse]
+  'Dim testa As Integer = usermem[MemoryInUse]
   
   Signal(SharedMemWaitQueue.ChangeSignal, NullPointer)
-  WaitQueue = New SharedMemWaitQueue
+  WaitQueue = New SharedMemWaitQueue(Me)
   
   sem_destroy(UserMem.AddrReal(MemMutex))
   sem_destroy(ColMem.AddrReal(Mutex))
@@ -699,14 +708,15 @@ Static Public Sub End(Optional FileName As String = "\t\t") ' free all the block
   InSession = False
 End
 
-'' Creates an element/pointer to an area withing a variables area of memory\
-'' it return an Element which need not be used. The refrenced pointer me be used in two ways
+'' Creates an element/pointer to an area within a variables area of memory\
+'' it return an Element which need not be used.\
+'' The refrenced pointer may be used in two ways:\
 '' > Through the returned Element object which is not locked during access.\
 '' > MyElement[0] or as SharedMem["TheElement"] which is locked during access\
-'' > > MyElement = SharedMem.Element(\[BufferObject | "VariableName"\], "TheNameWeGiveourPointer", 0, Sizeof(gb.long), gb.Long)\
-'' > > MyElement\[0\] = 20 ' Un protected change\
+'' > > MyElement = SharedMem.Element(\[BufferObject | "VariableName"\], "TheNameWeGiveOurPointer", 0, Sizeof(gb.long), gb.Long)\
+'' > > MyElement\[0\] = 20 ' Unprotected - No Semaphor lock during the data change.\
 '' > > or\
-'' > > SharedMem\["TheNameWeGiveourPointer"\] = 20 ' protected change\
+'' > > SharedMem\["TheNameWeGiveourPointer"\] = 20 ' Protected - Uses Semaphor lock during the data change.\
 '' > > 
 Static Public Sub Element(RootVar As Variant, symbol As String, index As Integer, DataType As Integer, Optional ilen As Integer = -1) As Element
   Dim MySymbol, RootSymbol As SharedMemSymbol
@@ -724,7 +734,7 @@ Static Public Sub Element(RootVar As Variant, symbol As String, index As Integer
       Return CPointer(Null)
     Endif
     If RootSymbol.SpecialObject = Null Then
-       RootObject = New Buffer
+       RootObject = New Buffer(Me)
       RootObject.Access(RootVar)
       RootSymbol.SpecialObject = RootObject
     Else
@@ -754,7 +764,7 @@ Static Public Sub Element(RootVar As Variant, symbol As String, index As Integer
       Return CPointer(Null)
   Endif
   
-  MyElement = New Element
+  MyElement = New Element(Me)
   MySymbol = PointerAlloc(symbol, MyElement, RootSymbol.RootAddress, RootObject.RootAddress + index, ilen, Datatype)
   
   MyElement.RootAddress = RootObject.RootAddress + index
@@ -778,7 +788,7 @@ Static Private Sub PointerAlloc(symbol As String, MyObject As Object, Rootaddr A
   
   If Not SymbolTable.exist(Symbol) Then
     
-     Dim MySymbol As SharedMemSymbol = New SharedmemSymbol
+     Dim MySymbol As New SharedmemSymbol(Me)
      
      MySymbol.SpecialObject = MyObject
      
@@ -827,7 +837,7 @@ Static Public Sub NamedAlloc(Symbol As String, MemSize As Integer, MyObject As V
    
    If Not SymbolTable.exist(Symbol) Then
      
-     MySymbol = New SharedMemSymbol
+     MySymbol = New SharedMemSymbol(Me)
      MySymbol.SpecialObject = MyObject
      MySymbol.ObjectName = Object.Type(MyObject)
      MySymbol.ClassName = Object.Type(MyObject)
@@ -1080,24 +1090,26 @@ Static Public Sub Add(LSymbol As SharedMemSymbol)
   
 End
 '' free a variables storage and move the block to the free list
-Static Public Sub free(symbolKey As String) As Boolean       ' note here the symbols shared memory will be freed and the symbol table entry will be deleted true if deleted
+Static Public Sub free(symbolKey As String, Optional bLock As Boolean = True) As Boolean       ' note here the symbols shared memory will be freed and the symbol table entry will be deleted true if deleted
       Dim Symbol As SharedMemSymbol = SymbolTable[symbolKey]
       Dim waittime As Integer = 0
       
-      While sem_trywait(UserMem.AddrReal(MemMutex)) ' wait till we have control of memory
-          Inc waittime
-          If waittime > WaitTimeout Then
-              Error.Raise("Race condition sharedmem.free")
-          Endif
-          sched_yield()
-      Wend
+      If bLock Then 
+        While sem_trywait(UserMem.AddrReal(MemMutex)) ' wait till we have control of memory
+            Inc waittime
+            If waittime > WaitTimeout Then
+                Error.Raise("Race condition sharedmem.free")
+            Endif
+            sched_yield()
+        Wend
+      Endif 
       
       CollectionChanged()
       
       Symbol = SymbolTable[symbolKey]
 
       If IsNull(Symbol) Then 
-          sem_post(UserMem.AddrReal(MemMutex))
+          If bLock Then sem_post(UserMem.AddrReal(MemMutex))
           Return False
       Endif
       
@@ -1112,14 +1124,16 @@ Static Public Sub free(symbolKey As String) As Boolean       ' note here the sym
       
       SaveCollection()
       
-      sem_post(UserMem.AddrReal(MemMutex))
+      If bLock Then
+         sem_post(UserMem.AddrReal(MemMutex))
+      Endif
       
       Return True
        
       Catch 
         Dim iCount As Integer = 0
         sem_getvalue(UserMem.AddrReal(MemMutex), VarPtr(iCount))
-        If iCount = 0 Then sem_post(UserMem.AddrReal(MemMutex))
+        If iCount = 0 And bLock Then sem_post(UserMem.AddrReal(MemMutex))
         Error.Propagate()
   
 End
@@ -1202,7 +1216,7 @@ Static Public Sub _put(data As Variant, index As String, Optional subscript As I
   
   CollectionChanged()
   px = SymbolTable[index]
-  If Not IsNull(px) And If px.symtype <> TypeOf(data)
+  If Not IsNull(px) And Subscript < 0 And If px.symtype <> TypeOf(data)
       If Not px._waiting() Then 'allow To change the type Of data stored by a symbol
            Me.free(index)
            px = Null
@@ -1222,24 +1236,25 @@ Static Public Sub _put(data As Variant, index As String, Optional subscript As I
   
   px = SymbolTable[index]
   If Not IsNull(px) Then
-    If px.symtype = gb.object Then px.updateobjectinfo(data)
+    
+    If px.symtype = gb.object And If subscript < 0 Then
+        px.updateobjectinfo(data)
+    Endif
     
     If px.SpecialType > ShmTypeAry Then
       px.SpecialObject[If(subscript < 0, 0, subscript)] = data
-    Else
-        If subscript >= 0 Then
+    Else If subscript >= 0 Then
             px.ShmWriteSub(data, subscript)
-        Else
+    Else
             px.ShmWrite(data)
             If px.symtype = gb.string Or px.symtype = gb.object Then
               SaveCollection()
             Endif
-         Endif
     Endif
-                 ' still to fix if location change
+                     ' still to fix if location change
   Else
     
-    px = New SharedMemSymbol
+    px = New SharedMemSymbol(Me)
     px.SetSymbol(index, data)
     SaveCollection()              ' update the shared area so other tasks know items add/deleted etc
     
@@ -1344,7 +1359,7 @@ Static Private Sub LoadCollection()
     
     For i As Integer = 1 To SymCount
   
-      ISym = New SharedMemSymbol
+      ISym = New SharedMemSymbol(Me)
       ISym._read(MFile)
  
       Me.Add(ISym)
@@ -1639,7 +1654,7 @@ Static Public Sub _read(mFile As File, Optional iMerge As Boolean = False) As Bo
   TableCount = Read #mFile As Integer
   
   For I As Integer = 1 To TableCount
-    symbol = New SharedMemSymbol
+    symbol = New SharedMemSymbol(Me)
     symbol._read(mFile, True)                     ' read the symbol and load the data
     add(symbol)
   Next
@@ -1670,7 +1685,7 @@ End
 '' This allows a variable to be stored to a file
 '' by default if no file is specified then The variable is written to users home directory/vars/varname
 '' the entire context of the variable is stored, for loading at a different time
-Static Public Sub WriteVarTo(symbol As String, Optional FileName As Variant = "", sync As Boolean = False) As Integer
+Static Public Sub WriteVarTo(symbol As String, Optional FileName As Variant = "", bsync As Boolean = False) As Integer
  
   Dim wfile As File
   Dim mSymbol As SharedMemSymbol
@@ -1690,7 +1705,7 @@ Static Public Sub WriteVarTo(symbol As String, Optional FileName As Variant = ""
     Endif
   Else
     If filename = "" Then
-      filename = If(Not sync, DefaultSaveLocation & symbol, If(msymbol.LastMemorySync = "", DefaultSaveLocation & symbol, msymbol.LastMemorySync))
+      filename = If(Not bsync, DefaultSaveLocation & symbol, If(msymbol.LastMemorySync = "", DefaultSaveLocation & symbol, msymbol.LastMemorySync))
     Endif
   
     Dim closefile As Boolean = True
@@ -1747,7 +1762,7 @@ Static Public Sub WriteVarTo(symbol As String, Optional FileName As Variant = ""
       retlen = mSymbol._serialize(True)
   Endif
   
-  If sync And If closefile Then mSymbol.LastMemorySync = FileName
+  If bsync And If closefile Then mSymbol.LastMemorySync = FileName
   
   sched_yield()
   
@@ -1765,7 +1780,7 @@ End
 '' The Variable value may be loaded into a diffrent variable name by specifiing the filename as other then default\
 '' > SharedMem.ReadVarFrom("MyVar") <- reads from file of this name\
 '' > SharedMem.ReadVarFrom("MyVar","TheOtherVar") <- reads from the content of a var called MyOtherVar
-Static Public Sub ReadVarFrom(symbol As String, Optional fileName As Variant = "", sync As Boolean = False) As Integer
+Static Public Sub ReadVarFrom(symbol As String, Optional fileName As Variant = "", bsync As Boolean = False) As Integer
   Dim wfile As File
   Dim mSymbol As SharedMemSymbol
   Dim closefile As Boolean
@@ -1814,14 +1829,14 @@ Static Public Sub ReadVarFrom(symbol As String, Optional fileName As Variant = "
           sched_yield()
   Wend
 
-  mSymbol = New SharedMemSymbol
+  mSymbol = New SharedMemSymbol(Me)
   mSymbol._read(wFile, True)
   mSymbol.symname = symbol                    'make sure the name is what we asked for
   add(mSymbol)
   
   If closefile Then Close wFile
   
-  If sync And closefile Then mSymbol.LastMemorySync = filename
+  If bsync And closefile Then mSymbol.LastMemorySync = filename
   
   SaveCollection()              ' update the shared area so other tasks know items add/deleted etc
     
@@ -1998,7 +2013,7 @@ Endif
   
   If Param.count = 0 Then
       Return SharedMem[Param.name]
-  Else
+  Else 
       SharedMem[Param.name] = Param[0]
   Endif
 End
