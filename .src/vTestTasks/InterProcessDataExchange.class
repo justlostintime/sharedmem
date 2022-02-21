@@ -3,44 +3,45 @@
 Inherits Task
 
 Public Sub main()
-With Sharedmem
-  
- .BeginNamed("TestBlock", 128000, True)
- 
- .SyncMessage = 0
- .TestString = "Hello"
 
-While .TestString <> "quit"
-  While .SyncMessage = 0
-    Wait
-  Wend
-  .Result = .TestString
-  .SyncMessage = 0
-Wend
+  With Sharedmem
 
-      Dim pSyncMessage As Pointer = ._varptr("SyncMessage")
-      Dim pTestString As Pointer = ._varptr("TestString")
-      Dim pResult As Pointer = ._varptr("Result")
-      
-      .usermem[pTestString] = "Ready"
+    .BeginNamed("TestBlock", 128000, True)
+
+    .SyncMessage = 0
+    .TestString = "Hello"
+
+    While .TestString <> "quit"
+      While .SyncMessage = 0
+        Wait
+      Wend
+      .Result = .TestString
+      .SyncMessage = 0
+    Wend
+
+    Dim pSyncMessage As Pointer = ._varptr("SyncMessage")
+    Dim pTestString As Pointer = ._varptr("TestString")
+    Dim pResult As Pointer = ._varptr("Result")
+
+    .usermem[pTestString] = "Ready"
+    .usermem[pSyncMessage] = 0
+
+
+    While .usermem[pTestString] <> "quit"
+      While .usermem[pSyncMessage] = 0
+        Wait
+      Wend
+
+      .usermem[pResult] = .usermem[pTestString]
       .usermem[pSyncMessage] = 0
-      
 
-While .usermem[pTestString] <> "quit"
-  While .usermem[pSyncMessage] = 0
-    Wait
-  Wend 
-  
-  .usermem[pResult] = .usermem[pTestString]
-  .usermem[pSyncMessage] = 0
-  
-Wend
+    Wend
 
- .End()
- 
- Catch 
-   Print Error.text, Error.where
-   
-End With
+    .End()
+
+  Catch
+    Print Error.text, Error.where
+
+  End With
 
 End
