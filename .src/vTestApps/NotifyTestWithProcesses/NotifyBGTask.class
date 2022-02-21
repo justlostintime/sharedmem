@@ -1,0 +1,28 @@
+' Gambas class file
+
+Inherits Task
+
+Public Sub main() As String 
+
+With NewNotifyTest.vars
+  Print Application.id, "BG Begins,";;
+  .Notify("cow", Me)
+  Print "Notify Set"
+  While True
+    Wait 0.01
+  Wend
+  
+End With
+  Return "Done"
+  
+Catch 
+  Print Application.id, "BG Error =";; Error.text, Error.where
+
+End
+
+Public Sub cow_changed(VarName As String, VarValue As Variant, TimedOut As Boolean)
+  
+  Print Application.id, "BG Cow Changed ", VarName, "=", VarValue
+  If VarValue == 100 Then Quit 0
+  
+End

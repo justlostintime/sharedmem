@@ -1,0 +1,208 @@
+' Gambas class file
+
+  Const VarMemDefault As Long = 2000000
+  Const MaxSymbolsDefault As Integer = 8000
+  Const TimeOutDefault As Float = 0.1
+  
+  Public varStore As ShmMemBlock
+  Public varMnge As ShmManage
+  Public MyVarMem As ShmVarStorage
+  Public VarStoreName As String 
+  
+  Public symStore As ShmMemBlock
+  Public vars As ShmSymbolTable
+  Public SymStoreName As String
+
+  Property Read Count As Integer
+  Property Read Max As Integer
+  Property Read Length As Integer 
+  Private $sKey As String
+  Property Read Key As String
+  Property Debug As Boolean Use $bDebug
+  
+  
+'' Remove the memory by force
+Static Public Sub ForceDelete(SharedName As String)
+  
+  Try shmMemBlock.ForceDelete(SharedName & "Data")
+  Try shmMemBlock.ForceDelete(SharedName & "Symbols")
+  
+End
+
+  
+  '' Allocate the memory
+  Public Sub _new(Optional VarMemLength As Long = VarMemDefault, MemName As String = "", MaxSymbols As Integer = MaxSymbolsDefault, LockTimeOut As Float = TimeOutDefault)
+  
+  If MemName <> "" Then 
+    VarStoreName = Memname & "_Data"
+    SymStoreName = Memname & "_Symbols"
+    VarStore = New ShmMemBlock(VarMemLength, VarStoreName, LockTimeOut)
+    symStore = New ShmMemBlock((ShmSymbolTable.SymbolLength() * MaxSymbols) + ShmSymbolTable.InfoLength(), SymStoreName, LockTimeOut)
+  Else 
+    VarStoreName = ""
+    SymStoreName = ""
+    VarStore = New ShmMemBlock(VarMemLength, MemName, LockTimeOut)
+    symStore = New ShmMemBlock((ShmSymbolTable.SymbolLength() * MaxSymbols) + ShmSymbolTable.InfoLength(), MemName, LockTimeOut)
+  Endif
+  
+  VarMnge = New ShmManage(varStore)
+  MyVarMem = New ShmVarStorage(varMnge)
+  vars = New ShmSymbolTable(symStore, MyVarMem)
+
+End
+
+Public Sub _free()
+  
+  Vars = Null
+ ' SymStore = Null
+  'MyVarMem = Null
+  varMnge = Null
+  'varstore = Null
+  
+End
+
+
+Public Sub _get(SymName As String) As Variant
+  
+  Return vars[SymName]
+  
+End
+
+Public Sub _put(value As Variant, SymName As String)
+  
+  vars[SymName] = value
+  
+End
+
+Public Sub {Free}(SymName As String)
+  
+  vars.Free(SymName)
+  
+End
+
+
+Public Sub {VarPtr}(SymName As String) As Variant
+  
+  Return vars.VarPtr(SymName)
+  
+End
+
+Public Sub {SizeOf}(Value As Variant) As Long
+  
+    Return MyVarMem.SizeOf(Value)
+  
+End
+
+Public Sub {Print}()
+  
+  Print vars.Text
+  
+End
+'   Const VarMemDefault As Long = 2000000
+'   Const MaxSymbolsDefault As Integer = 8000
+'   Const TimeOutDefault As Float = 0.1
+'   
+'   Public varStore As ShmMemBlock
+'   Public varMnge As ShmManage
+'   Public MyVarMem As ShmVarStorage
+'   
+'   Public symStore As ShmMemBlock
+'   Public vars As ShmSymbolTable
+'   Public NotifyVars As ShmNotify
+Public Sub PrintAllInfo()
+  Print "***************************************** Full Memory Info***************************************************"
+  Print Subst("Default Memory Size &1Meg,MAx Symbol Table entries &2, Default Timeout &3", VarMemDefault, MaxSymbolsDefault, TimeOutDefault)
+  Print 
+  Print Vars.text
+  Print 
+  VarMnge._Print()
+  Print 
+  
+End
+
+
+Public Sub PrintTree()
+  
+  Print MyVarMem.TextTree()
+  
+End
+
+
+Public Sub WaitFor(SymName As String, Optional Timeout As Float = 0) As Boolean
+  
+  Return vars.WaitFor(symname, timeout)
+  
+End
+
+Public Sub WaitForValue(SymName As String, Value As Variant, Optional Timeout As Float = 0) As Boolean
+  
+  Return vars.WaitForValue(symname, Value, timeout)
+  
+End
+
+Public Sub WaitValueChange(SymName As String, Value As Variant, Optional Timeout As Float = 0) As Boolean
+  
+  Return vars.WaitValueChange(symname, Value, timeout)
+  
+End
+
+Public Sub Notify(SymName As String, NotifyObject As Object, Optional NotifyFunction As String = "")
+  
+  vars.NotifyVars.Notify(SymName, NotifyObject, NotifyFunction)
+  
+End
+
+Public Sub StopNotify(SymName As String)
+  
+   vars.NotifyVars.NotifyStop(SymName)
+  
+End
+
+Public Sub _next() As Variant
+  Static SymList As String[]
+  
+  If Enum.Index = Null Then 
+    SymList = Vars.SortedList()
+    Enum.index = 0
+  Else 
+    Inc Enum.Index
+    If Enum.index > SymList.max Then 
+      Enum.Stop()
+      Return
+    Endif
+  Endif 
+  $sKey = SymList[Enum.index]
+  Return Vars[SymList[Enum.Index]]
+  
+End
+
+Public Sub Exist(SymName As String) As Boolean
+  
+  Return Vars.Exist(SymName)
+  
+End
+
+
+Private Function Count_Read() As Integer
+
+  Return Vars.count
+
+End
+
+Private Function Max_Read() As Integer
+
+  Return Vars.max
+
+End
+
+Private Function Length_Read() As Integer
+
+  Return vars.Count
+
+End
+
+Private Function Key_Read() As String
+
+  Return $sKey
+
+End

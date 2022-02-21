@@ -46,9 +46,9 @@ Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "li
 ' Extern rRead(handel As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "read"
 ' Extern rClose(Handle As Integer) As Integer In "libc:6" Exec "close"
 
-Public Sub _new(Optional shm As Variant = Null)
+Public Sub _new(Optional vshm As Variant = Null)
   
-  $oShm = shm
+  $oShm = vshm
   
 End
 

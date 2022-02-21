@@ -16,6 +16,7 @@ Extern rClose(Handle As Integer) As Integer In "libc:6" Exec "close"
 Public LastWriteLength As Integer = 0                      '' The length of the last write
 Public RootAddress As Pointer = CPointer(0)                '' The rootAddress of the actual memory
 Public MemoryLength As Long = -1                           '' The length of the memory pool if originally provided
+Public MemoryBlockSize As Long = -1                        '' Length of each block to allocate when out of space
 
 '' When this is set mem assumes its using real pointers not offset pointers, pointers must point to real data
 '' Indirection to objects and strings will not be used , just assumes its real pointers to data
@@ -25,7 +26,7 @@ Public RealPointers As Boolean = False
 
 '' This sets the usage style of the object
 '' first parameter should set the base of the shared memory area or 0 for Realmemory access
-'' Sets if this instance is for real memory, not base offse calculation
+'' Sets if this instance is for real memory, not base offset calculation
 Public Sub _new(Optional BaseAddress As Pointer = 0, UsingRealMemoryAddress As Boolean = False, MemLength As Long = -1)
   
   RootAddress = BaseAddress

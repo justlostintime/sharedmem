@@ -1,0 +1,31 @@
+' Gambas module file
+
+Public Sub main()
+  
+  Dim vmem As New ShmMem(1000000)
+  Dim c As New Collection
+  
+  With vmem
+    !go = "hello"
+    !goagain = "bye"
+    !Pork = 1
+    !Alpha = "Bobby"
+    !Beta = 3
+    c!Dumb = "hello"
+    Print vmem.Count, !PorkBellies, c!smart
+    
+    For Each v As Variant In vmem
+      Print vmem.key, v
+    Next
+    
+    For Each v In c
+      Print c.key, v
+    Next
+    
+    Print !go, !goagain
+    
+    
+  End With
+  
+  
+End

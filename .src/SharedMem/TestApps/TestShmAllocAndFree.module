@@ -9,11 +9,11 @@ Public Sub main()
  Dim bb As Pointer
  Dim cc As Pointer
  
- Dim data As Variant
- Dim MyObject As SharedObjectExample = New SharedObjectExample
+ 'Dim data As Variant
+ 'Dim MyObject As SharedObjectExample = New SharedObjectExample
  
   Print "Begin Test Alloc Free ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
-  
+         
   SharedMem.begin(100000)
   Print "Begin of testing"
   SharedMem._print()

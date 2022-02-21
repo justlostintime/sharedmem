@@ -1,0 +1,18 @@
+' Gambas class file
+
+Inherits Task
+
+Public Sub main()
+
+  With NewProcessUsingNamed.vmem
+  Print "Mapped Task Waiting for  goagain = 'run' "
+
+    .WaitForValue("goagain", "run")
+    Print "Mapped got "; !goagain
+    !goagain = "done"
+    Print "Mapped All Done"
+  Quit
+  End With
+  Catch 
+    Print Error.text, Error.where
+End

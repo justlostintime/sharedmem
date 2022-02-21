@@ -1,0 +1,16 @@
+' Gambas class file
+
+Inherits ShmListEntry
+
+Property Read Priority As Long
+
+
+Private Function Priority_Read() As Long
+
+  Return Super.Entry.RefCount
+
+End
+
+
+
+

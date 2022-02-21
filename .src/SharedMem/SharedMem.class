@@ -238,16 +238,31 @@ End
 
 Static Private Sub AllocChunk() As Pointer
   Dim p As Pointer
-  
-      P = mremap(mem[MemoryAddress], UserMem[MemoryLength], (usermem[MemoryLength] + UserMem[ChunkLength]), 0)
+      If usermem[MemoryInUse] > 1 Then
+        Error.Raise("Unable to allocate new memory Block, Can not move as other pid's ref to this shared memory")
+      Endif
       
-      If p <> MemoryAddress Then
+      P = mremap(UserMem.RootAddress, UserMem.MemoryLength, (UserMem.MemoryLength + UserMem.MemoryBlockSize), 1)
+      
+      If p <> UserMem.RootAddress Then
         If p = -1 Then 
              Error.Raise("Remap error new =" & Str(p) & " system error =" & Str(System.Error))
+        Else     
+          UserMem.rootaddress = p
+          UserMem[MemoryRoot] = p
+          usermem.MemoryLength = (UserMem.MemoryLength + UserMem.MemoryBlockSize)
+          usermem[MemoryLength] = usermem.MemoryLength
         Endif
       Else
-              UserMem[MemoryLength] = UserMem[MemoryLength] + UserMem[ChunkLength]
+         UserMem.MemoryLength = (UserMem.MemoryLength + UserMem.MemoryBlockSize)
       Endif
+      
+      UserMem[EndOfBlock] = UserMem[MemoryAddress] + UserMem[MemoryLength] - 1
+      _print()
+      
+  Catch 
+    Print Error.text, Error.where
+    Stop
 End
 
 '' This Method is used to cancel the notification sent when memory changes\
@@ -329,12 +344,13 @@ If MemoryStorage = Null Then
      
       UserMem.RootAddress = MemoryStorage                                     ' All internal address are now offsets to addresses
       UserMem.MemoryLength = BlockSize                                        ' The length of the memory created
+      UserMem.MemoryBlockSize = BlockSize                                     ' The size of memory block to add when out of memory
       MemoryRoot = 0                                                          ' measured offset is always zero
       MemoryLength = MemoryRoot + SizeOf(gb.long) + 1                         ' As Integer = 0     ' total length of memory we allocate changed so all of these are offsets not pointers
       ChunkLength = MemoryLength + SizeOf(gb.long) + 1                        ' As Integer
       MemoryInUse = ChunkLength + SizeOf(gb.Long) + 1                         ' counts all refs to this memory block by different applications
       NextFree = MemoryInUse + SizeOf(gb.long) + 1                            ' As Pointer         ' next free address in chunk
-      EndOfBlock = NextFree + SizeOf(gb.long) + 1                          ' As Pointer         ' end of block address
+      EndOfBlock = NextFree + SizeOf(gb.long) + 1                             ' As Pointer         ' end of block address
       FreeListStart = EndOfBlock + SizeOf(gb.long) + 1
       FreeListEnd = FreeListStart + SizeOf(gb.long) + 1
       MemMutex = FreeListEnd + SizeOf(gb.long) + 1 
@@ -478,7 +494,7 @@ Endif
     Endif
 
     NamedMemName = MemName
-    ' Print "Do real allocate"
+    ' Print "Do real mapping of allocated storage"
     Dim Iret As Boolean = begin(MemSize)
     If firstuse Then usermem[MemoryInUse] = 1
     'DumpMem(MemoryAddress, 300, "dump" & Application.name)
@@ -1378,7 +1394,7 @@ Static Private Sub LoadCollection()
 End
 '' a function which mat be called to dump the content of any memory area to a file
 '' The default location if no name specified is the users desktop as dumpfile
-Static Public Sub DumpMem(mPointer As Pointer, IntLength As Integer, Optional Filename As String = User.home & "/Desktop/dumpfile")
+Static Public Sub DumpMem(mPointer As Pointer, IntLength As Integer, Optional Filename As String = User.home & "/Desktop/dumpfile.ghex")
   Dim mFile As File
   
   If File.Dir(Filename) = "" Then
@@ -1474,7 +1490,11 @@ Static Public Sub RealAddress(symbol As String) As Pointer
 
 End
 
-
+Static Public Sub PhysicalAddress(OffsetAddress As Pointer) As Pointer
+  
+  Return UserMem.AddrReal(OffsetAddress)
+  
+End
 
 
 '' Returns the length of the data storage block of the array

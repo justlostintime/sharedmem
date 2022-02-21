@@ -62,11 +62,11 @@ Public Sub NotifyCancel(Symbol As String, NotifyObject As Object)
   
 End
 
-Public Sub _new(Optional shm As Variant)
+Public Sub _new(Optional vshm As Variant)
   'Print "init wait queue"
   WaitQueue = New Variant[]
   SetSignal()
-  $oShm = shm
+  $oShm = vshm
  
 End
 
