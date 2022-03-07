@@ -67,11 +67,11 @@ Private NewMemoryBlock As Boolean = True                '' Used to indicate if w
 Private MyAppId As Long = 0                             '' The app used if we spawn a task that requires the sem lock
 
 Property Read length As Long                            '' Length of user space
-Property Read address As Pointer                        '' address or user space
+Property Read address As Pointer                        '' address of user space
 Property Debug As Boolean Use $bDebug
 
 Public Sub _print()
-  
+
   Print "Memory Address : "; Hex(MemoryAddress, 9)
   Print "Memory Length  : "; MemoryLength;; BlockInfo.MemoryLength
   Print "Data Address   : "; Hex(DataAddress, 9);; "As Offset from Start Of Shared Memory Segment ";; Hex(BlockInfo.DataAddress, 9)
@@ -82,36 +82,37 @@ Public Sub _print()
   Print "Lock TimeOut   : "; LockTimeOut;; BlockInfo.LockTimeOut
   Print "New Mem Block  : "; NewMemoryBlock
   Print "Memory Handle  : "; IIf(MemoryHandle = -1, "No Handle, Not Using Named Shared Memory", MemoryHandle)
-  Print 
-  
+  Print
+
 End
 
 Static Public Sub ForceDelete(SharedName As String)
-  
+
   Try shm_unlink(SharedName)
-  
+
 End
 
 
 Public Sub _new(Optional SharedLength As Long = DefaultLength, SharedName As String = "", WaitTimeout As Float = 2.1)
   '$bDebug = True
+
   MemoryLength = SharedLength + SizeOf(MemBlockHeader)
   Name = SharedName
-  
-  If SharedName = "" Then 
+
+  If SharedName = "" Then
     MemoryAddress = MapMemory(MemoryLength)
-  Else 
+  Else
     MemoryAddress = CreateNamedMem(SharedName, MemoryLength)
   Endif
   If NewMemoryBlock Then
     SemLock = MemoryAddress
-    If sem_init(SemLock, 1, 0) Then 
-        Try munmap(MemoryAddress, MemoryLength)
-        If name <> "" Then
-          Try shm_unlink(Name)
-          Try rClose(MemoryHandle)
-        Endif 
-        Error.Raise("Failed to create Lock for :" & Name & System.Error & " : " & String@(strerror(System.Error)))
+    If sem_init(SemLock, 1, 0) Then
+      Try munmap(MemoryAddress, MemoryLength)
+      If name <> "" Then
+        Try shm_unlink(Name)
+        Try rClose(MemoryHandle)
+      Endif
+      Error.Raise("Failed to create Lock for :" & Name & System.Error & " : " & String@(strerror(System.Error)))
     Endif
     BlockInfo = SetBlockInfo(MemoryAddress, MemoryAddress, 0)
     BlockInfo.InUseCounter = 1
@@ -124,10 +125,10 @@ Public Sub _new(Optional SharedLength As Long = DefaultLength, SharedName As Str
     BlockInfo.DataLength = DataLength
     LockTimeout = WaitTimeOut
     BlockInfo.LockTimeOut = LockTimeout
-    
+
     sem_post(SemLock)
-    
-  Else 
+
+  Else
     SemLock = MemoryAddress
     sem_wait(SemLock)
     BlockInfo = SetBlockInfo(MemoryAddress, MemoryAddress, 0)
@@ -137,17 +138,18 @@ Public Sub _new(Optional SharedLength As Long = DefaultLength, SharedName As Str
     DataLength = BlockInfo.DataLength
     LockTimeOut = BlockInfo.LockTimeOut
     If MemoryLength <> BlockInfo.MemoryLength Then
-       RemapNamed(BlockInfo.MemoryLength)                 '' called when the requested length does not match the actual length
-       MemoryLength = BlockInfo.MemoryLength
+      RemapNamed(BlockInfo.MemoryLength)                 '' called when the requested length does not match the actual length
+      MemoryLength = BlockInfo.MemoryLength
     Endif
     sem_post(SemLock)
   Endif
   MyAppId = Application.id
+
 End
 
 Public Sub _free()
 
-  If name <> "" Then 
+  If name <> "" Then
     Dec BlockInfo.InUseCounter
     Try rClose(MemoryHandle)
     If BlockInfo.InUseCounter = 0 Then
@@ -155,155 +157,162 @@ Public Sub _free()
     Endif
     Try sem_destroy(SemLock)
     Try munmap(MemoryAddress, MemoryLength)
-  Else 
+  Else
     Try sem_destroy(SemLock)
     Try munmap(MemoryAddress, MemoryLength)
   Endif
-  
+
 End
 
 '' Map a block of named or unnamed memory into the address space of the app
 Public Sub MapMemory(BlockSize As Long) As Pointer
-      Dim MemPointer As Pointer
-      If MemoryHandle = -1 Then
-            MemPointer = mmap(Null, BlockSize, (PROT_READ Or PROT_WRITE), (MAP_SHARED Or MAP_ANONYMOUS), MemoryHandle, 0) 'Or MAP_ANONYMOUS
-      Else
-            MemPointer = mmap(Null, BlockSize, (PROT_READ Or PROT_WRITE), MAP_SHARED, MemoryHandle, 0) 'Or MAP_ANONYMOUS    
+
+  Dim MemPointer As Pointer
+
+  If MemoryHandle = -1 Then
+    MemPointer = mmap(Null, BlockSize, (PROT_READ Or PROT_WRITE), (MAP_SHARED Or MAP_ANONYMOUS), MemoryHandle, 0) 'Or MAP_ANONYMOUS
+  Else
+    MemPointer = mmap(Null, BlockSize, (PROT_READ Or PROT_WRITE), MAP_SHARED, MemoryHandle, 0) 'Or MAP_ANONYMOUS
+  Endif
+
+  If MemPointer = -1 Then
+    If MemoryHandle <> -1 Then
+      Try rClose(MemoryHandle)
+      If Name <> "" Then
+        Try shm_unlink(Name)
       Endif
-      
-      If MemPointer = -1 Then
-        If MemoryHandle <> -1 Then 
-          Try rClose(MemoryHandle)
-          If Name <> "" Then
-            Try shm_unlink(Name)
-          Endif
-        Endif
-        
-        Debug MemPointer, System.Error, String@(strerror(System.Error))
-        Stop
-        Error.Raise("System Error:" & System.Error & " : " & String@(strerror(System.Error)))
-     Endif
-     
-     Return MemPointer
+    Endif
+
+    Debug MemPointer, System.Error, String@(strerror(System.Error))
+    Stop
+    Error.Raise("System Error:" & System.Error & " : " & String@(strerror(System.Error)))
+  Endif
+
+  Return MemPointer
+
 End
 
 '' Allocate the block of named memory right away
 Public Sub CreateNamedMem(Optional MemName As String = User.name & Application.name, MemSize As Integer = DefaultLength, forceCleanup As Boolean = False) As Pointer
-  
-    If ForceCleanup Then           ' try to clean up any leftover stuff
-      Try shm_unlink(MemName)
-    Endif
-  
-    MemoryHandle = shm_open(MemName, O_CREAT Or O_RDWR Or O_EXCL, DefaultPermissions)     ' return an error if its already there
+
+  If ForceCleanup Then           ' try to clean up any leftover stuff
+    Try shm_unlink(MemName)
+  Endif
+
+  MemoryHandle = shm_open(MemName, O_CREAT Or O_RDWR Or O_EXCL, DefaultPermissions)     ' return an error if its already there
+  If MemoryHandle = -1 Then
+    MemoryHandle = shm_open(MemName, O_RDWR, DefaultPermissions)
     If MemoryHandle = -1 Then
-       MemoryHandle = shm_open(MemName, O_RDWR, DefaultPermissions)
-       If MemoryHandle = -1 Then
-           Error.Raise("Unable to open Named Shared Memory" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error)))
-       Endif
-       NewMemoryBlock = False
-    Else If ftruncate(MemoryHandle, MemSize) = -1 Then
-          Error "Unable to ftruncate the Memory area " & MemName & " " & Str(System.error) & " " & String@(strerror(System.error))
-          rClose(MemoryHandle)
-          shm_unlink(MemName)
-          Error.Raise("Unable to ftruncate memory" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error)))
+      Error.Raise("Unable to open Named Shared Memory" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error)))
     Endif
-    ' Print "Do real mapping of allocated storage"
-    
-    Return MapMemory(MemSize)
-   
+    NewMemoryBlock = False
+  Else If ftruncate(MemoryHandle, MemSize) = -1 Then
+    Error "Unable to ftruncate the Memory area " & MemName & " " & Str(System.error) & " " & String@(strerror(System.error))
+    rClose(MemoryHandle)
+    shm_unlink(MemName)
+    Error.Raise("Unable to ftruncate memory" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error)))
+  Endif
+  ' Print "Do real mapping of allocated storage"
+
+  Return MapMemory(MemSize)
+
 End
 
 '' Called to have the mapped area match the actual shared area
 Public Sub RemapNamed(NewLength As Long)
-  
- Dim p As Pointer
 
-      P = mremap(MemoryAddress, MemoryLength, NewLength, 0)           '' resize but don't allow to move
-      If p = -1 Or p <> MemoryAddress Then 
-        Stop
-      Endif
-      
+  Dim p As Pointer
+
+  P = mremap(MemoryAddress, MemoryLength, NewLength, 0)           '' resize but don't allow to move
+  If p = -1 Or p <> MemoryAddress Then
+    Stop
+  Endif
+
 End
 
 Private InLock As Integer = 0
 
 Public Sub Exclusive()
- 
-   If InLock Then 
-     If $bDebug Then Print Application.id;; " In Lock no wait ";; InLock;; Blockinfo.DataLength
-     Inc InLock
-     Return
-   Endif
-   
+
+  If InLock Then
+    If $bDebug Then Print Application.id;; " In Lock no wait ";; InLock;; Blockinfo.DataLength
+    Inc InLock
+    Return
+  Endif
+
   If $bDebug Then Print Application.id;; "Real Wait  ";; InLock;; Blockinfo.DataLength
   Inc InLock
   sem_wait(SemLock)
-  
+
 End
 
 
 Public Sub ExclusiveTimeout()
-   If InLock Then 
-     If $bDebug Then Print Application.id;; " In Lock Timeout no wait ";; InLock;; Blockinfo.DataLength
-     Inc InLock
-     Return
-   Endif
-   
-   Dim counter As Float = Timer
-   While sem_trywait(SemLock)
-      sched_yield()
-      If Timer - counter > LockTimeout Then 
-        Error.Raise("Mutex race condition !!! :" & IIf(name = "", "Anonymous", name))
-      Endif
-   Wend
-   If $bDebug Then Print Application.id;; " In Lock Timeout wait ";; InLock;; Blockinfo.DataLength
-   Inc InLock
+
+  If InLock Then
+    If $bDebug Then Print Application.id;; " In Lock Timeout no wait ";; InLock;; Blockinfo.DataLength
+    Inc InLock
+    Return
+  Endif
+
+  Dim counter As Float = Timer
+  While sem_trywait(SemLock)
+    sched_yield()
+    If Timer - counter > LockTimeout Then
+      Error.Raise("Mutex race condition !!! :" & IIf(name = "", "Anonymous", name))
+    Endif
+  Wend
+  If $bDebug Then Print Application.id;; " In Lock Timeout wait ";; InLock;; Blockinfo.DataLength
+  Inc InLock
+
 End
 
 Public Sub Release()
 
-  If inlock > 1 Then 
+  If inlock > 1 Then
     If $bDebug Then Print Application.id;; "In Lock Release ";; InLock;; Blockinfo.DataLength
     Dec Inlock
     Return
   Endif
-  
+
   If $bDebug Then Print Application.id;; "Release memory";; InLock;; Blockinfo.DataLength
   Dec InLock
   sem_post(SemLock)
   sched_yield()
-  
+
 End
 
 Public Sub AllocChunk()
-      Dim p As Pointer
 
-      P = mremap(MemoryAddress, MemoryLength, (MemoryLength + MemoryBlockSize), 1)
+  Dim p As Pointer
 
-      If p <> MemoryAddress Then
-        If p = -1 Then 
-             Error.Raise("Extend Shared Memory Failed error:" & Str(p) & " system error =" & Str(System.Error))
-        Else     
-          MemoryAddress = p
-          SemLock = MemoryAddress
-          DataAddress = SemLock + SizeOf(MemBlockHeader)
-          DataLength += MemoryBlockSize 
-          MemoryLength += MemoryBlockSize
-          BlockInfo.MemoryLength = MemoryLength
-          BlockInfo.DataLength = DataLength
-        Endif
-      Else
-        DataLength += MemoryBlockSize 
-        MemoryLength += MemoryBlockSize
-        BlockInfo.MemoryLength = MemoryLength
-        BlockInfo.DataLength = DataLength
-      Endif
-      
-      _print()
-      
-  Catch 
-    Print Error.text, Error.where
-    Stop
+  P = mremap(MemoryAddress, MemoryLength, (MemoryLength + MemoryBlockSize), 1)
+
+  If p <> MemoryAddress Then
+    If p = -1 Then
+      Error.Raise("Extend Shared Memory Failed error:" & Str(p) & " system error =" & Str(System.Error))
+    Else
+      MemoryAddress = p
+      SemLock = MemoryAddress
+      DataAddress = SemLock + SizeOf(MemBlockHeader)
+      DataLength += MemoryBlockSize
+      MemoryLength += MemoryBlockSize
+      BlockInfo.MemoryLength = MemoryLength
+      BlockInfo.DataLength = DataLength
+    Endif
+  Else
+    DataLength += MemoryBlockSize
+    MemoryLength += MemoryBlockSize
+    BlockInfo.MemoryLength = MemoryLength
+    BlockInfo.DataLength = DataLength
+  Endif
+
+  _print()
+
+Catch
+  Error Error.text, Error.where
+  Stop
+
 End
 
 

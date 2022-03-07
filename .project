@@ -1,6 +1,6 @@
 # Gambas Project File 3.0
 Title=Shared Memory object - SHMV2.0
-Startup=NewNotifyTest
+Startup=NewTestChangedatatypes
 Version=3.16.3
 Component=gb.args
 Component=gb.image

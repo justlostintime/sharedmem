@@ -395,7 +395,7 @@ Public Sub _PrintBlocks(Optional vVarStorage As ShmVarStorage = Null)
     If vVarStorage Then
       Print vVarStorage.text(vptr.address)
     Else
-      Print Subst("Start : &1 Length :  &2 Type :(&4) &3", Hex(vptr.address, 10), Format(vptr.length, "########0"), ShmVarStorage.GetTextType(vptr.type), Format(vptr.type, "##0"))
+      Print Subst("Start : &1 Length :  &2 Type :(&4) &3", Hex(vptr.address, 10), Format(vptr.length, "########0"), ShmVarStorage.GetTextType(vptr.type), Format(vptr.type, "-##0"))
     Endif
 
     If vptr.address + vptr.length > ManagedInfo.EndOfMem Then

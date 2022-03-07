@@ -1,50 +1,50 @@
 ' Gambas class file
 
-  Const VarMemDefault As Long = 2000000
-  Const MaxSymbolsDefault As Integer = 8000
-  Const TimeOutDefault As Float = 0.1
-  
-  Public varStore As ShmMemBlock
-  Public varMnge As ShmManage
-  Public MyVarMem As ShmVarStorage
-  Public VarStoreName As String 
-  
-  Public symStore As ShmMemBlock
-  Public vars As ShmSymbolTable
-  Public SymStoreName As String
+Const VarMemDefault As Long = 2000000
+Const MaxSymbolsDefault As Integer = 8000
+Const TimeOutDefault As Float = 0.1
 
-  Property Read Count As Integer
-  Property Read Max As Integer
-  Property Read Length As Integer 
-  Private $sKey As String
-  Property Read Key As String
-  Property Debug As Boolean Use $bDebug
-  
-  
+Public varStore As ShmMemBlock
+Public varMnge As ShmManage
+Public MyVarMem As ShmVarStorage
+Public VarStoreName As String
+
+Public symStore As ShmMemBlock
+Public vars As ShmSymbolTable
+Public SymStoreName As String
+
+Property Read Count As Integer
+Property Read Max As Integer
+Property Read Length As Integer
+Private $sKey As String
+Property Read Key As String
+Property Debug As Boolean Use $bDebug
+
+
 '' Remove the memory by force
 Static Public Sub ForceDelete(SharedName As String)
-  
+
   Try shmMemBlock.ForceDelete(SharedName & "Data")
   Try shmMemBlock.ForceDelete(SharedName & "Symbols")
-  
+
 End
 
-  
-  '' Allocate the memory
-  Public Sub _new(Optional VarMemLength As Long = VarMemDefault, MemName As String = "", MaxSymbols As Integer = MaxSymbolsDefault, LockTimeOut As Float = TimeOutDefault)
-  
-  If MemName <> "" Then 
+
+'' Allocate the memory
+Public Sub _new(Optional VarMemLength As Long = VarMemDefault, MemName As String = "", MaxSymbols As Integer = MaxSymbolsDefault, LockTimeOut As Float = TimeOutDefault)
+
+  If MemName <> "" Then
     VarStoreName = Memname & "_Data"
     SymStoreName = Memname & "_Symbols"
     VarStore = New ShmMemBlock(VarMemLength, VarStoreName, LockTimeOut)
     symStore = New ShmMemBlock((ShmSymbolTable.SymbolLength() * MaxSymbols) + ShmSymbolTable.InfoLength(), SymStoreName, LockTimeOut)
-  Else 
+  Else
     VarStoreName = ""
     SymStoreName = ""
     VarStore = New ShmMemBlock(VarMemLength, MemName, LockTimeOut)
     symStore = New ShmMemBlock((ShmSymbolTable.SymbolLength() * MaxSymbols) + ShmSymbolTable.InfoLength(), MemName, LockTimeOut)
   Endif
-  
+
   VarMnge = New ShmManage(varStore)
   MyVarMem = New ShmVarStorage(varMnge)
   vars = New ShmSymbolTable(symStore, MyVarMem)
@@ -52,134 +52,156 @@ End
 End
 
 Public Sub _free()
-  
+
   Vars = Null
- ' SymStore = Null
+  ' SymStore = Null
   'MyVarMem = Null
   varMnge = Null
   'varstore = Null
-  
+
 End
 
 
-Public Sub _get(SymName As String) As Variant
-  
+Public Sub _get(SymName As String, ...) As Variant
+
   Return vars[SymName]
-  
+
 End
 
-Public Sub _put(value As Variant, SymName As String)
-  
-  vars[SymName] = value
-  
+Public Sub _put(value As Variant, SymName As String, ...)
+
+  If Param.count > 0 And If Param.count < 4 Then
+    Dim tmpvar As Variant = vars[SymName]
+    Select Case Param.count
+      Case 1
+        tmpvar[Param[0]] = value
+      Case 2
+        tmpvar[Param[0], Param[1]] = value
+      Case 3
+        tmpvar[Param[0], Param[1], Param[2]] = value
+      Case 4
+        tmpvar[Param[0], Param[1], Param[2]] = value
+    End Select
+    vars[SymName] = tmpvar
+  Else
+    vars[SymName] = value
+  Endif
+
 End
 
 Public Sub {Free}(SymName As String)
-  
-  vars.Free(SymName)
-  
+
+  If Param.count > 0 Then
+
+  Else
+    vars.Free(SymName)
+  Endif
+
 End
 
 
 Public Sub {VarPtr}(SymName As String) As Variant
-  
+
   Return vars.VarPtr(SymName)
-  
+
 End
 
 Public Sub {SizeOf}(Value As Variant) As Long
-  
-    Return MyVarMem.SizeOf(Value)
-  
+
+  Return MyVarMem.SizeOf(Value)
+
 End
 
 Public Sub {Print}()
-  
+
   Print vars.Text
-  
+
 End
 '   Const VarMemDefault As Long = 2000000
 '   Const MaxSymbolsDefault As Integer = 8000
 '   Const TimeOutDefault As Float = 0.1
-'   
+'
 '   Public varStore As ShmMemBlock
 '   Public varMnge As ShmManage
 '   Public MyVarMem As ShmVarStorage
-'   
+'
 '   Public symStore As ShmMemBlock
 '   Public vars As ShmSymbolTable
 '   Public NotifyVars As ShmNotify
+
 Public Sub PrintAllInfo()
+
   Print "***************************************** Full Memory Info***************************************************"
-  Print Subst("Default Memory Size &1Meg,MAx Symbol Table entries &2, Default Timeout &3", VarMemDefault, MaxSymbolsDefault, TimeOutDefault)
-  Print 
+  Print Subst("Default Memory Size &1 Meg, Max Symbol Table entries &2, Default Timeout &3", VarMemDefault, MaxSymbolsDefault, TimeOutDefault)
+  Print
   Print Vars.text
-  Print 
+  Print
   VarMnge._Print()
-  Print 
-  
+  Print
+
 End
 
 
 Public Sub PrintTree()
-  
+
   Print MyVarMem.TextTree()
-  
+
 End
 
 
 Public Sub WaitFor(SymName As String, Optional Timeout As Float = 0) As Boolean
-  
+
   Return vars.WaitFor(symname, timeout)
-  
+
 End
 
 Public Sub WaitForValue(SymName As String, Value As Variant, Optional Timeout As Float = 0) As Boolean
-  
+
   Return vars.WaitForValue(symname, Value, timeout)
-  
+
 End
 
 Public Sub WaitValueChange(SymName As String, Value As Variant, Optional Timeout As Float = 0) As Boolean
-  
+
   Return vars.WaitValueChange(symname, Value, timeout)
-  
+
 End
 
 Public Sub Notify(SymName As String, NotifyObject As Object, Optional NotifyFunction As String = "")
-  
+
   vars.NotifyVars.Notify(SymName, NotifyObject, NotifyFunction)
-  
+
 End
 
 Public Sub StopNotify(SymName As String)
-  
-   vars.NotifyVars.NotifyStop(SymName)
-  
+
+  vars.NotifyVars.NotifyStop(SymName)
+
 End
 
 Public Sub _next() As Variant
+
   Static SymList As String[]
-  
-  If Enum.Index = Null Then 
+
+  If Enum.Index = Null Then
     SymList = Vars.SortedList()
     Enum.index = 0
-  Else 
+  Else
     Inc Enum.Index
-    If Enum.index > SymList.max Then 
+    If Enum.index > SymList.max Then
       Enum.Stop()
       Return
     Endif
-  Endif 
+  Endif
   $sKey = SymList[Enum.index]
   Return Vars[SymList[Enum.Index]]
-  
+
 End
 
 Public Sub Exist(SymName As String) As Boolean
-  
+
   Return Vars.Exist(SymName)
-  
+
 End
 
 

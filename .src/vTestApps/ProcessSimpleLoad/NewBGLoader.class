@@ -3,23 +3,23 @@
 Inherits Task
 
 Public Sub main()
-  
+
   Dim vmem As New ShmMem(1000000, "jiffy")
-  
+
   Dim counter As Long = 0
-  
+
   With vmem
-  While True
-    
-    .WaitValueChange("Wiggle", Application.id)
-    !Wiggle = Application.id
-    Inc counter
-    If !AllDone = "Yes" Then Break
-    
-  Wend
+    While True
+
+      .WaitValueChange("Wiggle", Application.id)
+      !Wiggle = Application.id
+      Inc counter
+      If !AllDone = "Yes" Then Break
+
+    Wend
   End With
   Print Application.id;; " Done Counter ="; counter
   Quit
-  
+
 End
 

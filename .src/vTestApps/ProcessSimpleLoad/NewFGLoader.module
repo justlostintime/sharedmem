@@ -1,30 +1,32 @@
 ' Gambas module file
 
 Public Sub main()
+
   Dim Tasks As New NewBGLoader[]
   Dim vmem As New ShmMem(1000000, "jiffy")
   Dim wiggle As Integer = 0
-  With vmem
-  !Wiggle = Application.id
-  !AllDone = "No"
-  
-  For i As Integer = 0 To 100
-    Dim tmp As NewBGLoader
-    tmp = New NewBGLoader
-    Tasks.Add(tmp)
-  Next
-  
-  Dim counter As Long = 0
 
-  While counter < 100000
-    
-    .WaitValueChange("Wiggle", Application.id)
-    wiggle = !Wiggle
+  With vmem
     !Wiggle = Application.id
-    Inc counter
-    If counter Mod 10000 = 0 Then Print "FG Count = "; counter;; "Wiggle=";; wiggle
-  Wend
-  !AllDone = "Yes"
+    !AllDone = "No"
+
+    For i As Integer = 0 To 100
+      Dim tmp As NewBGLoader
+      tmp = New NewBGLoader
+      Tasks.Add(tmp)
+    Next
+
+    Dim counter As Long = 0
+
+    While counter < 100000
+
+      .WaitValueChange("Wiggle", Application.id)
+      wiggle = !Wiggle
+      !Wiggle = Application.id
+      Inc counter
+      If counter Mod 10000 = 0 Then Print "FG Count = "; counter;; "Wiggle=";; wiggle
+    Wend
+    !AllDone = "Yes"
   End With
-  
+
 End

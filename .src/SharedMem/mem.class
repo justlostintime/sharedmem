@@ -28,64 +28,66 @@ Public RealPointers As Boolean = False
 '' first parameter should set the base of the shared memory area or 0 for Realmemory access
 '' Sets if this instance is for real memory, not base offset calculation
 Public Sub _new(Optional BaseAddress As Pointer = 0, UsingRealMemoryAddress As Boolean = False, MemLength As Long = -1)
-  
+
   RootAddress = BaseAddress
   RealPOinters = UsingRealMemoryAddress
-  
+
 End
 
 
 '' return the actual storage required for any data type
-'' objects must have a _write public function                                                
+'' objects must have a _write public function
 Static Public Sub _SizeOf(data As Variant) As Integer
 
   Dim rdType As Integer = TypeOf(Data)
   Dim rdLen As Integer = 1
-  
+
   Select Case rdType
-      Case gb.String
-        rdLen += data.len + 1   ' will record data length and terminator zero
-        
-      Case gb.Object
-        rdLen += ObjectSizeOf(data)
-        
-      Case gb.Class
-        Error.Raise("_Sizeof(): Class type not supported")
-        rdLen = 0
-        
-      Default
-         rdLen += SizeOf(rdType)  ' will record data type
-         
+    Case gb.String
+      rdLen += data.len + 1   ' will record data length and terminator zero
+
+    Case gb.Object
+      rdLen += ObjectSizeOf(data)
+
+    Case gb.Class
+      Error.Raise("_Sizeof(): Class type not supported")
+      rdLen = 0
+
+    Default
+      rdLen += SizeOf(rdType)  ' will record data type
+
   End Select
 
-  Return rdLen 
+  Return rdLen
 
 End
 
 '' Used the Objects _write function to get the size of the object
 Static Private Sub ObjectSizeOf(data As Variant) As Integer
-  Dim mFile As File 
+
+  Dim mFile As File
   Dim rdLen As Integer = 0
-  
-              mFile = Open Null For Write
-              Try Write #mfile, data As Object
-              If Error Then 
-                  Error.Raise("Unable to write object to memory," & Error.text)
-              Endif
-              
-              rdLen += Seek(mFile)
-              Close mFile
-  
+
+  mFile = Open Null For Write
+  Try Write #mfile, data As Object
+  If Error Then
+    Error.Raise("Unable to write object to memory," & Error.text)
+  Endif
+
+  rdLen += Seek(mFile)
+  Close mFile
+
   Return rdLen
-  
+
 End
 
 Public Sub SetType(Mempointer As Pointer, rdType As Integer)
 
   Dim cvByte As Byte
+
   cvByte = rdType
   memcpy(RootAddress + MemPointer, VarPtr(cvByte), 1)
-  
+
 End
 
 '' Object entry point when used as array in user program
@@ -97,114 +99,115 @@ Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integ
 
   Dim mfile As File
   Dim cvByte As Byte
+
   If mempointer < 0 Then
     Print "Bad pointer : "; mempointer
     Stop
   Endif
   If Not notype Then
-      If rdType = -1 Then                                    ' if this is -1 we assume this is a new or default call
-        rdType = TypeOf(data)
-        cvByte = rdType
-        memcpy(RootAddress + MemPointer, VarPtr(cvByte), 1)
-      Endif
-      Inc mempointer
+    If rdType = -1 Then                                    ' if this is -1 we assume this is a new or default call
+      rdType = TypeOf(data)
+      cvByte = rdType
+      memcpy(RootAddress + MemPointer, VarPtr(cvByte), 1)
+    Endif
+    Inc mempointer
   Endif
 
   LastWriteLength = SizeOf(rdType)
-  
+
   Select Case rdType
-    
-       Case gb.Long
-            Dim ivar As Long = data
-           memcpy(Mempointer + Rootaddress, VarPtr(iVar), SizeOf(gb.Long))
-           
-       Case gb.integer
-            Dim ivar1 As Integer = data
-            memcpy(Mempointer + Rootaddress, VarPtr(iVar1), SizeOf(gb.integer))
-            
-      Case gb.pointer
-            Dim ivar2 As Pointer = data
-            memcpy(Mempointer + Rootaddress, VarPtr(iVar2), SizeOf(gb.pointer))
-            
-      Case gb.short
-            Dim ivar3 As Short = data
-            memcpy(Mempointer + Rootaddress, VarPtr(iVar3), SizeOf(gb.short))
-            
-      Case gb.float
-            Dim ivar4 As Float = data
-            memcpy(Mempointer + Rootaddress, VarPtr(iVar4), SizeOf(gb.float))
-            
-      Case gb.boolean
-            Dim ivar5 As Boolean = data
-            memcpy(Mempointer + Rootaddress, VarPtr(iVar5), SizeOf(gb.boolean))
-            
-      Case gb.byte
-            Dim ivar6 As Byte = data
-            memcpy(Mempointer + Rootaddress, VarPtr(iVar6), SizeOf(gb.byte))
-            
-      Case gb.date
-            Dim ivar7 As Date = data
-            memcpy(Mempointer + Rootaddress, VarPtr(iVar7), SizeOf(gb.date))
-            
-      Case gb.Single
-            Dim ivar8 As Single = data
-            memcpy(Mempointer + Rootaddress, VarPtr(iVar8), SizeOf(gb.Single))
-            
-      Case gb.String
-        Dim iString As String = data
-        If Not RealPointers Then 
-            MemPointer = Me[MemPointer, gb.Pointer, True]                            ' Pointer@(RootAddress + MemPointer)
-            'Print mempointer
-            memPointer += RootAddress + SharedMem.DataOffset + 1
-        Endif
-        
-         If istring = "" Then
-            memset(Mempointer, 0, 1)          ' empty string ummm oh well
-         Else
-            smemcpy(MemPointer, iString, Len(iString) + 1)
-         Endif
-         
-         LastWriteLength = strlen(Mempointer)
-  
-      Case gb.object
-              If Not RealPointers Then 
-                  MemPointer = Me[MemPointer, gb.pointer, True]                     ' Pointer@(RootAddress + MemPointer)
-                  MemPointer += RootAddress + SharedMem.DataOffset + 1
-              Endif
-              mfile = Memory MemPointer For Write
-              Write #mFile, Data As Object
-              LastWriteLength = Seek(mFile)
-              Close mFile
-  
-      Case gb.Class
-           Error.Raise("Class must have _write Static method To be saved but not supported")
-           LastWriteLength = 0
-           
-      Case gb.function
-      Case gb.NULL
-         
-      Default
-              Print #File.err, "Mem default write... eeeek"
-              mfile = Memory MemPointer For Write
-              Write #mFile, Data As Variant
-              LastWriteLength = Seek(mFile)
-              Close mFile
-         
-     End Select 
- 
-   
+
+    Case gb.Long
+      Dim ivar As Long = data
+      memcpy(Mempointer + Rootaddress, VarPtr(iVar), SizeOf(gb.Long))
+
+    Case gb.integer
+      Dim ivar1 As Integer = data
+      memcpy(Mempointer + Rootaddress, VarPtr(iVar1), SizeOf(gb.integer))
+
+    Case gb.pointer
+      Dim ivar2 As Pointer = data
+      memcpy(Mempointer + Rootaddress, VarPtr(iVar2), SizeOf(gb.pointer))
+
+    Case gb.short
+      Dim ivar3 As Short = data
+      memcpy(Mempointer + Rootaddress, VarPtr(iVar3), SizeOf(gb.short))
+
+    Case gb.float
+      Dim ivar4 As Float = data
+      memcpy(Mempointer + Rootaddress, VarPtr(iVar4), SizeOf(gb.float))
+
+    Case gb.boolean
+      Dim ivar5 As Boolean = data
+      memcpy(Mempointer + Rootaddress, VarPtr(iVar5), SizeOf(gb.boolean))
+
+    Case gb.byte
+      Dim ivar6 As Byte = data
+      memcpy(Mempointer + Rootaddress, VarPtr(iVar6), SizeOf(gb.byte))
+
+    Case gb.date
+      Dim ivar7 As Date = data
+      memcpy(Mempointer + Rootaddress, VarPtr(iVar7), SizeOf(gb.date))
+
+    Case gb.Single
+      Dim ivar8 As Single = data
+      memcpy(Mempointer + Rootaddress, VarPtr(iVar8), SizeOf(gb.Single))
+
+    Case gb.String
+      Dim iString As String = data
+      If Not RealPointers Then
+        MemPointer = Me[MemPointer, gb.Pointer, True]                            ' Pointer@(RootAddress + MemPointer)
+        'Print mempointer
+        memPointer += RootAddress + SharedMem.DataOffset + 1
+      Endif
+
+      If istring = "" Then
+        memset(Mempointer, 0, 1)          ' empty string ummm oh well
+      Else
+        smemcpy(MemPointer, iString, Len(iString) + 1)
+      Endif
+
+      LastWriteLength = strlen(Mempointer)
+
+    Case gb.object
+      If Not RealPointers Then
+        MemPointer = Me[MemPointer, gb.pointer, True]                     ' Pointer@(RootAddress + MemPointer)
+        MemPointer += RootAddress + SharedMem.DataOffset + 1
+      Endif
+      mfile = Memory MemPointer For Write
+      Write #mFile, Data As Object
+      LastWriteLength = Seek(mFile)
+      Close mFile
+
+    Case gb.Class
+      Error.Raise("Class must have _write Static method To be saved but not supported")
+      LastWriteLength = 0
+
+    Case gb.function
+    Case gb.NULL
+
+    Default
+      Print #File.err, "Mem default write... eeeek"
+      mfile = Memory MemPointer For Write
+      Write #mFile, Data As Variant
+      LastWriteLength = Seek(mFile)
+      Close mFile
+
+  End Select
+
+
 End
 
 '' Put variable into memory
-''  
+''
 '' Mempointer - the location to get the daya from
 '' rdType - the type of data to be read, this is an over ride for the stored data type or used when no datatype stored
 '' notype - the storgae location first has to data type specified
 Public Sub _get(MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False) As Variant
 
-Dim cvVariant As Variant
-Dim mFile As File
-  
+  Dim cvVariant As Variant
+  Dim mFile As File
+
   '' print"MEM GET request: prt="; MemPointer; " RDTYPE = "; rdType
   If Not notype Then
     If rdtype = -1 Then   ' and not notype
@@ -212,111 +215,112 @@ Dim mFile As File
     Endif
     Inc mempointer
   End If
-  
-'DataTypes = ["*Binary", "*Boolean", "*Byte", "*Short", "*Integer", "*Long", "*Single", "*Float", "*Date", "*String",
-'                                       "*LongDate", "*Pointer", "*Variant", "*Function", "*Class", "NULL", "*Object", "Not Array", "", "", "", "", "", ""]
 
- On rdType Goto DoBinary, DoBoolean, DoByte, DoShort, DoInteger, DoLong, DoSingle, DoFloat, DoDate, DoString, DoLongDate, DoPointer, DoVariant, DoFunction, DoClass, DoNull, DoObject
-    
-    
+  'DataTypes = ["*Binary", "*Boolean", "*Byte", "*Short", "*Integer", "*Long", "*Single", "*Float", "*Date", "*String",
+  '                                       "*LongDate", "*Pointer", "*Variant", "*Function", "*Class", "NULL", "*Object", "Not Array", "", "", "", "", "", ""]
+
+  On rdType Goto DoBinary, DoBoolean, DoByte, DoShort, DoInteger, DoLong, DoSingle, DoFloat, DoDate, DoString, DoLongDate, DoPointer, DoVariant, DoFunction, DoClass, DoNull, DoObject
+
+
 DoPointer:
-         'memcpy(VarPtr(cvPointer), mempointer, SizeOf(gb.pointer))
-         ' printcvPointer
-         'Return cvPointer
-         Return Pointer@(RootAddress + MemPointer)
- 
+  'memcpy(VarPtr(cvPointer), mempointer, SizeOf(gb.pointer))
+  ' printcvPointer
+  'Return cvPointer
+  Return Pointer@(RootAddress + MemPointer)
+
 DoInteger:
-         Return Integer@(RootAddress + MemPointer)
+  Return Integer@(RootAddress + MemPointer)
 
 DoLong:
-         Return Long@(RootAddress + MemPointer)
-         
+  Return Long@(RootAddress + MemPointer)
+
 DoString:
-         If Not RealPointers Then 
-            MemPointer = Pointer@(RootAddress + MemPointer)
-            MemPointer = RootAddress + MemPointer + SharedMem.DataOffset + 1
-            Return String@(MemPointer)
-         Else
-            Return String@(MemPointer)
-         Endif
+  If Not RealPointers Then
+    MemPointer = Pointer@(RootAddress + MemPointer)
+    MemPointer = RootAddress + MemPointer + SharedMem.DataOffset + 1
+    Return String@(MemPointer)
+  Else
+    Return String@(MemPointer)
+  Endif
 
 DoObject:
-DoVariant:  
-         Dim MyObject As Object
-         If Not RealPointers Then 
-            MemPointer = Pointer@(RootAddress + MemPointer)
-            MemPointer += RootAddress + SharedMem.DataOffset + 1
-         Endif
-         mfile = Memory MemPointer For Read
-         Try MyObject = Read #mFile As Object
-         If Error Then Print #File.err, "Object read failed"
-         LastWriteLength = Seek(mFile)
-         Close mFile
-         Return MyObject
-        
+DoVariant:
+  Dim MyObject As Object
+  If Not RealPointers Then
+    MemPointer = Pointer@(RootAddress + MemPointer)
+    MemPointer += RootAddress + SharedMem.DataOffset + 1
+  Endif
+  mfile = Memory MemPointer For Read
+  Try MyObject = Read #mFile As Object
+  If Error Then Print #File.err, "Object read failed"
+  LastWriteLength = Seek(mFile)
+  Close mFile
+  Return MyObject
+
 DoClass:
-         Error.Raise("Class read must implement _read static method but not supported")
-         Return Null
-         
+  Error.Raise("Class read must implement _read static method but not supported")
+  Return Null
+
 DoBoolean:
-         Return Boolean@(RootAddress + Mempointer)
-      
+  Return Boolean@(RootAddress + Mempointer)
+
 DoShort:
-         Return Short@(RootAddress + mempointer)
-         
+  Return Short@(RootAddress + mempointer)
+
 DoByte:
-         Return Byte@(RootAddress + mempointer)
-         
+  Return Byte@(RootAddress + mempointer)
+
 Dofloat:
-         Return Float@(RootAddress + mempointer)
-         
+  Return Float@(RootAddress + mempointer)
+
 DoDate:
-         Return Date@(RootAddress + mempointer)
+  Return Date@(RootAddress + mempointer)
 
 DoSingle:
-        Return Single@(RootAddress + mempointer)
-        
+  Return Single@(RootAddress + mempointer)
+
 DoFunction:
 DoNull:
-        Return Null
+  Return Null
 DoBinary:
-        Return RootAddress + mempointer
-         
+  Return RootAddress + mempointer
+
 
 DoLongDate:
-         mfile = Memory RootAddress + MemPointer For Read
-         cvVariant = Read #mfile As Variant
-         Close mFile
-         Return cvVariant
+  mfile = Memory RootAddress + MemPointer For Read
+  cvVariant = Read #mfile As Variant
+  Close mFile
+  Return cvVariant
+
 End
 
 '' This function return the address of the data portion of the memory location
 '' notype will always assume binary type and return the address of binary blob at the address
 '' The read type can override the normal value for the variable
 Public Sub AddrData(MemPointer As Pointer, Optional rdtype As Integer = -1, notype As Boolean = False) As Pointer
-          
-         If RealPointers Then 
-            Error.Raise("AddrData is not valid in realAddressMode")
-            Return Null
-         Endif
-         
-         If Not notype Then
-            If rdtype = -1 Then ' And Not notype Then
-              rdType = Byte@(RootAddress + MemPointer)  ' get the data type
-            Endif
-            Inc mempointer
-         End If
-         
-         Select Case rdtype
-           Case gb.string, gb.object, gb.Variant
-           MemPointer = Pointer@(RootAddress + MemPointer) 
-           Mempointer += RootAddress + SharedMem.DataOffset + 1
-         Default
-           mempointer += RootAddress
-         End Select
-          
-        Return mempointer
-  
+
+  If RealPointers Then
+    Error.Raise("AddrData is not valid in realAddressMode")
+    Return Null
+  Endif
+
+  If Not notype Then
+    If rdtype = -1 Then ' And Not notype Then
+      rdType = Byte@(RootAddress + MemPointer)  ' get the data type
+    Endif
+    Inc mempointer
+  End If
+
+  Select Case rdtype
+    Case gb.string, gb.object, gb.Variant
+      MemPointer = Pointer@(RootAddress + MemPointer)
+      Mempointer += RootAddress + SharedMem.DataOffset + 1
+    Default
+      mempointer += RootAddress
+  End Select
+
+  Return mempointer
+
 End
 
 '' This function return the relative addr of the data portion of the memory location
@@ -324,50 +328,53 @@ End
 '' The read type can override the normal value for the variable
 
 Public Sub DataOffset(MemPointer As Pointer, Optional rdtype As Integer = -1, notype As Boolean = False) As Pointer
-          
-        Dim addrptr As Pointer = AddrData(Mempointer, rdtype, notype)
-          
-        Return addrptr - rootaddress
-  
+
+  Dim addrptr As Pointer = AddrData(Mempointer, rdtype, notype)
+
+  Return addrptr - rootaddress
+
 End
 
 Public Sub AddrReal(mempointer As Pointer) As Pointer
-  
-      Return RootAddress + Mempointer
-  
+
+  Return RootAddress + Mempointer
+
 End
 
 Public Sub ReadData(mPointer As Pointer, mFile As File, DataLength As Integer, Optional rdType As Integer = -1, noType As Boolean = False)
-  
-     rRead(mFile.handle, AddrData(mPointer, rdType, noType), DataLength)
+
+  rRead(mFile.handle, AddrData(mPointer, rdType, noType), DataLength)
+
 End
 
 Public Sub WriteData(mPointer As Pointer, mFile As File, DataLength As Integer, Optional rdType As Integer = -1, noType As Boolean = False)
 
-    rWrite(mFile.handle, AddrData(mPointer, rdType, noType), datalength)
-  
+  rWrite(mFile.handle, AddrData(mPointer, rdType, noType), datalength)
+
 End
 '' a function which mat be called to dump the content of any memory area to a file
 '' The default location if no name specified is the users desktop as dumpfile
+
 Static Public Sub DumpMem(mPointer As Pointer, IntLength As Integer, Optional Filename As String = User.home & "/Desktop/dumpfile")
+
   Dim mFile As File
-  
+
   If File.Dir(Filename) = "" Then
     filename = User.home & "/Desktop/" & filename
   Endif
-  
+
   mFile = Open filename For Write Create
-  
+
   rWrite(mFile.handle, mPointer, IntLength)
- 
+
   Close mFile
-  
+
 End
 
 '' Dump all the memory for this mem object
 Public Sub DumpAllMem()
-  
+
   DumpMem(RootAddress, MemoryLength)
-  
+
 End
 
