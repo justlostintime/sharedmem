@@ -47,16 +47,16 @@ Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "li
 ' Extern rClose(Handle As Integer) As Integer In "libc:6" Exec "close"
 
 Public Sub _new(Optional vshm As Variant = Null)
-  
+
   $oShm = vshm
-  
+
 End
 
 
 '' Write the variable def  to the and format information to an output file
 '' Optionally write the variables value as well
 Public Sub _write(mFile As File, Optional WithData As Boolean = False)
-  
+
   Write #Mfile, SymName As String
   Write #Mfile, SymType As Integer
   Write #Mfile, SpecialType As Integer
@@ -71,43 +71,44 @@ Public Sub _write(mFile As File, Optional WithData As Boolean = False)
   Write #MFile, dataLength As Integer
   Write #MFile, LastWriteLength As Integer
   Write #Mfile, ShmLastWriteTime As Pointer
-  
-  If withData Then 
-      'Print "Saving ["; SharedMem.usermem[DataAddress]; "]"
-      'Dim stbuffer As String
-      'If symtype = gb.string Then stbuffer = SharedMem.UserMem[DataAddress]
-      Flush #mfile
-      SharedMem.UserMem.WriteData(DataAddress, mFile, DataLength, symtype)
+
+  If withData Then
+    'Print "Saving ["; SharedMem.usermem[DataAddress]; "]"
+    'Dim stbuffer As String
+    'If symtype = gb.string Then stbuffer = SharedMem.UserMem[DataAddress]
+    Flush #mfile
+    SharedMem.UserMem.WriteData(DataAddress, mFile, DataLength, symtype)
   Endif
-  
-  Catch
-    Error.raise("_write symbol read error " & Error.text & " " & Error.where)
-    Stop
+
+Catch
+  Error.raise("_write symbol read error " & Error.text & " " & Error.where)
+  Stop
+
 End
 
-'' This return the total amount of space required to store the\
+'' This returns the total amount of space required to store the\
 '' symbol to a file
 Public Sub _serialize(Optional withData As Boolean = False) As Integer
-  
+
   Dim mFile As File
   Dim rslt As Integer
-  
+
   mfile = Open Null For Write
   _write(mfile, withData)
   rslt = Seek(mFile)
   Close mfile
-  
+
   Return rslt
-  
+
 End
 
 '' Read a variable def And control information From an Input file
-'' Optionall load the data as well in to the shared memory
+'' Optionally load the data as well in to the shared memory
 Public Sub _read(MFile As File, Optional WithData As Boolean = False)
 
   If WithData Then
-     If Not IsNull(RootAddress) And WithData Then SharedMem.ShmFree(RootAddress)
-     RootAddress = Null
+    If Not IsNull(RootAddress) And WithData Then SharedMem.ShmFree(RootAddress)
+    RootAddress = Null
   Endif
 
   SymName = Read #Mfile As String
@@ -124,201 +125,211 @@ Public Sub _read(MFile As File, Optional WithData As Boolean = False)
   dataLength = Read #Mfile As Integer
   LastWriteLength = Read #Mfile As Integer
   ShmLastWriteTime = Read #Mfile As Pointer
-  
+
   If WithData Then
-      RootAddress = Null
-      DataAddress = Null
-      If (AllocStorage(datalength)) Then
-            SharedMem.UserMem.ReadData(DataAddress, mFile, DataLength, symtype)
-      Endif 
+    RootAddress = Null
+    DataAddress = Null
+    If (AllocStorage(datalength)) Then
+      SharedMem.UserMem.ReadData(DataAddress, mFile, DataLength, symtype)
+    Endif
   Endif
-  
-  Catch
-   Error.raise("_read symbol read error " & Error.text & ", Probably invalid symbol file format")
-   Stop
+
+Catch
+  Error.raise("_read symbol read error " & Error.text & ", Probably invalid symbol file format")
+  Stop
+
 End
 
 
 Public Sub updateobjectinfo(data As Variant)
-  
-      If symtype = gb.object Then 
-          ClassName = Object.Class(data).name
-          ObjectName = Object.type(data)
-          If UnsupportedList.exist(ClassName) Then
-            Error.Raise("SharedMem Unsupported data type :" & Classname)
-          Endif
-          If Object.Class(data).Symbols.Exist("Dim") Then
-            SpecialType = SharedMem.ShmTypeAry
-            ElementCount = data.length
-            ElementType = data.type
-          Endif
-      Endif
-End 
+
+  If symtype = gb.object Then
+    ClassName = Object.Class(data).name
+    ObjectName = Object.type(data)
+    If UnsupportedList.exist(ClassName) Then
+      Error.Raise("SharedMem Unsupported data type :" & Classname)
+    Endif
+    If Object.Class(data).Symbols.Exist("Dim") Then
+      SpecialType = SharedMem.ShmTypeAry
+      ElementCount = data.length
+      ElementType = data.type
+    Endif
+  Endif
+
+End
 
 Public Sub SetSymbol(Sname As String, data As Variant, Optional extrastorage As Integer = 0) As Boolean ' when null is entered then we are in loading mode
 
   If Not IsNull(Sname) Then
-    
-      SymName = Sname
-      SymType = TypeOf(data)
-      'Print "New variable(" & SymName & ") of type ", SymType
-      storageLength = extrastorage
-      
-      If symtype = gb.object Then 
-          ClassName = Object.Class(data).name
-          ObjectName = Object.type(data)
-          If UnsupportedList.exist(ClassName) Then
-            Error.Raise("SharedMem Unsupported data type :" & Classname)
-            Return False
-          Endif
-          If Object.Class(data).Symbols.Exist("Dim") Then
-            SpecialType = SharedMem.ShmTypeAry
-            ElementCount = data.length
-            ElementType = data.type
-          Endif
+
+    SymName = Sname
+    SymType = TypeOf(data)
+    'Print "New variable(" & SymName & ") of type ", SymType
+    storageLength = extrastorage
+
+    If symtype = gb.object Then
+      ClassName = Object.Class(data).name
+      ObjectName = Object.type(data)
+      If UnsupportedList.exist(ClassName) Then
+        Error.Raise("SharedMem Unsupported data type :" & Classname)
+        Return False
       Endif
-      
-     SharedMem.Add(Me)
-      
-     ShmWrite(data)
-      
+      If Object.Class(data).Symbols.Exist("Dim") Then
+        SpecialType = SharedMem.ShmTypeAry
+        ElementCount = data.length
+        ElementType = data.type
+      Endif
+    Endif
+
+    SharedMem.Add(Me)
+
+    ShmWrite(data)
+
   Endif
-  
+
   Return True
+
 End
 
 
-Public Sub _wait() As Integer 
-    If SharedMem.UserMem[ShmLastWriteTime, gb.float] = 0.0 Then
-        SharedMem.UserMem[ShmLastWriteTime, gb.float] = Now + Timer
-    Endif
-    
-    SharedMem.UserMem[ShmWait] += 1
+Public Sub _wait() As Integer
+
+  If SharedMem.UserMem[ShmLastWriteTime, gb.float] = 0.0 Then
+    SharedMem.UserMem[ShmLastWriteTime, gb.float] = Now + Timer
+  Endif
+
+  SharedMem.UserMem[ShmWait] += 1
 
 End
 
 Public Sub _waiting() As Boolean
-  
+
   If SharedMem.UserMem[ShmWait] > 0 Then Return True
   Return False
-  
+
 End
 
 
 Public Sub GetWaitCount() As Integer
-  
+
   Return SharedMem.UserMem[ShmWait]
-  
+
 End
 
 Public Sub _ClearWait() As Integer
-  
-    SharedMem.UserMem[ShmWait] -= 1
-  
+
+  SharedMem.UserMem[ShmWait] -= 1
+
 End
 
 Public Sub getLastWrite() As Float
-  If ShmLastWriteTime = Null Then 
+
+  If ShmLastWriteTime = Null Then
     Error.Raise("last write time pointer is nill" & SymName)
   Endif
   Return SharedMem.UserMem[ShmLastWriteTime, gb.float]
-  
+
 End
 
 Public Sub SetLastWrite() As Float
-  If ShmLastWriteTime = Null Then 
+
+  If ShmLastWriteTime = Null Then
     Error.Raise("last write time pointer is nill" & SymName)
   Endif
-  
+
   SharedMem.UserMem[ShmLastWriteTime, gb.float] = Now + Timer
   Return SharedMem.UserMem[ShmLastWriteTime, gb.float]
-  
+
 End
 
 Public Sub SetStorage(data As Variant, Optional ExtraLen As Integer = 0) As Boolean
 
-        DataLength = SharedMem.Usermem._SizeOf(data) 
-        Return AllocStorage(extraLen + DataLength)
-  
-  Catch
-    'Error.Raise("SetStorage set error", Error.text, Error.where)
-    Error.Propagate()
-    Stop
+  DataLength = SharedMem.Usermem._SizeOf(data)
+  Return AllocStorage(extraLen + DataLength)
+
+Catch
+  'Error.Raise("SetStorage set error", Error.text, Error.where)
+  Error.Propagate()
+  Stop
+
 End
 
 Public Sub AllocStorage(iLength As Integer) As Boolean
+
   Dim NewStorageLength As Integer
   Dim NewStorage As Pointer
-  
+
   NewStorageLength = SharedMem.AllocHeaderLen + ilength
   DataLength = iLength
 
   If Not IsNull(RootAddress) Then       ' free and reallocate storage
-    
-      If NewStorageLength > StorageLength Then
-        StorageLength = NewStorageLength
 
-        If symtype = gb.string Or symtype = gb.object Then
-            If gb.string Then 
-              StorageLength += StringBufferExtra
-            Endif
-            SharedMem.ShmFree(SharedMem.UserMem[DataAddress + 1, gb.pointer, True])
-            newStorage = SharedMem.ShmAlloc(storageLength + 1)
-            SharedMem.UserMem[DataAddress + 1, gb.pointer, True] = newstorage
-            SharedMem.UserMem.SetType(DataAddress, symtype)
-            SharedMem.UserMem.SetType(newStorage + SharedMem.DataOffset, symtype)     ' make sure the indexed storage also defines the type of data
-        Else
-            SharedMem.ShmFree(RootAddress)
-            RootAddress = SharedMem.ShmAlloc(storageLength + 1)
-            DataAddress = RootAddress + SharedMem.DataOffset
-            ShmWait = RootAddress + SharedMem.WaitOffset
-            ShmLastWriteTime = RootAddress + SharedMem.LastWriteOffset
-            SharedMem.UserMem.SetType(DataAddress, symtype)
-            SharedMem.UserMem[ShmLastWriteTime] = 0.0
-            SharedMem.UserMem[shmWait] = CLong(0)
-        Endif
-      Endif
-  Else
+    If NewStorageLength > StorageLength Then
       StorageLength = NewStorageLength
+
       If symtype = gb.string Or symtype = gb.object Then
-         RootAddress = SharedMem.ShmAlloc(SizeOf(gb.pointer) + 1 + SharedMem.AllocHeaderLen)
-         DataAddress = RootAddress + SharedMem.AllocHeaderLen
-         newStorage = SharedMem.ShmAlloc(storageLength + 1)
-         SharedMem.UserMem[DataAddress + 1, gb.pointer, True] = newstorage
-         SharedMem.UserMem.SetType(DataAddress, symtype)
-         SharedMem.UserMem.SetType(NewStorage + SharedMem.dataoffset, symtype)
+        If gb.string Then
+          StorageLength += StringBufferExtra
+        Endif
+        SharedMem.ShmFree(SharedMem.UserMem[DataAddress + 1, gb.pointer, True])
+        newStorage = SharedMem.ShmAlloc(storageLength + 1)
+        SharedMem.UserMem[DataAddress + 1, gb.pointer, True] = newstorage
+        SharedMem.UserMem.SetType(DataAddress, symtype)
+        SharedMem.UserMem.SetType(newStorage + SharedMem.DataOffset, symtype)     ' make sure the indexed storage also defines the type of data
       Else
-          RootAddress = SharedMem.ShmAlloc(storageLength + 1)
-          DataAddress = RootAddress + SharedMem.AllocHeaderLen
-          SharedMem.UserMem.Settype(DataAddress, symtype)
+        SharedMem.ShmFree(RootAddress)
+        RootAddress = SharedMem.ShmAlloc(storageLength + 1)
+        DataAddress = RootAddress + SharedMem.DataOffset
+        ShmWait = RootAddress + SharedMem.WaitOffset
+        ShmLastWriteTime = RootAddress + SharedMem.LastWriteOffset
+        SharedMem.UserMem.SetType(DataAddress, symtype)
+        SharedMem.UserMem[ShmLastWriteTime] = 0.0
+        SharedMem.UserMem[shmWait] = CLong(0)
       Endif
-      ShmWait = RootAddress + SharedMem.WaitOffset
-      ShmLastWriteTime = RootAddress + SharedMem.LastWriteOffset
-      
-      SharedMem.UserMem[ShmLastWriteTime] = 0.0
-      SharedMem.UserMem[shmwait] = CLong(0)
-      
-  Endif
-  
-  If Not IsNull(RootAddress) Then
-      Return True
+    Endif
   Else
-      Return False
+    StorageLength = NewStorageLength
+    If symtype = gb.string Or symtype = gb.object Then
+      RootAddress = SharedMem.ShmAlloc(SizeOf(gb.pointer) + 1 + SharedMem.AllocHeaderLen)
+      DataAddress = RootAddress + SharedMem.AllocHeaderLen
+      newStorage = SharedMem.ShmAlloc(storageLength + 1)
+      SharedMem.UserMem[DataAddress + 1, gb.pointer, True] = newstorage
+      SharedMem.UserMem.SetType(DataAddress, symtype)
+      SharedMem.UserMem.SetType(NewStorage + SharedMem.dataoffset, symtype)
+    Else
+      RootAddress = SharedMem.ShmAlloc(storageLength + 1)
+      DataAddress = RootAddress + SharedMem.AllocHeaderLen
+      SharedMem.UserMem.Settype(DataAddress, symtype)
+    Endif
+    ShmWait = RootAddress + SharedMem.WaitOffset
+    ShmLastWriteTime = RootAddress + SharedMem.LastWriteOffset
+
+    SharedMem.UserMem[ShmLastWriteTime] = 0.0
+    SharedMem.UserMem[shmwait] = CLong(0)
+
   Endif
-  
-  Catch
-    Error.Raise("AllocStorage set error", Error.text, Error.where)
-    Stop
+
+  If Not IsNull(RootAddress) Then
+    Return True
+  Else
+    Return False
+  Endif
+
+Catch
+  Error.Raise("AllocStorage set error", Error.text, Error.where)
+  Stop
+
 End
 
 
 Public Sub Serialize(data As Variant)
 
-    datalength = mem._SizeOf(data)
- 
-  Catch 
-    Error.Raise("Serialize :" & Error.text & " " & Error.where)
-    Stop
+  datalength = mem._SizeOf(data)
+
+Catch
+  Error.Raise("Serialize :" & Error.text & " " & Error.where)
+  Stop
+
 End
 
 
@@ -326,156 +337,162 @@ End
 Public Sub ShmRead() As Variant
 
   Return SharedMem.UserMem[DataAddress, SymType]
- 
-  Catch 
-     Error.Propagate()
+
+Catch
+  Error.Propagate()
+
 End
 
 Public Sub ShmReadSub(subscript As Integer) As Variant
 
   If SpecialType = 1 Then
-          If subscript < ElementCount
-             If Not ((ElementType = gb.object) Or (ElementType = gb.string))
-                    Dim ElementAddress As Pointer = ShmElementAddress(subscript)
-                    Return SharedMem.UserMem[ElementAddress, ElementType, True]
-             Else
-                    Select Case ElementType
-                      Case gb.String
-                        Dim MyString As String[] = ShmRead()
-                        Return MyString[subscript]
-                      Case gb.object
-                        Dim MyObject As Object[] = ShmRead()
-                        Return MyObject[subscript]
-                    End Select
-                    Error.Raise("Unsupported data type for subscript " & SymName)
-             Endif
-          Else
-             Error.Raise("SubScript out of range " & SymName)
-          Endif
+    If subscript < ElementCount
+      If Not ((ElementType = gb.object) Or (ElementType = gb.string))
+        Dim ElementAddress As Pointer = ShmElementAddress(subscript)
+        Return SharedMem.UserMem[ElementAddress, ElementType, True]
+      Else
+        Select Case ElementType
+          Case gb.String
+            Dim MyString As String[] = ShmRead()
+            Return MyString[subscript]
+          Case gb.object
+            Dim MyObject As Object[] = ShmRead()
+            Return MyObject[subscript]
+        End Select
+        Error.Raise("Unsupported data type for subscript " & SymName)
+      Endif
+    Else
+      Error.Raise("SubScript out of range " & SymName)
+    Endif
   Else
-        Error.Raise("Not supported array type in " & SymName)
+    Error.Raise("Not supported array type in " & SymName)
   Endif
-  
-  
+
+
 End
 
 
 Public Sub ShmWrite(mdata As Variant) As Integer
-   
-   If TypeOf(mdata) <> SymType   ' this is done to prevent the need to save and reload table while other task may be using this variable
-     Error.Raise("ShmWrite: Can not change memory storage type after creation when Notify requested from " & SharedMem.DataTypes[SymType] & " to " & SharedMem.DataTypes[TypeOf(mdata)])
-     Return 0
-   Endif
-   
-  If IsNull(RootAddress) Or SymType = gb.object Or symtype = gb.string Then 
-    
-      If Not SetStorage(mdata) Then
-        Error.Raise("ShmWrite : Unable to allocate required storage")
-        Return 0
-      Endif
-      
-      'Print " Set storage done and about to store the data "
-      SharedMem.UserMem[DataAddress] = mdata
-      'Print " Set done"
-      LastWriteLength = SharedMem.UserMem.LastWriteLength
-          
-  Else
-       SharedMem.UserMem[DataAddress, symtype] = mdata
+
+  If TypeOf(mdata) <> SymType   ' this is done to prevent the need to save and reload table while other task may be using this variable
+    Error.Raise("ShmWrite: Can not change memory storage type after creation when Notify requested from " & SharedMem.DataTypes[SymType] & " to " & SharedMem.DataTypes[TypeOf(mdata)])
+    Return 0
   Endif
-  
+
+  If IsNull(RootAddress) Or SymType = gb.object Or symtype = gb.string Then
+
+    If Not SetStorage(mdata) Then
+      Error.Raise("ShmWrite : Unable to allocate required storage")
+      Return 0
+    Endif
+
+    'Print " Set storage done and about to store the data "
+    SharedMem.UserMem[DataAddress] = mdata
+    'Print " Set done"
+    LastWriteLength = SharedMem.UserMem.LastWriteLength
+
+  Else
+    SharedMem.UserMem[DataAddress, symtype] = mdata
+  Endif
+
   Return LastWriteLength
-    'Print "ShmWrite done"     
-    
-  Catch
-    Error.Propagate()
+  'Print "ShmWrite done"
+
+Catch
+  Error.Propagate()
+
 End
 
 Public Sub ShmWriteSub(data As Variant, subscript As Integer)
 
-      If SpecialType = 1 Then
-          If subscript < ElementCount
-             If ElementType = TypeOf(data)
-                If Not ((ElementType = gb.object) Or (ElementType = gb.string)) Then
-                    SharedMem.UserMem[ShmElementAddress(subscript), ElementType, True] = data
-                Else
-                    Select Case ElementType
-                      Case gb.String
-                        Dim MyString As String[] = ShmRead()
-                        MyString[subscript] = data
-                        ShmWrite(MyString)
-                        Return
-                      Case gb.object
-                        Dim MyObject As Object[] = ShmRead()
-                        MyObject[subscript] = data
-                        ShmWrite(MyObject)
-                        Return
-                    End Select
-                    Error.Raise("Unsupported data type for subscript in " & SymName)
-                Endif
-             Else
-                Error.Raise("Element Data type mismatch " & SymName)
-             Endif
-          Else
-             Error.Raise("SubScript out of range " & SymName)
-          Endif
+  If SpecialType = 1 Then
+    If subscript < ElementCount
+      If ElementType = TypeOf(data)
+        If Not ((ElementType = gb.object) Or (ElementType = gb.string)) Then
+          SharedMem.UserMem[ShmElementAddress(subscript), ElementType, True] = data
+        Else
+          Select Case ElementType
+            Case gb.String
+              Dim MyString As String[] = ShmRead()
+              MyString[subscript] = data
+              ShmWrite(MyString)
+              Return
+            Case gb.object
+              Dim MyObject As Object[] = ShmRead()
+              MyObject[subscript] = data
+              ShmWrite(MyObject)
+              Return
+          End Select
+          Error.Raise("Unsupported data type for subscript in " & SymName)
+        Endif
       Else
-        Error.Raise("Not supported array type in " & SymName)
+        Error.Raise("Element Data type mismatch " & SymName)
       Endif
+    Else
+      Error.Raise("SubScript out of range " & SymName)
+    Endif
+  Else
+    Error.Raise("Not supported array type in " & SymName)
+  Endif
+
 End
 
 Public Sub ShmElementAddress(index As Integer) As Pointer
+
   Dim bLen As Byte
- 'Dim offset As Integer = dataAddress - rootaddress + 3
+  'Dim offset As Integer = dataAddress - rootaddress + 3
   Dim offset As Integer = 0
-  
+
   'bLen = Byte@(SharedMem.UserMem[RootAddress + offset])
   blen = Byte@(DataPtr() + 2)
-  
+
   offset += If(BTst(bLen, 7), If(BTst(bLen, 6), 4, 2), 1) + 2 ' skip the element count
   offset += SizeOf(ElementType) * index
-  
+
   Return DataOffsetPtr() + offset
-  
+
 End
 
 
 
 Public Sub ShmCopy(mempointer As Pointer, memlen As Integer)
-  
+
   DataLength = memlen - SharedMem.AllocHeaderLen
-     
+
   If Not IsNull(RootAddress) Then
-    
-      If memLen > StorageLength Then
-             SharedMem.ShmFree(RootAddress)
-             StorageLength = memlen
-             RootAddress = SharedMem.ShmAlloc(storageLength)
-             DataAddress = RootAddress + SharedMem.DataOffset
-             ShmWait = RootAddress + SharedMem.WaitOffset
-             ShmLastWriteTime = RootAddress + SharedMem.LastWriteOffset
-      Endif
-      
-      memcpy(RootAddress, mempointer, memlen)
-  Else
+
+    If memLen > StorageLength Then
+      SharedMem.ShmFree(RootAddress)
       StorageLength = memlen
       RootAddress = SharedMem.ShmAlloc(storageLength)
       DataAddress = RootAddress + SharedMem.DataOffset
       ShmWait = RootAddress + SharedMem.WaitOffset
       ShmLastWriteTime = RootAddress + SharedMem.LastWriteOffset
-      ZeroRef = VarPtr(Zeropointer)
-      RootRef = VarPtr(RootAddress)
-      memcpy(RootAddress, mempointer, memlen)
+    Endif
+
+    memcpy(RootAddress, mempointer, memlen)
+  Else
+    StorageLength = memlen
+    RootAddress = SharedMem.ShmAlloc(storageLength)
+    DataAddress = RootAddress + SharedMem.DataOffset
+    ShmWait = RootAddress + SharedMem.WaitOffset
+    ShmLastWriteTime = RootAddress + SharedMem.LastWriteOffset
+    ZeroRef = VarPtr(Zeropointer)
+    RootRef = VarPtr(RootAddress)
+    memcpy(RootAddress, mempointer, memlen)
   Endif
-  
+
 End
 
 Public Sub _call(Optional value As Variant) As Variant
-    If Param.count > 0 Then
-      ShmWrite(value)
-      Return value
-    Else
-     Return ShmRead()
-    Endif
+
+  If Param.count > 0 Then
+    ShmWrite(value)
+    Return value
+  Else
+    Return ShmRead()
+  Endif
+
 End
 
 Public Sub _get(...) As Variant
@@ -485,78 +502,81 @@ Public Sub _get(...) As Variant
   Else
     Return ShmReadSub(Param[0])
   Endif
-  
+
 End
 
 Public Sub _put(value As Variant, index As Integer)
-  
-    ShmWriteSub(Value, index)
-  
+
+  ShmWriteSub(Value, index)
+
 End
 
 
 
 Public Sub memSize() As Integer
-  
+
   Return storageLength
-  
+
 End
 
 Public Sub SizeOf() As Integer
-  
+
   Return DataLength
-  
+
 End
 
 Public Sub SetZeros()
-  
+
   ZeroRef = VarPtr(Zeropointer)
   RootRef = VarPtr(RootAddress)
-  
+
 End
 
 Public Sub DataOffsetPtr() As Pointer
-  
+
   Return SharedMem.UserMem.DataOffset(DataAddress, SymType)
-  
+
 End
 
 
-''Returns the real address of the variable header, ie containing the 
+''Returns the real address of the variable header, ie containing the
 '' basic information And pointer To storage For strings, And objects
 Public Sub AddressPtr() As Pointer
-  
+
   Return SharedMem.UserMem.AddrReal(RootAddress)
-  
+
 End
 
 ''Returns the real address of the data storage of the
 '' object or string or base data types
 Public Sub DataPtr() As Pointer
-  
+
   Return SharedMem.UserMem.AddrData(DataAddress, SymType)
-  
+
 End
 
 
 '' Dumps the variables value to an output file
 Public Sub DumpMem()
-Dim Src As Pointer = DataPtr()
 
-mem.DumpMem(Src, DataLength, User.home &/ "Desktop/" &/ SymName & ".dump")
+  Dim Src As Pointer = DataPtr()
+
+  mem.DumpMem(Src, DataLength, User.home &/ "Desktop/" &/ SymName & ".dump")
 
 End
 
 '' Prints the details of this variable to the current output sink
 Public Sub _print()
+
   Print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
   Print "Symbol Name: "; Me.SymName, "SymType: "; SharedMem.DataTypes[Me.SymType]
   Print "Special Type:", If(Me.SpecialType = 1, "Yes", "No"), "Class("; Me.ClassName; ")", "ObjectName("; Me.ObjectName; ")"
-  Print "Address:"; CLong(Me.RootAddress); "/"; CLong(Me.DataAddress); "/"; 
+  Print "Address:"; CLong(Me.RootAddress); "/"; CLong(Me.DataAddress); "/";
   Print If(Me.SymType = gb.string Or Symtype = gb.object, CLong(SharedMem.usermem[DataAddress + 1, gb.pointer, True]), " - "),
-  Print "Length:"; Me.dataLength, "Storage len: "; Me.storageLength
+    Print "Length:"; Me.dataLength, "Storage len: "; Me.storageLength
   Print "Last Write length : "; LastWriteLength, "ElementCount :"; ElementCount, "ElementType : "; SharedMem.DataTypes[ElementType]
   Print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+
 End
 
 Private Function Value_Read() As Variant

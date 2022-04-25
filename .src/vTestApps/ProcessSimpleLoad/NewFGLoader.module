@@ -5,28 +5,37 @@ Public Sub main()
   Dim Tasks As New NewBGLoader[]
   Dim vmem As New ShmMem(1000000, "jiffy")
   Dim wiggle As Integer = 0
+  Dim tmp As NewBGLoader
 
   With vmem
-    !Wiggle = Application.id
+    !Wiggle = 0
     !AllDone = "No"
 
     For i As Integer = 0 To 100
-      Dim tmp As NewBGLoader
       tmp = New NewBGLoader
       Tasks.Add(tmp)
     Next
+    Wait 2.00
 
     Dim counter As Long = 0
 
-    While counter < 100000
+    While counter < 11
 
-      .WaitValueChange("Wiggle", Application.id)
       wiggle = !Wiggle
-      !Wiggle = Application.id
+      !Wiggle = counter
+      Wait 0.5
+
+      If counter Mod 1 = 0 Then
+        Print "FG Count = "; counter;; "Wiggle=";; wiggle
+      Endif
+      If counter = 9 Then
+        !AllDone = "Yes"
+      Endif
+
       Inc counter
-      If counter Mod 10000 = 0 Then Print "FG Count = "; counter;; "Wiggle=";; wiggle
     Wend
-    !AllDone = "Yes"
+    Print "Completed "
+
   End With
 
 End

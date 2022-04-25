@@ -8,27 +8,27 @@
 Public Const ChangeSignal As Integer = 16      '' Sigsys = 31, SigUSr2 = 12, sig16 is unused too
 Private InitSignal As Integer = 0              '' force the init on first call of Notify
 
-Public Struct AllocHeader                 '' Standard header
-  Length As Long                          '' Length including header
-  Address As Pointer                      '' The virtual address of this block, speed pointer conversion
-  Type As Integer                         '' Type of memory
-{Next} As Pointer                       '' null if no more in list
+Public Struct AllocHeader                      '' Standard header
+  Length As Long                               '' Length including header
+  Address As Pointer                           '' The virtual address of this block, speed pointer conversion
+  Type As Integer                              '' Type of memory
+  {Next} As Pointer                              '' null if no more in list
 End Struct
 
 Public Struct dPointer
-  Length As Long                          '' Length including header
-  Address As Pointer                      '' The virtual address of this block, speed pointer conversion
-  Type As Integer                         '' Type of memory
-  Value As Pointer                        '' The actual value for usage
+  Length As Long                              '' Length including header
+  Address As Pointer                          '' The virtual address of this block, speed pointer conversion
+  Type As Integer                             '' Type of memory
+  Value As Pointer                            '' The actual value for usage
 End Struct
 
 Public Struct Symbol
-  Name[128] As Byte                       '' Max length of any variable name
-  Used As Boolean                         '' This slot is in use
-  NotifyBlock As Pointer                  '' pointer to chain of pids waiting to be notifies when This symbol changes
-  Address As Long                         '' virtual address of the value, 0 means no value yet
-  Hash As Long                            '' When we start using a hash for this table
-  NameLength As Integer                   '' NameLength
+  Name[128] As Byte                          '' Max length of any variable name
+  Used As Boolean                            '' This slot is in use
+  NotifyBlock As Pointer                     '' pointer to chain of pids waiting to be notifies when This symbol changes
+  Address As Long                            '' virtual address of the value, 0 means no value yet
+  Hash As Long                               '' When we start using a hash for this table
+  NameLength As Integer                      '' NameLength
 End Struct
 
 Extern signal(sig As Integer, sighandler As Pointer) As Pointer In "libc:6"
@@ -55,7 +55,7 @@ Public Sub _free()
     Return
   Endif
 
-  NotifyQueue = Null
+  NotifyQueue.free()
 
 End
 
@@ -132,6 +132,12 @@ Public Sub NotifyStop(SymEntry As Symbol)
 
   If PidQueue.Exist(NotifyQueue.Address) Then
     PidQueue.Dequeue(NotifyQueue.Address)
+    NotifyQueue.free()
+  Endif
+
+  If PidQueue.count = 0 Then
+    SymEntry.NotifyBlock = 0
+    PidQueue.free()
   Endif
 
 End

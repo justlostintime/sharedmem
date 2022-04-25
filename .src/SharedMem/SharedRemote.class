@@ -36,128 +36,130 @@ Event Kill(data As Integer)
 Ssh_session As Pointer = Null
 
 Public Sub _new(host As String, password As String, Optional port As Integer = 22, Verbosity As Integer = 2)
+
   Dim result As Integer
-  
+
   ssh_session = ssh_new()
-  
+
   If ssh_session = Null Then Error.Raise("RemoteSession failed " & Error.text)
-  
+
   ssh_options_set(ssh_session, 0, host)
   ssh_options_set(ssh_session, 1, VarPtr(port))
   ssh_options_set(ssh_session, 13, VarPtr(Verbosity))
-  
+
   result = ssh_connect(ssh_session)
   If result <> 0 Then Error.Raise("RemoteSession failed error=" & result & ":" & String@(ssh_get_error(ssh_session)))
-  
+
   result = ssh_is_server_known(ssh_session)
   Select Case result
     Case 1 ' known host
-      
+
       result = ssh_userauth_password(ssh_session, Null, password)
       If result <> 0 Then Error.Raise("Unable to autorize connection")
-      
-    Case -1 
+
+    Case -1
       Error.Raise("Host Check error " & String@(ssh_get_error(ssh_session)))
-      
+
     Default
       Error.Raise("Unknow host in database !", host)
-      
+
   End Select
-  
+
 End
 
 
 Public Sub _free()
-  
+
   If Not IsNull(ssh_session) Then
     ssh_disconnect(ssh_session)
     ssh_free(ssh_session)
   Endif
-  
+
 End
 
 Public Sub ExecuteCommand(command As String)
-  
+
   Dim ssh_channel As Pointer
   Dim result As Integer
-  Dim buffer As New Byte[4096] 
+  Dim buffer As New Byte[4096]
 
   ssh_channel = ssh_channel_new(ssh_session)
-  
+
   If IsNull(ssh_channel) Then Error.Raise("Unable to create remote channel")
-  
+
   result = ssh_channel_open_session(ssh_channel)
-  
+
   If result <> 0 Then
     ssh_channel_free(ssh_Channel)
     Error.Raise("Unable open channel  ")
   Endif
-  
+
   result = ssh_channel_request_exec(ssh_channel, command)
   If result <> 0 Then
     ssh_channel_close(ssh_channel)
     ssh_channel_free(ssh_channel)
     Error.Raise("SSH Exec failed !")
   Endif
-  
+
   result = ssh_channel_read(ssh_channel, Buffer.Data, Buffer.Length, 0)
-  While result > 0 
+  While result > 0
     Buffer.Write(File.out, 0, result)
     result = ssh_channel_read(ssh_channel, Buffer.Data, Buffer.Length, 0)
   Wend
-   
+
   ssh_channel_send_eof(ssh_channel)
   ssh_channel_close(ssh_channel)
   ssh_channel_free(ssh_channel)
-  
-  Catch
-    Error.Propagate()
+
+Catch
+  Error.Propagate()
+
 End
 
 ssh_channel_shell As Pointer = Null
 
 Public Sub OpenShell(WriteBuff As String) As Integer
-  
+
   Dim result As Integer
   Dim ssh_channel As Pointer = OpenChannel()
   Dim buffer As New Byte[4096]
   Dim writedata As String
-  
+
   Dim ssh_channel_shell As Pointer
-  
+
   result = ssh_channel_request_pty(ssh_channel)
   If result <> 0 Then Return result
- 
+
   result = ssh_channel_change_pty_size(ssh_channel, 80, 24)
   If result <> 0 Then Return result
- 
+
   result = ssh_channel_request_shell(ssh_channel)
   If result <> 0 Then Return result
   ssh_channel_shell = ssh_channel
-  
+
   While ssh_channel_is_open(ssh_channel) And Not ssh_channel_is_eof(ssh_channel)
     result = ssh_channel_read_nonblocking(ssh_channel, Buffer.Data, Buffer.Length, 0)
     If result < 0 Then Error.Raise("Shell read error")
     If result > 0 Then Buffer.Write(File.out, 0, result)
-    If result = 0 Then 
-        If SharedMem[WriteBuff] <> "" Then 
-            writedata = SharedMem[Writebuff]
-            ssh_channel_write(ssh_channel, writedata, writedata.len)
-            SharedMem[WriteBuff] = ""
-        Endif
+    If result = 0 Then
+      If SharedMem[WriteBuff] <> "" Then
+        writedata = SharedMem[Writebuff]
+        ssh_channel_write(ssh_channel, writedata, writedata.len)
+        SharedMem[WriteBuff] = ""
+      Endif
     Endif
     Wait 0.01
   Wend
-  
+
   CloseChannel(ssh_channel)
   ssh_channel_shell = Null
-  
+
   Return result
-  
+
 End
 
 Public Sub ShellLink(Writebuff As String)
-  
+
   Dim ssh_channel As Pointer
   Dim result As Integer
   Dim buffer As Pointer = Alloc(4096)
@@ -165,76 +167,77 @@ Public Sub ShellLink(Writebuff As String)
   Dim WriteData As String
 
   ssh_channel = ssh_channel_new(ssh_session)
-  
+
   If IsNull(ssh_channel) Then Error.Raise("Unable to create remote channel")
-  
+
   result = ssh_channel_open_session(ssh_channel)
-  
+
   If result <> 0 Then
     ssh_channel_free(ssh_Channel)
     Error.Raise("Unable open channel  ")
   Endif
-  
+
   result = ssh_channel_request_exec(ssh_channel, "gsh -d")
   If result <> 0 Then
     ssh_channel_close(ssh_channel)
     ssh_channel_free(ssh_channel)
     Error.Raise("SSH Exec failed !")
   Endif
-  
+
   While ssh_channel_is_open(ssh_channel) And Not ssh_channel_is_eof(ssh_channel)
-    
+
     result = ssh_channel_read_nonblocking(ssh_channel, Buffer, 4096, False)
-    If result > 0 Then 
-          'Print "********************************"
-          'Print #File.err, Buffer.ToString(0, result)
-          'Print "*********************************"
-          Raise indata(buffer, result)
+    If result > 0 Then
+      'Print "********************************"
+      'Print #File.err, Buffer.ToString(0, result)
+      'Print "*********************************"
+      Raise indata(buffer, result)
     Endif
-    If result < 0 Then 
-          If result = -127 Or If Not ssh_channel_is_open(ssh_channel) Or If ssh_channel_is_eof(ssh_channel) Then
-           Raise Kill(0)
-           Break
-          Endif
-          Raise Kill(result)
-          Break
+    If result < 0 Then
+      If result = -127 Or If Not ssh_channel_is_open(ssh_channel) Or If ssh_channel_is_eof(ssh_channel) Then
+        Raise Kill(0)
+        Break
+      Endif
+      Raise Kill(result)
+      Break
     Endif
-    
+
     result = ssh_channel_read_nonblocking(ssh_channel, errBuffer.Data, errBuffer.Length, True)
     If result > 0 Then Raise errdata(errbuffer, result)
-    
-    If result < 0 Then 
-          If result = -127 Or If Not ssh_channel_is_open(ssh_channel) Or If ssh_channel_is_eof(ssh_channel) Then
-           Raise Kill(0)
-           Break
-          Endif
-          Raise Kill(result)
-          Break
+
+    If result < 0 Then
+      If result = -127 Or If Not ssh_channel_is_open(ssh_channel) Or If ssh_channel_is_eof(ssh_channel) Then
+        Raise Kill(0)
+        Break
+      Endif
+      Raise Kill(result)
+      Break
     Endif
-    
-    If SharedMem[WriteBuff] <> "" Then 
-            writedata = SharedMem[Writebuff]
-            If writedata[writedata.len - 1] <> "\n" Then writedata &= "\n"
-            
-            result = ssh_channel_write(ssh_channel, writedata, writedata.len)
-            SharedMem[WriteBuff] = ""
+
+    If SharedMem[WriteBuff] <> "" Then
+      writedata = SharedMem[Writebuff]
+      If writedata[writedata.len - 1] <> "\n" Then writedata &= "\n"
+
+      result = ssh_channel_write(ssh_channel, writedata, writedata.len)
+      SharedMem[WriteBuff] = ""
     Endif
     Wait 0.01
   Wend
-  
+
   ' result = ssh_channel_read(ssh_channel, Buffer.Data, Buffer.Length, 0)
-  ' While result > 0 
+  ' While result > 0
   '   Buffer.Write(File.out, 0, result)
   '   result = ssh_channel_read(ssh_channel, Buffer.Data, Buffer.Length, 0)
   ' Wend
-   
+
   Free(buffer)
   ssh_channel_send_eof(ssh_channel)
   ssh_channel_close(ssh_channel)
   ssh_channel_free(ssh_channel)
-  
-  Catch
-    Error.Propagate()
+
+Catch
+  Error.Propagate()
+
 End
 
 Private Sub OpenChannel() As Pointer
@@ -244,28 +247,28 @@ Private Sub OpenChannel() As Pointer
 
 
   ssh_channel = ssh_channel_new(ssh_session)
-  
+
   If IsNull(ssh_channel) Then Error.Raise("Unable to create remote channel")
-  
+
   result = ssh_channel_open_session(ssh_channel)
-  
+
   If result <> 0 Then
     ssh_channel_free(ssh_Channel)
     Error.Raise("Unable open channel  ")
   Endif
-  
+
   Return ssh_channel
-  
+
 End
 
 
 
 Private Sub CloseChannel(ssh_channel As Pointer)
-  
+
   ssh_channel_send_eof(ssh_channel)
   ssh_channel_close(ssh_channel)
   ssh_channel_free(ssh_channel)
-  
+
 End
 
 

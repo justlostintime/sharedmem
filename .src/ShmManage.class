@@ -6,7 +6,7 @@ Public Struct AllocHeader
   Length As Long                          '' Length including header
   Address As Pointer                      '' The virtual address of this block, speed pointer conversion
   Type As Integer                         '' Type of memory
-{Next} As Pointer                       '' null if no more in list
+  {Next} As Pointer                       '' null if no more in list
 End Struct
 
 Public Struct InfoHeader
@@ -78,6 +78,7 @@ Public Sub AllocPtr(VirtAddress As Pointer) As AllocHeader
 
 End
 
+'' Returns a real pointer to the actual address of the allocated address block
 Public Sub RealAddress(VirtAddress As Pointer) As Pointer
 
   Dim p As Pointer = Storage.DataAddress + VirtAddress
@@ -85,6 +86,16 @@ Public Sub RealAddress(VirtAddress As Pointer) As Pointer
   Return p
 
 End
+
+Public Sub RealDataAddress(VirtAddress As Pointer) As Pointer
+
+  Dim p As Pointer = Storage.DataAddress + VirtAddress + SizeOf(AllocHeader)
+
+  Return p
+
+
+End
+
 
 
 Private Sub InitFreeList()

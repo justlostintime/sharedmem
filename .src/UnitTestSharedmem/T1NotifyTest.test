@@ -1,0 +1,23 @@
+' Gambas test file
+
+Public Sub aTest()
+
+  SharedMem.BeginNamed("MyTest")
+
+  With SharedMem
+    !cow = 100
+    SharedMem.NotifyChange("cow", Me)
+    !cow = 300
+    Wait
+  End With
+
+  SharedMem.End()
+
+End
+
+Public Sub cow_changed(value As Variant, varname As String)
+
+  'Print "Changed to "; value;; varname;; "count="; Param.count
+  Assert.equals(SharedMem["cow"], value, "Value correct " & value)
+
+End

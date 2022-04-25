@@ -11,8 +11,7 @@ Public Sub main()
   With vmem
     While True
 
-      .WaitValueChange("Wiggle", Application.id)
-      !Wiggle = Application.id
+      .WaitValueChange("Wiggle", counter)
       Inc counter
       If !AllDone = "Yes" Then Break
 

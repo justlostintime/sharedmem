@@ -5,36 +5,36 @@ Inherits Task
 
 Public Sub main()
 
- ' Print "Background Begin", Application.id
- 
-   
+  ' Print "Background Begin", Application.id
+
+
   For i As Integer = 1 To TestFGTaskSymbolCreate.Exchanges
-    
-     If Not waitfor("Sync" & Str(i)) Then 
-       Print "Timed out waiting for Sync", i
-       Break
-     Else
-       If SharedMem["Str" & Str(i)] <> "Hello" & Str(i) Then
-         Print "Error String Values fail to match = \""; SharedMem["Str" & Str(i)]; "\""
-       Endif
-       SharedMem["ForegroundSync" & Str(i)] = 1
-     Endif
+
+    If Not waitfor("Sync" & Str(i)) Then
+      Print "Timed out waiting for Sync", i
+      Break
+    Else
+      If SharedMem["Str" & Str(i)] <> "Hello" & Str(i) Then
+        Print "Error String Values fail to match = \""; SharedMem["Str" & Str(i)]; "\""
+      Endif
+      SharedMem["ForegroundSync" & Str(i)] = 1
+    Endif
   Next
- 
+
   Return
-  
-  Catch
-    Print "Back ground error ", Error.text, Error.Where
-    
+
+Catch
+  Print "Back ground error ", Error.text, Error.Where
+
 End
 
 Public Sub waitfor(Item As String) As Boolean
-  
+
   For i As Integer = 0 To 50000
     If SharedMem.Exist(item) Then Return True
-     'Wait 0.01
+    'Wait 0.01
   Next
   Return False
-  
+
 End
 

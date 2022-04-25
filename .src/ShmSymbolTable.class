@@ -65,6 +65,110 @@ Property Read Collisions As Integer               '' The number of time the Hash
 Property Read MaxUsedSymbols As Integer           '' Highest Number Of Symbols ever used
 Property Debug As Boolean Use $bDebug
 
+Public Sub Save(OutFile As File)
+
+  If $bDebug Then Print Application.id, "Save SymTblmem.exclusive"
+  SymTblMem.Exclusive()
+  Write #outFile, SymInfo.UsedCount As Long
+  Write #outFile, SymInfo.LastUpdate As Float
+  For i As Integer = 0 To SymInfo.count - 1                   '' for each slot save to the file with the value
+    If SymMem.Table[i].Used = False Then Continue             '' Skip unused entries
+    If SymMem.Table[i].address > 0 Then
+      Write #OutFile, True As Boolean                         '' There is saved data
+      WriteVar(SymMem.Table[i].Address, OutFile, SymMem.Table[i].Name.ToString())          '' Write the variable to the file
+    Else
+      Write #OutFile, False As Boolean                        '' There is no data saved
+    Endif
+  Next
+
+  SymTblMem.Release()
+  If $bDebug Then Print Application.id, "Save SymTblmem.release"
+
+Catch
+  Dim errormsg As String = "Save Error :" & Error.Text & "," & Error.where
+  SymTblMem.Release()
+  If $bDebug Then Print Application.id, "Save SymTblmem.release"
+  Error.Raise(errormsg)
+
+End
+
+Public Sub SaveVar(SymName As String, OutFile As File)
+
+  UpdateCache()
+
+  If Not SymbolCache.exist(SymName) Then
+    Error.Raise("SaveVar Error:" & Error.text & "," & Error.where)
+  Endif
+
+  Dim index As Long = SymbolCache[SymName]
+  WriteVar(SymMem.Table[index].Address, OutFile, SymName)
+  If Error Then
+    Error.Raise("SaveVar Error: " & Error.text & "," & Error.where)
+  Endif
+
+End
+
+
+Public Sub WriteVar(Address As Long, OutFile As File, SymName As String)
+
+  Dim value As Variant
+
+  If $bDebug Then Print Application.id, "Save ShmSymbolTable VarMem.Lock " & SymName
+  VarMem.Lock()
+  value = VarMem[Address]
+  Write #OutFile, SymName As String
+  Write #OutFile, Value As Variant
+  VarMem.Unlock()
+  If $bDebug Then Print Application.id, "Save ShmSymbolTable Varmem.UnLock " & SymName
+Catch
+  Dim errormsg As String = "WriteVar Error :" & Error.text & "," & Error.where
+  VarMem.Unlock()
+  If $bDebug Then Print Application.id, "Save ShmSymbolTable Varmem.UnLock " & SymName
+  Error.Raise(errormsg)
+
+End
+
+
+Public Sub Load(InFile As File)
+
+  Dim UsedCount As Long
+  Dim lastUpdate As Float
+  Dim Assigned As Boolean
+
+  UsedCount = Read #inFile As Long
+  lastUpdate = Read #inFile As Float
+  For i As Integer = 1 To usedCount                           '' load all the variables
+    Assigned = Read #inFile As Boolean
+    If Not Assigned Then Continue
+    LoadVar(inFile)
+  Next
+
+Catch
+  Dim errormsg As String = "Load Error :" & Error.Text & "," & Error.where
+  Error.Raise(errormsg)
+
+End
+
+Public Sub Loadvar(infile As File, Optional symname As String = "")
+
+  ReadVar(infile, symname)
+
+End
+
+Public Sub ReadVar(infile As File, ReqSymname As String)
+
+  Dim symname As String
+  Dim value As Variant
+
+  Symname = Read #infile As String
+  If reqSymname <> "" Then symname = ReqSymName
+  value = Read #infile As Variant
+  _put(value, symname)
+
+End
+
+
+
 Static Public Sub SymbolLength() As Integer
 
   Return SizeOf(symbol)
@@ -621,3 +725,7 @@ Private Function MaxUsedSymbols_Read() As Integer
   Return SymInfo.MaxCount
 
 End
+
+
+
+

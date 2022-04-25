@@ -42,11 +42,11 @@
 ''' >  iInt = SharedMem\["TheArray", 2\]             ' this returns the second element of the array\
 ''' >  inc SharedMem\["TheArray",2\]                 ' Increments the second element of array\
 '''
-''' >  Inc SharedMem\["MyVariable"\]          ' This will Trigger a signal to the waiting task again\
-''' >  wait 1                              ' Allow time to print response\
+''' >  Inc SharedMem\["MyVariable"\]                 ' This will Trigger a signal to the waiting task again\
+''' >  wait 1                                        ' Allow time to print response\
 '''
-''' >  SharedMem.end()                     ' Releases the shared memory and all variables\
-''' >  'SharedMem.end("filename")          ' Alternately The Shared memory may be stored before closing\
+''' >  SharedMem.end()                               ' Releases the shared memory and all variables\
+''' >  'SharedMem.end("filename")                    ' Alternately The Shared memory may be stored before closing\
 ''' End\
 '''
 ''' Class MyTask \
@@ -1698,7 +1698,7 @@ Static Public Sub _write(mFile As File) As Boolean
   Write #mFile, SymbolTable.length As Integer         ' number of entries in the symbol table
 
   For Each symbol In SymbolTable
-    symbol._write(mFile, True)                      ' write the data as well as the parameters
+    symbol._write(mFile, True)                        ' write the data as well as the parameters
   Next
 
   Return True

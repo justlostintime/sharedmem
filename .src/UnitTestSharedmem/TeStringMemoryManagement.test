@@ -1,21 +1,21 @@
 ' Gambas test file
 
 Public Sub aStringGetsbigger()
-  
+
   With SharedMem
     .Begin(1450000)
-    
+
     .myString = "..........................................................................................."
-    
+
     Dim mystring As SharedMemSymbol = ._Symbol("myString")            ' work with the symbol information
-    
+
     'Print .mystring.len, .len("myString"), Len(.mystring), mystring.LastWriteLength, MyString.storageLength, MyString.dataLength
     Dim starttime As Float = Timer
     For i As Integer = 0 To 100000
       .["myString"] = .["MyString"] & "++ "
-      If MyString.storageLength < MyString.dataLength Then 
+      If MyString.storageLength < MyString.dataLength Then
         Assert.Fail("invalid memory allocation for string")
-      Else If mystring.LastWriteLength <> .mystring.len Then 
+      Else If mystring.LastWriteLength <> .mystring.len Then
         Assert.Fail("Invalid write length/possible data corruption")
       Endif
     Next
@@ -27,22 +27,23 @@ Public Sub aStringGetsbigger()
     '._print()
 
 
-  Dim testString As String = "......................................."
-  Starttime = Timer
-  For i As Integer = 0 To 100000
+    Dim testString As String = "......................................."
+    Starttime = Timer
+    For i As Integer = 0 To 100000
       testString = testString & "++ "
-  Next
-  
-  Assert.Pass("Native String time = " & Str(Timer - starttime))
-  
-  MyString.value = "................................................"
-  starttime = Timer
-  For i As Integer = 0 To 100000
-      MyString.value = MyString.value & "++ "
-  Next
-  
-  Assert.Pass("ShmSymbolEntry no mutex protection time = " & Str(Timer - starttime))
+    Next
 
-  .End()
+    Assert.Pass("Native String time = " & Str(Timer - starttime))
+
+    MyString.value = "................................................"
+    starttime = Timer
+    For i As Integer = 0 To 100000
+      MyString.value = MyString.value & "++ "
+    Next
+
+    Assert.Pass("ShmSymbolEntry no mutex protection time = " & Str(Timer - starttime))
+
+    .End()
   End With
+
 End

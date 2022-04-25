@@ -19,6 +19,7 @@ Property Read Length As Integer
 Private $sKey As String
 Property Read Key As String
 Property Debug As Boolean Use $bDebug
+Property DefaultDirectory As String Use $sDefaultDirectory
 
 
 '' Remove the memory by force
@@ -32,6 +33,8 @@ End
 
 '' Allocate the memory
 Public Sub _new(Optional VarMemLength As Long = VarMemDefault, MemName As String = "", MaxSymbols As Integer = MaxSymbolsDefault, LockTimeOut As Float = TimeOutDefault)
+
+  $sDefaultDirectory = User.home &/ "vars"
 
   If MemName <> "" Then
     VarStoreName = Memname & "_Data"
@@ -99,6 +102,79 @@ Public Sub {Free}(SymName As String)
 
 End
 
+''-----------------------------------------------------------------------------------
+'' Read and write images and variables
+''-----------------------------------------------------------------------------------
+Public Sub SetPath(filePath As String, Optional defaultBaseName As String = "", defaultExtension As String = "") As String
+
+  Dim basename As String = File.BaseName(filePath)
+  Dim Extension As String = File.Ext(filePath)
+  Dim Directory As String = File.Dir(filepath)
+
+  If directory = "" Then directory = $sDefaultDirectory
+  If basename = "" Then basename = defaultBaseName
+  If extension = "" Then extension = defaultExtension
+  Return Directory &/ basename & IIf(extension <> "", "." & Extension, "")
+
+End
+
+Public Sub SaveImage(Optional FileName As String = Application.name & ".image")
+
+  Dim outfileName As String = SetPath(FileName)
+  Dim outfile As File
+
+  Try outfile = Open outfilename For Write Create
+  If Error Then
+    Error.propegate()
+  Endif
+  vars.Save(outfile)
+  Close outfile
+
+End
+
+Public Sub SaveVar(VarName As String, Optional filename As String = "")
+
+  Dim outfileName As String = SetPath(FileName, VarName, "var")
+  Dim outfile As File
+
+  Try outfile = Open outfilename For Write Create
+  If Error Then
+    Error.propegate()
+  Endif
+  vars.SaveVar(VarName, Outfile)
+  Close outfile
+
+End
+
+
+Public Sub LoadImage(Optional FileName As String = Application.name & ".image")
+
+  Dim infileName As String = SetPath(FileName)
+  Dim infile As File
+
+  Try infile = Open infilename For Read
+  If Error Then
+    Error.propegate()
+  Endif
+  vars.Load(infile)
+  Close infile
+
+End
+
+Public Sub LoadVar(FileName As String, Optional SymName As String = "")
+
+  Dim infileName As String = SetPath(FileName, "", "var")
+  Dim infile As File
+
+  Try infile = Open infilename For Read
+  If Error Then
+    Error.propegate()
+  Endif
+  vars.LoadVar(infile, SymName)
+  Close infile
+
+End
+
 
 Public Sub {VarPtr}(SymName As String) As Variant
 
@@ -132,7 +208,7 @@ End
 Public Sub PrintAllInfo()
 
   Print "***************************************** Full Memory Info***************************************************"
-  Print Subst("Default Memory Size &1 Meg, Max Symbol Table entries &2, Default Timeout &3", VarMemDefault, MaxSymbolsDefault, TimeOutDefault)
+  Print Subst("Default Memory Size &1MB, Max Symbol Table entries &2, Default Timeout &3", VarMemDefault / 1024, MaxSymbolsDefault, TimeOutDefault)
   Print
   Print Vars.text
   Print
@@ -169,13 +245,13 @@ End
 
 Public Sub Notify(SymName As String, NotifyObject As Object, Optional NotifyFunction As String = "")
 
-  vars.NotifyVars.Notify(SymName, NotifyObject, NotifyFunction)
+  vars.Notify(SymName, NotifyObject, NotifyFunction)
 
 End
 
-Public Sub StopNotify(SymName As String)
+Public Sub NotifyStop(SymName As String)
 
-  vars.NotifyVars.NotifyStop(SymName)
+  vars.NotifyStop(SymName)
 
 End
 

@@ -8,6 +8,7 @@ Public Struct dList                       '' A defined entry in list of objects
   Type As Integer                         '' Type of memory
   {Next} As Pointer                       '' Next in list or head of pool
   Prev As Pointer                         '' previous in list or end of pool
+  sema As Pointer                         '' The locking semephor for each list
   Global As Integer                       '' If this variable is a global entry .. not auto deleted
   RefCount As Long                        '' Number of refrences to this element
   Value As Pointer                        '' Value of entry or count if pool
@@ -17,10 +18,10 @@ Static Private cShmQueue As Integer = 26
 Static Private cShmQueueEntry As Integer = 27
 
 Static Public Sub _init()
-  
+
   ShmVarStorage.DefineClass("ShmQueue", cShmQueue)
   ShmVarStorage.DefineClass("ShmQueueEntry", cShmQueueEntry)
-  
+
 End
 
 Public Sub _new()
@@ -32,59 +33,65 @@ Public Sub _new()
 End
 
 Public Sub Push(Value As Variant)
-  
+
   Me.add(Value)
-  
+
 End
 
 Public Sub Pop() As Variant
-  
+
   Return Me.remove(0)
-  
+
 End
 
 Private LastIndex As Integer = 0
+
 Public Sub EnQueue(Value As Variant, Optional Priority As Integer = 0)
-  
-  If priority = 0 Then 
+
+  If priority = 0 Then
     Me.add(value)
     Return
   Endif
-  
+
   Super.VarMem.Lock()
   SeekPriority(Priority)
   Super.Insert(LastIndex, Value, Priority)
   Super.VarMem.Unlock()
+
 End
 
 Public Sub DeQueue(Optional Priority As Integer = -1) As Variant
+
   Dim value As Variant
+
   Super.VarMem.Lock()
-  If Priority = -1 Then 
+  If Priority = -1 Then
     Value = Me.remove(0)
     Super.VarMem.Unlock()
     Return value
   Endif
-  
+
   Dim Entry As Dlist = SeekPriority(Priority, True)
-  If Not entry Then 
-   Value = Null
-  Else 
+  If Not entry Then
+    Value = Null
+  Else
     Value = Super.remove(LastIndex)
   Endif
   Super.VarMem.Unlock()
   Return value
+
 End
 
 Private Sub SeekPriority(Priority As Integer, Optional bMatch As Boolean = False) As DList
+
   Dim Index As Long = 0
   Dim current As Dlist = Super.EntryPtr(Super.ListHead.Next)
-  
+
   While current
     If bMatch Then
-        If Current.RefCount = Priority Then 
-           Break
-        Endif
+      If Current.RefCount = Priority Then
+        Break
+      Endif
     Else If current.RefCount < Priority Then                       ' RefCount will hold the priority
       Break
     Endif
@@ -92,56 +99,56 @@ Private Sub SeekPriority(Priority As Integer, Optional bMatch As Boolean = False
     Current = Super.EntryPtr(current.Next)
     Inc Index
   Wend
-  
-  If Index >= Super.ListHead.Value Then 
+
+  If Index >= Super.ListHead.Value Then
     Index = -1
   Endif
-  
+
   LastIndex = Index
   ' Debug "Seek Index = ";; LastIndex;; "Priority = ";; Priority
-  
+
   Return Current
-  
+
 End
 
 Public Sub Exist(Priority As Integer) As Boolean
-  
+
   SeekPriority(Priority, True)
-  If LastIndex = -1 Then 
+  If LastIndex = -1 Then
     Return False
   Endif
-  
+
   Return True
-  
+
 End
 
 Public Sub _next() As Variant
 
   Static ListItem As DList
   Dim Listof As DList = Super.Listhead
-  
-  If IsNull(Enum.Index) Then 
+
+  If IsNull(Enum.Index) Then
     Enum.Index = 0
     If Super.ListHead.Value > 0 Then
       ListItem = Super.EntryPtr(Super.ListHead.next)
       Super.key = ListItem.RefCount
-    Else 
+    Else
       Enum.Stop
       Return
     Endif
   Else
-    If ListItem.next = 0 Then 
+    If ListItem.next = 0 Then
       Enum.Stop
       Return
-    Else 
+    Else
       ListItem = Super.EntryPtr(ListItem.next)
       Super.key = ListItem.RefCount
       Inc Enum.Index
-    Endif 
-  Endif 
-  
+    Endif
+  Endif
+
   Return Super.VarMem[ListItem.value]
-  
+
 End
 
 

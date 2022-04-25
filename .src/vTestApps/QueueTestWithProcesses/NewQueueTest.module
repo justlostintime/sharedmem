@@ -3,6 +3,7 @@
 Public mqa As New ShmMem(1000000)
 
 Public Sub Main()
+
   Print Application.id, "***************************** Start FgTask "
   Dim qa As New ShmQueue(mqa, 0, True)
   Wait
@@ -18,12 +19,12 @@ Public Sub Main()
     If i Mod 1000 = 0 Then Print Application.id, "************************************", i
     While qa.Count
       Dim r As Variant = qa.pop()
-    Wend 
+    Wend
     Wait 0.1
   Next
-  
+
   MTask.Wait()
-  
+
   mqa.PrintAllInfo()
-  
+
 End

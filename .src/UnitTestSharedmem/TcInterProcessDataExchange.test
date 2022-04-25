@@ -1,0 +1,106 @@
+' Gambas test file
+
+Public Sub aInterProcessCommunications()
+
+  Dim Mutexloopcount As Integer = 10' 000
+  Dim NoMutexloopcount As Integer = 10 '0000
+
+  With sharedmem
+    Dim NamedConsume As String = ""
+    Dim starttime As Float
+
+    Dim MyTask As New InterProcessDataExchange
+    Wait 0.01
+    Assert.Ok(MyTask.Running, "Verify the bg task started")
+
+    starttime = Timer
+    If SharedMem.BeginNamed("TestBlock", 128000) Then
+
+      Dim Words As String[] = ["one.....", "two.....", "three...", "four....", "five....", "six.....", "seven...", "eight..."]
+      While Not SharedMem.Exist("TestString")
+        Wait
+        If Timer - starttime > 5 Then
+          Assert.Fail("Timed out waiting for process to start")
+        Endif
+      Wend
+
+      SharedMem["Result"] = SharedMem["TestString"]
+
+      starttime = Timer
+      For j As Integer = 0 To Mutexloopcount
+
+        NamedConsume = Words[j Mod 7]
+
+        SharedMem["TestString"] = NamedConsume
+        SharedMem["SyncMessage"] = 1        ' notify other process that we sent message
+
+        While SharedMem["SyncMessage"] = 1
+          Wait
+          If Timer - starttime > 5 Then
+            Assert.Fail("Timed out waiting for process to reply")
+          Endif
+
+        Wend
+
+        If NamedConsume <> SharedMem["Result"] Then
+          Assert.Fail("Named test Failed at count = " & j)
+          Break
+        Endif
+
+      Next
+
+      Assert.Pass("Mutex :" & Str(Timer - starttime) & " for (" & Str(MutexLoopCount * 4) & ")")
+
+      SharedMem["TestString"] = "quit"
+      SharedMem["SyncMessage"] = 1
+
+
+      starttime = Timer
+      While SharedMem["TestString"] <> "Ready"
+        Wait
+        If Timer - starttime > 5 Then
+          Assert.Fail("Timed out waiting for process to be ready no Sem test")
+        Endif
+      Wend
+
+      Dim pSyncMessage As Pointer = ._varptr("SyncMessage")
+      Dim pTestString As Pointer = ._varptr("TestString")
+      Dim pResult As Pointer = ._varptr("Result")
+
+
+      starttime = Timer
+      For i As Integer = 1 To NoMutexloopcount
+
+        NamedConsume = Words[i Mod 7]
+        .usermem[pTestString] = NamedConsume
+        .usermem[pSyncMessage] = 1                         ' notify other process that we sent message
+
+        While .usermem[pSyncMessage] = 1
+          Wait
+          If Timer - starttime > 5 Then
+            Assert.Fail("Timed out waiting for process to reply no sem Test")
+          Endif
+        Wend
+
+        If NamedConsume <> .usermem[pResult] Then
+          assert.fail("Named test Failed at count no sem  = " & i)
+          Break
+        Endif
+
+      Next
+
+      .UserMem[pTestString] = "quit"
+      .UserMem[pSyncMessage] = 1
+
+      Assert.Pass("No Mutex :" & Str(Timer - starttime) & " for (" & Str(NoMutexloopcount * 4) & ")")
+
+      SharedMem["TestVar"] = "This string"
+      Dim NamedTest As String = SharedMem["TestVar"]
+
+      SharedMem.End()
+    Endif
+
+    Assert.equals(NamedTest, "This string", "Test Named Shared Mem")
+  End With
+
+End
