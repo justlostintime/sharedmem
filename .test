@@ -1,0 +1,8 @@
+[TestSuites]
+Count=1
+TestWith=1
+
+[TestSuites/1]
+Name="NewShm"
+Tests="NewBSaveLoadImage.aSaveImage;bLoadImage"
+
