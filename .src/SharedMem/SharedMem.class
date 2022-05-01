@@ -449,9 +449,9 @@ Static Public Sub BeginNamed(Optional MemName As String = User.Name & "gsh", Mem
   If Not Exist("/dev/shm/" &/ MemName) Then
     FirstUse = True
   Endif
-  NamedMemHandle = shm_open(MemName, O_CREAT Or O_RDWR Or O_EXCL, &O666) ' return an error if its already there
+  NamedMemHandle = shm_open(MemName, O_CREAT Or O_RDWR Or O_EXCL, &O660) ' return an error if its already there
   If NamedMemHandle = -1 Then
-    NamedMemHandle = shm_open(MemName, O_RDWR, &O666)
+    NamedMemHandle = shm_open(MemName, O_RDWR, &O660)
     If NamedMemHandle = -1 Then
       Error.Raise("Unable to open Named Shared Memory" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error)))
       Return False
@@ -473,10 +473,10 @@ Static Public Sub BeginNamed(Optional MemName As String = User.Name & "gsh", Mem
     Endif
   Endif
 
-  NamedMemCollectionHandle = shm_open(ColName, O_CREAT Or O_RDWR Or O_EXCL, &O666)
+  NamedMemCollectionHandle = shm_open(ColName, O_CREAT Or O_RDWR Or O_EXCL, &O660)
 
   If NamedMemCollectionHandle = -1 Then
-    NamedMemCollectionHandle = shm_open(ColName, O_RDWR, &O666)
+    NamedMemCollectionHandle = shm_open(ColName, O_RDWR, &O660)
     If NamedMemCollectionHandle = -1 Then
       Print #File.err, "Unable to open Named Shared Collection" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error))
       rClose(NamedMemHandle)

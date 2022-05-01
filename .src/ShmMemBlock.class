@@ -34,7 +34,7 @@ Static Private Const O_CREAT As Integer = &O0100
 Static Private Const O_EXCL As Integer = &O0200
 Static Private Const EEXIST As Integer = 11
 
-Static DefaultPermissions As Integer = &O666
+Static DefaultPermissions As Integer = &O660
 
 Public Struct MemBlockHeader                            '' Memory block header
   SemLock[64] As Byte                                   '' Semaphor used to lock this memory when sharing

@@ -79,7 +79,6 @@ Public Sub b_lowLevelAllocAndFree()
     Dim xx As Pointer
     Dim yy As Pointer
     Dim aa As Pointer
-    Dim bb As Pointer
     Dim cc As Pointer
 
 
