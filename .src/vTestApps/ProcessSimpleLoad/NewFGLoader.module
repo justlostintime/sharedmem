@@ -6,6 +6,7 @@ Public Sub main()
   Dim vmem As New ShmMem(1000000, "jiffy")
   Dim wiggle As Integer = 0
   Dim tmp As NewBGLoader
+  Dim Iterations As Integer = 10
 
   With vmem
     !Wiggle = 0
@@ -13,26 +14,37 @@ Public Sub main()
 
     For i As Integer = 0 To 100
       tmp = New NewBGLoader
+      tmp.myindex = i
+      Wait 0
       Tasks.Add(tmp)
     Next
-    Wait 2.00
-
+    Wait 1.0
     Dim counter As Long = 0
 
-    While counter < 11
+    While counter <= Iterations
 
-      wiggle = !Wiggle
       !Wiggle = counter
-      Wait 0.5
-
-      If counter Mod 1 = 0 Then
-        Print "FG Count = "; counter;; "Wiggle=";; wiggle
-      Endif
-      If counter = 9 Then
+      Print "FG Count = "; counter;; "Wiggle=";; !wiggle
+      If counter = Iterations Then
         !AllDone = "Yes"
       Endif
+      Wait 4.0
 
       Inc counter
+    Wend
+
+    Dim tasksRunning As Boolean = True
+    While tasksRunning
+      tasksRunning = False
+      For i = 0 To 100
+        If Tasks[i].Running Then
+          tasksRunning = True
+          Print "Task :";; i;; "Still running";; "Value="; Tasks[i].value
+        Else
+          Print "Task Complete ";; i;; "Value="; Tasks[i].value
+        Endif
+      Next
+      Wait 2.00
     Wend
     Print "Completed "
 

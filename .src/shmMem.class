@@ -25,8 +25,8 @@ Property DefaultDirectory As String Use $sDefaultDirectory
 '' Remove the memory by force
 Static Public Sub ForceDelete(SharedName As String)
 
-  Try shmMemBlock.ForceDelete(SharedName & "Data")
-  Try shmMemBlock.ForceDelete(SharedName & "Symbols")
+  Try shmMemBlock.ForceDelete(SharedName & "_Data")
+  Try shmMemBlock.ForceDelete(SharedName & "_Symbols")
 
 End
 

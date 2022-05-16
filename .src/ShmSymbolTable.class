@@ -566,7 +566,7 @@ Public Sub WaitFor(SymName As String, Optional Timeout As Float = 0) As Boolean
       Return False
     Endif
     UpdateCache()
-    Wait
+    Wait 0
   Wend
   Return True
 
@@ -582,11 +582,11 @@ Public Sub WaitForValue(SymName As String, Value As Variant, Optional timeout As
       Return False
     Endif
     UpdateCache()
-    Wait
+    Wait 0
   Wend
 
   While Me[symname] <> Value
-    Wait
+    Wait 0
     If timeout > 0 And If Timer - starttime >= timeout Then
       Return False
     Endif
@@ -606,14 +606,14 @@ Public Sub WaitValueChange(SymName As String, Value As Variant, Optional timeout
       Return False
     Endif
     UpdateCache()
-    Wait
+    Wait 0
   Wend
 
   While Me[symname] = Value
     If timeout > 0 And If Timer - starttime >= timeout Then
       Return False
     Endif
-    Wait
+    Wait 0
   Wend
 
   Return True

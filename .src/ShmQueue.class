@@ -4,13 +4,14 @@ Inherits ShmList
 
 Public Struct dList                       '' A defined entry in list of objects
   Length As Long                          '' Length including header
-  Address As Pointer                      '' The virtual address of this block, speed pointer conversion
+  Address As Pointer                   '' The virtual address of this block, speed pointer conversion
   Type As Integer                         '' Type of memory
-  {Next} As Pointer                       '' Next in list or head of pool
-  Prev As Pointer                         '' previous in list or end of pool
+  {Next} As Pointer                      '' Next in list or head of pool
+  Prev As Pointer                          '' previous in list or end of pool
   sema As Pointer                         '' The locking semephor for each list
-  Global As Integer                       '' If this variable is a global entry .. not auto deleted
-  RefCount As Long                        '' Number of refrences to this element
+  Global As Integer                       '' Defines if this is a global memory object or not
+  bDebug As Boolean                  '' turns on or off the debug control
+  RefCount As Long                      '' Number of refrences to this element
   Value As Pointer                        '' Value of entry or count if pool
 End Struct
 
@@ -124,32 +125,40 @@ End
 
 Public Sub _next() As Variant
 
-  Static ListItem As DList
+  Dim ListItem As DList
   Dim Listof As DList = Super.Listhead
 
   If IsNull(Enum.Index) Then
-    Enum.Index = 0
     If Super.ListHead.Value > 0 Then
-      ListItem = Super.EntryPtr(Super.ListHead.next)
-      Super.key = ListItem.RefCount
+      Enum.index = Super.EntryPtr(Super.ListHead.next)
+      Listitem = Enum.index
+      Super.key = Listitem.RefCount                                             ' sets the key to be the items priority in the queue
     Else
       Enum.Stop
       Return
     Endif
   Else
+    listitem = Enum.index
     If ListItem.next = 0 Then
       Enum.Stop
       Return
     Else
+      listitem = Enum.index
       ListItem = Super.EntryPtr(ListItem.next)
       Super.key = ListItem.RefCount
-      Inc Enum.Index
+      Enum.Index = listitem
     Endif
   Endif
 
+
   Return Super.VarMem[ListItem.value]
 
+Catch
+  Print "ShmQueue Next error ";; Error.text;; Error.where
+  Print Hex(listitem)
+
 End
+
 
 
 

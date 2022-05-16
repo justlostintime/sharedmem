@@ -9,11 +9,11 @@ Public Sub Main()
   Dim qa As New ShmQueue(NewQueueTest.mqa, 0, True)
 
   Print Application.id, "Start BackGround loop"
-  For i As Integer = 0 To 10
+  For i As Integer = 0 To 100
     qa.enqueue("Bye dolly")
     qa.enqueue(21)
     qa.enqueue(32.4)
-    If i Mod 1000 = 0 Then Print Application.id, "********************************************", i
+    If i Mod 10 = 0 Then Print Application.id, "********************************************", i
     While qa.Count
       Dim r As Variant = qa.pop()
     Wend

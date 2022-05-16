@@ -5,6 +5,7 @@ Public Sub main()
   Dim myMem As New ShmMem(1500000)
 
   With mymem
+    Print "Test Priority Queues ***************************************************************"
     For i As Integer = 0 To 1000
       Dim qa As New ShmQueue(myMem)
       qa.enqueue("This is even higher 201", 201)
@@ -41,16 +42,17 @@ Public Sub main()
       qa.enqueue("This is higher 100", 100)
       qa.enqueue("This is even higher 200", 200)
       qa.enqueue("This is very low 1", 1)
-      myMem.varMnge._Print()
-      myMem.PrintTree()
+      ' myMem.varMnge._Print()
+      ' myMem.PrintTree()
 
-      Print qa.Dequeue(300)
+      Print "Dequeue the 300 priority entry:";; qa.Dequeue(300)
+
       Dim Val As Variant = qa.DeQueue(300)
 
       If Not VAl Then
-        Print "No Entry Matches"
+        Print "Correct No Entry Matches when already dequeued 300 priority item"
       Else
-        Print Val
+        Print "Failed the 300 priority item was already dequeued ";; Val
       Endif
 
       While qa.count
@@ -58,6 +60,9 @@ Public Sub main()
       Wend
 
     Next
+
+    Print "End of priority queue test **********************************\nStart List test *******************************************"
+
     Dim a As ShmList = New ShmList(myMem)
     Dim b As ShmList
 
@@ -77,8 +82,9 @@ Public Sub main()
     Next
 
     Dim j As Integer
+    Print "Begin 1,000,000 Writes and reads from list ...... Please wait "
     Dim StartTime As Float = Timer
-    For I As Integer = 0 To 10
+    For I As Integer = 0 To 1000000
       a[1] = i
       j = a[1]
     Next
@@ -91,6 +97,8 @@ Public Sub main()
 
     !Apple[1] = "Changed Correctly"
     Print a[1], b[1], !Apple[1], !Orange[1], !Orange[3][4]
+
+    Print "End of list test ********************************\nStart FiFo and FiLo  test ******************************************"
 
     Dim c As New ShmFiFo(myMem)
     c.Push(1)
@@ -115,10 +123,16 @@ Public Sub main()
 
     d.push("Item 1")
     d.Push("Item 2")
+    Dim y As Variant = d.Copy()
     d.Pop()
     d.Pop()
 
     !Banana = d
+    For Each v As Variant In y
+      Print v
+    Next
+
+    Print "End of FiFo Test ******************************************************\nBegin FiLo test ************************************************************"
 
     myMem.varMnge._Print()
 

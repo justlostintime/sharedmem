@@ -6,17 +6,17 @@ Public Sub Main()
 
   Print Application.id, "***************************** Start FgTask "
   Dim qa As New ShmQueue(mqa, 0, True)
-  Wait
+  Wait 0
   Print application.id, "***************************** Start Background task"
   Dim MTask As New NewQueueBG
-  Wait
+  Wait 0
   Print application.id, "***************************** Start Loop test"
   Flush
-  For i As Integer = 0 To 10
+  For i As Integer = 0 To 100
     qa.enqueue("hello dolly")
     qa.enqueue(1)
     qa.enqueue(2.4)
-    If i Mod 1000 = 0 Then Print Application.id, "************************************", i
+    If i Mod 10 = 0 Then Print Application.id, "************************************", i
     While qa.Count
       Dim r As Variant = qa.pop()
     Wend

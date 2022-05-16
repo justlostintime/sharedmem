@@ -1,45 +1,46 @@
 ' Gambas module file
 
 Public Sub Main()
-SharedMem.BeginNamed("briangsh", 4512000)
-With Sharedmem
-  
-.free("a")
-.["a"] = 69
-.free("b")
-.["b"] = 80
 
-.NotifyChange("a", Me, -1)
-.a = 6
+  SharedMem.BeginNamed("briangsh", 4512000)
+  With Sharedmem
+
+    .free("a")
+    .["a"] = 69
+    .free("b")
+    .["b"] = 80
+
+    .NotifyChange("a", Me, -1)
+    .a = 6
 
 
-.NotifyChange("b", Me, -1, "b_flopped")
-.b = 7
-.a = 9
+    .NotifyChange("b", Me, -1, "b_flopped")
+    .b = 7
+    .a = 9
 
-For Each s As String In .notifylist()
-  Print s
-Next
+    For Each s As String In .notifylist()
+      Print s
+    Next
 
-.NotifyCancel("a", Me)
-.NotifyCancel("b", Me)
+    .NotifyCancel("a", Me)
+    .NotifyCancel("b", Me)
 
-End With
-SharedMem.end()
+  End With
+  SharedMem.end()
 
 Catch
-   Print Error.where;; Error.text
+  Print Error.where;; Error.text
 
 End
 
 Public Sub a_changed(data As Variant, symname As String)
-  
+
   Print "a=";; data;; symname
-  
+
 End
 
 Public Sub b_flopped(data As Variant, symname As String)
-  
+
   Print "b=";; data;; symname
-  
+
 End

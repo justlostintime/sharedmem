@@ -19,6 +19,7 @@ Public Struct dList                     '' A defined entry in list of objects
   Prev As Pointer                         '' previous in list or end of pool
   sema As Pointer                         '' The locking semephor for each list
   Global As Integer                       '' Defines if this is a global memory object or not
+  bDebug As Boolean                  '' Turns on debugging
   RefCount As Long                        '' Number of refrences to this element
   Value As Pointer                        '' Value of entry or count if pool
 End Struct
@@ -573,7 +574,7 @@ Public Sub text(VirtAddress As Pointer, Optional Indent As String = "", SetTree 
 
   Endif
 
-  Result &= Indent & Subst("@&1, Len&2, &3", Format(CLong(vptr.Address), "#########0"), Format(vptr.Length, "####0"), GetTextType(vptr.Type))
+  Result &= Indent & Subst("@&1, Len&2, &3", Hex(vptr.Address, 10), Format(vptr.Length, "####0"), GetTextType(vptr.Type))
 
   Select Case vptr.type
     Case FreeBlock
@@ -585,21 +586,24 @@ Public Sub text(VirtAddress As Pointer, Optional Indent As String = "", SetTree 
     Case gb.String
       sPtr = GetPointer(StrData, vptr.value)
       If SetTree Then AlreadyUsed[sPtr.address] = True
-      Result &= Subst("@&1, Blk&2, Len&3, Value=&4", Format(CLong(sPtr.address), "#########0"), Format(sPtr.ObjLen, "######0"), Format(sPtr.WriteLen, "######0"), Left(sPtr.value.ToString(), 10))
+      Result &= Subst("@&1, Blk&2, Len&3, Value=&4", Hex(sPtr.address, 10), Format(sPtr.ObjLen, "######0"), Format(sPtr.WriteLen, "######0"), Left(sPtr.value.ToString(), 10))
 
     Case gb.Object
       Dim MyObject As Object = getObject(vPtr)
       Dim OName As String = Object.Class(MyObject).name
       sPtr = GetPointer(StrData, vptr.value)
       If SetTree Then AlreadyUsed[sPtr.address] = True
-      Result &= Subst("@&1, Blk&2, Len&3, Class=&4", Format(CLong(sPtr.address), "#########0"), Format(sPtr.ObjLen, "######0"), Format(sPtr.WriteLen, "######0"), OName)
+      Result &= Subst("@&1, Blk&2, Len&3, Class=&4", Hex(sPtr.address, 10), Format(sPtr.ObjLen, "######0"), Format(sPtr.WriteLen, "######0"), OName)
+
+    Case 0  ' binary object
+      Result &= "Defined Binary"
 
     Case Else
       If UserClasses.Exist(vptr.Type) Then
         Dim xObject As Variant = Object.New(UserClasses[vptr.type], [Me, vPtr.Address])
-        result &= ", Value=" & xObject.value
+        result &= ", Value = " & xObject.value
       Else
-        result &= ", Value=" & vptr.value
+        result &= ", Value = " & vptr.value
       Endif
 
   End Select

@@ -1,7 +1,7 @@
 # Gambas Project File 3.0
 Title=Shared Memory object - SHMV2.0
-Startup=NewNotifyTest
-Version=3.17.0
+Startup=NewShmListTest
+Version=3.17.1
 Component=gb.args
 Component=gb.image
 Component=gb.debug
@@ -20,8 +20,8 @@ Address=brian@westwoodsvcs.com
 Url=www.westwoodsvcs.com
 License=General Public License
 Prefix=1
-PackageName=gambas3-gb-sharedmem-3.17.0
-PackageVersion=39
+PackageName=gambas3-gb-sharedmem-3.17.1
+PackageVersion=40
 CreateEachDirectory=1
 Packager=1
 Systems=autotools,debian,fedora,mageia,suse,slackware,ubuntu

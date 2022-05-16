@@ -16,13 +16,14 @@ End Struct
 
 Public Struct dList                       '' A defined entry in list of objects
   Length As Long                          '' Length including header
-  Address As Pointer                      '' The virtual address of this block, speed pointer conversion
+  Address As Pointer                   '' The virtual address of this block, speed pointer conversion
   Type As Integer                         '' Type of memory
-  {Next} As Pointer                       '' Next in list or head of pool
-  Prev As Pointer                         '' previous in list or end of pool
-  sema As Pointer                        '' The locking semephor for each list
-  Global As Integer                       '' If this variable is a global entry .. not auto deleted
-  RefCount As Long                        '' Number of refrences to this element
+  {Next} As Pointer                      '' Next in list or head of pool
+  Prev As Pointer                          '' previous in list or end of pool
+  sema As Pointer                         '' The locking semephor for each list
+  Global As Integer                       '' Defines if this is a global memory object or not
+  bDebug As Boolean                  '' turns on or off the debug control
+  RefCount As Long                      '' Number of refrences to this element
   Value As Pointer                        '' Value of entry or count if pool
 End Struct
 
