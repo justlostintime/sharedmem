@@ -515,6 +515,7 @@ Static Public Sub BeginNamed(Optional MemName As String = User.Name & "gsh", Mem
 End
 
 Static Private ProtectedVariables As String[] = ["notifylist"]
+
 '' this function clears the memory and deletes all the variables
 
 Static Public Sub ClearMem()
