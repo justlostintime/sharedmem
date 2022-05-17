@@ -1,5 +1,6 @@
 ' Gambas class file
 
+Export
 Private varmem As ShmManage
 Private Storage As ShmMemBlock
 Static Public DefaultAlloc As Integer = 1024 '' Default increments used when allocating string and object memory

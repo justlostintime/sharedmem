@@ -1,5 +1,6 @@
 ' Gambas class file
 
+Export
 Inherits ShmList
 
 Public Struct dList                       '' A defined entry in list of objects

@@ -1,3 +1,4 @@
 ' Gambas class file
 
+Export
 Inherits ShmListEntry

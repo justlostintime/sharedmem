@@ -1,5 +1,6 @@
 ' Gambas class file
 
+Export
 Public Storage As ShmMemBlock
 
 Public Struct AllocHeader

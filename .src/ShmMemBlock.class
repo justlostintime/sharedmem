@@ -1,5 +1,6 @@
 ' Gambas class file
 
+Export
 Extern mmap(MapPoint As Pointer, MapLength As Integer, prot As Integer, flags As Integer, fd As Integer, offset As Integer) As Pointer In "libc:6"
 Extern munmap(MapPoint As Pointer, MapLength As Integer) As Integer In "libc:6"
 Extern shm_open(name As String, oflag As Integer, mode As Integer) As Integer In "librt:1"

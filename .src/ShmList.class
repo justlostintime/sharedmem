@@ -1,5 +1,6 @@
 ' Gambas class file
 
+Export
 ''' Defines the Shm datatype - list
 ''' Lists are inherited by every other list based object
 
