@@ -65,6 +65,23 @@ Public Sub _free()
 
 End
 
+Public Sub _property(...) As Boolean
+
+  Debug Param.count
+  Return True
+
+End
+
+Public Sub _unknown(...) As Variant
+
+  If Param.count = 0 Then
+    Return _get(Param.name)
+  Endif
+
+  _put(Param[0], Param.name)
+
+End
+
 
 Public Sub _get(SymName As String, ...) As Variant
 
@@ -84,7 +101,7 @@ Public Sub _put(value As Variant, SymName As String, ...)
       Case 3
         tmpvar[Param[0], Param[1], Param[2]] = value
       Case 4
-        tmpvar[Param[0], Param[1], Param[2]] = value
+        tmpvar[Param[0], Param[1], Param[2], Param[3]] = value
     End Select
     vars[SymName] = tmpvar
   Else
@@ -93,13 +110,14 @@ Public Sub _put(value As Variant, SymName As String, ...)
 
 End
 
-Public Sub {Free}(SymName As String)
+Public Sub {Free}(SymName As Variant)
 
-  If Param.count > 0 Then
-
-  Else
-    vars.Free(SymName)
-  Endif
+  Select Case TypeOf(SymName)
+    Case gb.integer, gb.pointer, gb.long, gb.Short
+      MyVarMem.FreeVirt(CPointer(SymName))
+    Case gb.string
+      vars.Free(SymName)
+  End Select
 
 End
 
@@ -305,3 +323,21 @@ Private Function Key_Read() As String
   Return $sKey
 
 End
+
+'' Returns the actual Physical address after traslating the Virtual pointer
+Public Sub RealAddress(VirtAddress As Pointer) As Pointer
+
+  MyVarMem.RealAddress(VirtAddress)
+
+End
+
+'' Allocate a block of memory
+Public Sub {alloc}(Length As Pointer) As Pointer
+
+  Dim TheMem As Pointer
+
+  TheMem = MyVarMem.AllocVirt(Length)
+  Return TheMem
+
+End
+

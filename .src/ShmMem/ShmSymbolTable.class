@@ -266,7 +266,7 @@ Public Sub Clear()
 End
 
 
-Private Sub Hash(Symbol As String) As Pointer                 '' Hash table used pointers as they are unsigned
+Private Sub Hash(Symbol As String) As Pointer                 '' Hash table uses  pointers as index value  as they are unsigned
 
   Dim SymName As String = Lower(Symbol)
   Dim Buffer As Byte[]

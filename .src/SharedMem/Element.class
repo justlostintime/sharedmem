@@ -6,39 +6,39 @@ Inherits Buffer
 
 'Fast Unsafe
 ' Public Sub _get(index As Integer) As Variant
-'   
-'   
-'   
+'
+'
+'
 ' End
-' 
+'
 ' Public Sub _put(data As Variant, index As Integer)
-'   
+'
 '   Super[index] = data
-'   
+'
 ' End
-' 
+'
 ' Public Sub _varptr() As Pointer
-'   
+'
 '   Super[index] = data
-'   
+'
 ' End
-' 
+'
 ' Public Sub _varLen() As Integer
-' 
-'   
+'
+'
 ' End
-' 
-' 
+'
+'
 ' Public Sub _read(mFile As File)
-'   
-'   
-'   
+'
+'
+'
 ' End
-' 
+'
 ' Public Sub _write(mFile As File)
-'   
-'   
-'   
+'
+'
+'
 ' End
 
 

@@ -57,7 +57,7 @@ Property Read Address As Pointer                  '' The address of the object
 Property Debug As Boolean                              '' Debugging helper
 Property Read AllLists As Variant[]               '' Returns a table of all active List{type} in memory
 
-Public SetHeadType As Integer = cShmList          '' The list header Class
+Public SetHeadType As Integer = cShmList               '' The list header Class
 Public SetEntryType As Integer = cShmListEntry    '' The List Entry Class
 
 
