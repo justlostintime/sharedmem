@@ -5,7 +5,7 @@ Public Struct LongStruct
 End Struct
 
 'Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "libc:6"
-Extern LongPtr(dest As Pointer, src As Pointer, Len As Integer) As LongStruct In "libc:6" Exec "memcpy"
+'Extern LongPtr(dest As Pointer, src As Pointer, Len As Integer) As LongStruct In "libc:6" Exec "memcpy"
 
 Public Sub main()
 
@@ -33,7 +33,7 @@ Public Sub main()
   Print "Create/Del named Block                    time X  "; LoopCount; " : "; Timer - starttime
 
   MyBlock = New ShmMemBlock(250000)
-  llongptr = LongPtr(MyBlock.DataAddress, MyBlock.DataAddress, 0)
+  llongptr = MyBlock.DataAddress
   Len = MyBlock.DataLength
   Starttime = Timer
   For i = 0 To LongLoop

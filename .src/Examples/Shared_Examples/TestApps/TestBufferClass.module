@@ -1,7 +1,7 @@
 ' Gambas module file
 
-Public Sub main() 
-  
+Public Sub main()
+
   Dim MyBuff As New Buffer
   Dim MyVar As Variant = "this"
   Dim MyString As String = ""
@@ -9,50 +9,50 @@ Public Sub main()
   Dim MyLong As Long = 0
   Dim MyPnt As Pointer = Null
   Dim MyElement, MyELong As Element
-  
+
   Print "Begin Buffer Test ???????????????????????????????????????????????????????????????????????????????????????????????????????????????????"
-  
+
   SharedMem.begin(1000)
-  
+
   MyBuff.Create("TheBuffer", 200)
-  
+
   MyBuff[0] = 0
   MyBuff[1] = CLong(99)
   MyBuff[9] = CPointer(123456)
   MyBuff[20] = "this is a bunch of junk to write to the buffer"
-  
+
   SharedMem.DumpMem(MyBuff(), MyBuff.Len())
-  
+
   Dim MyStore As New Buffer
-  Dim MyBuff2 As Buffer 
-  
-  MyStore.Access("TheBuffer") 
+  Dim MyBuff2 As Buffer
+
+  MyStore.Access("TheBuffer")
   MyBuff2 = MyBuff.Duplicate("TheBuff2")
-  
+
   MyElement = SharedMem.Element(MyBuff, "MyBuff.Str", 20, gb.string, 60)
   MyElong = SharedMem.Element(MyBuff, "MyBuff.Long", 1, gb.Long)
   SharedMem.Element("TheBuff2", "MyInt", 15, gb.integer)
- 
-  
+
+
   'SharedMem.DumpMem(MyStore(), MyStore._VarLen(), "/home/brian/Desktop/dump1")
   'SharedMem.DumpMem(MyBuff2(), MyBuff2._VarLen(), "/home/brian/Desktop/dump2")
   'MyBuff._print()
-  
+
   Print " Compare if Copies are equal       answer is "; If(MyBuff.Equal(MyBuff2), "Pass", "Fail"); "."
 
   MyElement[0] = "Divert and contain"
 
   'MyBuff._print()
   'MyBuff2._print()
-  
+
   Print " Compare if Access  are equal      answer is "; If(MyBuff.Equal(MyStore), "Pass", "Fail"); "."
   Print " Compare if buffers are equal      answer is "; If(MyBuff.Equal(MyBuff2), "Fail", "Pass"); "."
   Print " Compare if buffers are greater    answer is "; If(MyBuff.Greater(MyBuff2), "Fail", "Pass"); "."
   Print " Compare if buffers are Less       answer is "; If(MyBuff.Less(MyBuff2), "Pass", "Fail"); "."
-  
+
   SharedMem["MyInt"] = 28
   Print " Compare if Element indirect =     answer is "; If(SharedMem["MyInt"] = 28, "Pass", "Fail"); "."
-  
+
   Print " Compare long to long value        answer is "; If(MyELong[0] = 99, "Yes", "No")
   MyELong[0] = 2098
   Print " Compare long to long value        answer is "; If(MyELong[0] = 2098, "Yes", "No")
@@ -61,35 +61,35 @@ Public Sub main()
   MyLong = SharedMem["MyBuff.Long"]
   Print " Compare long to long value        answer is "; If(MyELong[0] = MyLong, "Yes", "No")
   MyLong = Long@(MyELong())
-  Print " Compare long to long value        answer is "; If(MyELong[0] = MyLong, "Yes", "No") 
+  Print " Compare long to long value        answer is "; If(MyELong[0] = MyLong, "Yes", "No")
   MyLong = MyELong[0]
   Print " Compare long to long value        answer is "; If(MyELong[0] = MyLong, "Yes", "No")
   Print " Compare string to value           answer is "; If(MyElement[0] = "Divert and contain", "Yes", "No")
   Print " Compare string to value           answer is "; If(SharedMem["MyBuff.Str"] = "Divert and contain", "Yes", "No")
-  
+
   Print " Compare if immediate are equal    answer is "; If(MyElement.Equal("Divert and contain"), "Pass", "Fail"); "."
   Print " Compare if immediate are Greater  answer is "; If(MyElement.Greater("Civert and contain"), "Pass", "Fail"); "."
   Print " Compare if immediate are Less     answer is "; If(MyElement.Less("Fivert and contain"), "Pass", "Fail"); "."
-  
+
   'MyElement._print()
   'MyBuff._print()
-  
+
   MyBuff.Write()
   MyBuff2.Read("TheBuffer_Raw")
-  
+
   Print " Compare if wrt = rd buff are =    answer is "; If(MyBuff.Equal(MyBuff2), "Pass", "Fail"); "."
-  
+
   MyString = MyElement[7]
   Print " Compare if immediates are equal   answer is "; If(MyElement[7] = MyString, "Pass", "Fail"); "."
- 'Print "\n The MyString = "; MyString
-  
+  'Print "\n The MyString = "; MyString
+
   'SharedMem._print()
-  
+
   SharedMem.End()
-  
+
   Print "End Buffer Test ???????????????????????????????????????????????????????????????????????????????????????????????????????????????????"
-  
-  Catch
-    Print Error.where, Error.text
-  
+
+Catch
+  Print Error.where, Error.text
+
 End

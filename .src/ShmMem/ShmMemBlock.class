@@ -1,6 +1,16 @@
 ' Gambas class file
 
+'Author Westwood JustLostintime
+'Released Under:
+'  GNU GENERAL Public LICENSE
+'  Version 3, 29 June 2007
+'  See project license file.
 Export
+
+'Fast Unsafe
+
+Property Debug As Boolean Use $bDebug = False
+
 Extern mmap(MapPoint As Pointer, MapLength As Integer, prot As Integer, flags As Integer, fd As Integer, offset As Integer) As Pointer In "libc:6"
 Extern munmap(MapPoint As Pointer, MapLength As Integer) As Integer In "libc:6"
 Extern shm_open(name As String, oflag As Integer, mode As Integer) As Integer In "librt:1"
@@ -69,7 +79,7 @@ Private MyAppId As Long = 0                             '' The app used if we sp
 
 Property Read length As Long                            '' Length of user space
 Property Read address As Pointer                        '' address of user space
-Property Debug As Boolean Use $bDebug
+
 
 Public Sub _print()
 
@@ -94,8 +104,7 @@ Static Public Sub ForceDelete(SharedName As String)
 End
 
 
-Public Sub _new(Optional SharedLength As Long = DefaultLength, SharedName As String = "", WaitTimeout As Float = 2.1)
-  '$bDebug = True
+Public Sub _new(Optional SharedLength As Long = DefaultLength, SharedName As String = "", WaitTimeout As Float = 2.1, cleanup As Boolean = False)
 
   MemoryLength = SharedLength + SizeOf(MemBlockHeader)
   Name = SharedName
@@ -103,7 +112,7 @@ Public Sub _new(Optional SharedLength As Long = DefaultLength, SharedName As Str
   If SharedName = "" Then
     MemoryAddress = MapMemory(MemoryLength)
   Else
-    MemoryAddress = CreateNamedMem(SharedName, MemoryLength)
+    MemoryAddress = CreateNamedMem(SharedName, MemoryLength, cleanup)
   Endif
   If NewMemoryBlock Then
     SemLock = MemoryAddress
@@ -115,7 +124,7 @@ Public Sub _new(Optional SharedLength As Long = DefaultLength, SharedName As Str
       Endif
       Error.Raise("Failed to create Lock for :" & Name & System.Error & " : " & String@(strerror(System.Error)))
     Endif
-    BlockInfo = SetBlockInfo(MemoryAddress, MemoryAddress, 0)
+    BlockInfo = MemoryAddress                      'SetBlockInfo(MemoryAddress, MemoryAddress, 0)
     BlockInfo.InUseCounter = 1
     BlockInfo.MemoryLength = MemoryLength
     BlockInfo.MemoryBlockSize = SharedLength
@@ -132,7 +141,7 @@ Public Sub _new(Optional SharedLength As Long = DefaultLength, SharedName As Str
   Else
     SemLock = MemoryAddress
     sem_wait(SemLock)
-    BlockInfo = SetBlockInfo(MemoryAddress, MemoryAddress, 0)
+    BlockInfo = MemoryAddress                         'SetBlockInfo(MemoryAddress, MemoryAddress, 0)
     Inc BlockInfo.InUseCounter
     MemoryBlockSize = BlockInfo.MemoryBlockSize
     DataAddress = SemLock + BlockInfo.DataAddress
@@ -236,14 +245,15 @@ Private InLock As Integer = 0
 Public Sub Exclusive()
 
   If InLock Then
-    If $bDebug Then Print Application.id;; " In Lock no wait ";; InLock;; Blockinfo.DataLength
+    If $bDebug Then Print Application.id;; "ShmMemBlock Exclusive : In Lock no wait ";; InLock;; Blockinfo.DataLength
     Inc InLock
     Return
   Endif
 
-  If $bDebug Then Print Application.id;; "Real Wait  ";; InLock;; Blockinfo.DataLength
+  If $bDebug Then Print Application.id;; "ShmMemBlock Exclusive: Real Wait  ";; InLock;; Blockinfo.DataLength
   Inc InLock
   sem_wait(SemLock)
+  If $bDebug Then Print Application.id;; "ShmMemBlock Exclusive: Real Wait Locked";; InLock;; Blockinfo.DataLength
 
 End
 
@@ -251,7 +261,7 @@ End
 Public Sub ExclusiveTimeout()
 
   If InLock Then
-    If $bDebug Then Print Application.id;; " In Lock Timeout no wait ";; InLock;; Blockinfo.DataLength
+    If $bDebug Then Print Application.id;; "ShmMemBlock ExclusiveTimeout: In Lock Timeout no wait ";; InLock;; Blockinfo.DataLength
     Inc InLock
     Return
   Endif
@@ -260,10 +270,10 @@ Public Sub ExclusiveTimeout()
   While sem_trywait(SemLock)
     sched_yield()
     If Timer - counter > LockTimeout Then
-      Error.Raise("Mutex race condition !!! :" & IIf(name = "", "Anonymous", name))
+      Error.Raise("ShmMemBlock ExclusiveTimeout: Mutex race condition !!! :" & IIf(name = "", "Anonymous", name))
     Endif
   Wend
-  If $bDebug Then Print Application.id;; " In Lock Timeout wait ";; InLock;; Blockinfo.DataLength
+  If $bDebug Then Print Application.id;; "ShmMemBlock ExclusiveTimeout: In Lock Timeout wait ";; InLock;; Blockinfo.DataLength
   Inc InLock
 
 End
@@ -271,12 +281,12 @@ End
 Public Sub Release()
 
   If inlock > 1 Then
-    If $bDebug Then Print Application.id;; "In Lock Release ";; InLock;; Blockinfo.DataLength
+    If $bDebug Then Print Application.id;; "ShmMemBlock Release:In Lock Release ";; InLock;; Blockinfo.DataLength
     Dec Inlock
     Return
   Endif
 
-  If $bDebug Then Print Application.id;; "Release memory";; InLock;; Blockinfo.DataLength
+  If $bDebug Then Print Application.id;; "ShmMemBlock Release:Release memory";; InLock;; Blockinfo.DataLength
   Dec InLock
   sem_post(SemLock)
   sched_yield()
@@ -319,13 +329,13 @@ End
 
 Private Function length_Read() As Long
 
-  Return Blockinfo.DataLength
+  Return DataLength
 
 End
 
 Private Function address_Read() As Pointer
 
-  Return BlockInfo.DataAddress
+  Return DataAddress
 
 End
 

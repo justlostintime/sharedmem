@@ -1,23 +1,40 @@
 ' Gambas module file
 
+'Author Westwood JustLostintime
+'Released Under:
+'  GNU GENERAL Public LICENSE
+'  Version 3, 29 June 2007
+'  See project license file.
 Export
 'Fast Unsafe
 Extern strncpy(dest As String, src As String, count As Integer) As Pointer In "libc:6"
-Extern memcpy(dest As Pointer, src As Pointer, count As Integer) As Pointer In "libc:6"
+'Extern memcpy(dest As Pointer, src As Pointer, count As Integer) As Pointer In "libc:6"
 
+'' This function returns a pointer to a strings content
+'' as for some reason gambas will not do a varptr of a string
+'' go figure...
+'' Also remember that strings in gambas are static,
+'' So you must get a new address everytime the string is altered
 Public Sub str(Var As String) As Pointer
 
   Return strncpy(Var, Var, 0)
 
 End
 
+'' This function returns a pointer to the data portion of an array
+'' Be carefull using this as every array type has a gambas specific
+'' memory format, so understand that before using this
 Public Sub Array(var As Object) As Pointer
 
   Return var.data
 
 End
 
-Public Sub Object(var As Object) As Pointer   ' this function allocates memory blocks and creates a static copy of the object data to pass to a c function
+'' this function allocates memory blocks and creates a static copy of the
+'' object data to pass to a c function, or transmit via ssh
+'' This is very very slow slow.....
+
+Public Sub Object(var As Object) As Pointer
 
   Dim fLength As Integer
   Dim mFile As File

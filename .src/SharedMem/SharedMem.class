@@ -1,5 +1,11 @@
 ' Gambas class file
 
+'Author Westwood JustLostintime
+'Released Under:
+'  GNU GENERAL Public LICENSE
+'  Version 3, 29 June 2007
+'  See project license file.
+
 ''' This Class provides a way to manage and access memory which may be shared between Tasks\
 ''' It provides Safe access to defined variables used between Tasks.
 '''
@@ -7,74 +13,13 @@
 ''' Signal call backs when variables are changed are also provided.\
 ''' Two levels of access are provided through the mem class direct unprotected access
 ''' And through this class protected access.\
-''' Defined variables become fixed type at the time of creation and may not change type until deleted.\
-'''
-''' The memory format of a vaiable data storage 1st byte is fixed data type, rest is the data\
-''' Yes the memory is not aligned. You need to use a buffer for that\
-'''
-''' This Class is implemented as a Static class, all methods and Values are static.\
-'''
-''' Example of use:\
-'''
-''' public sub main() \
-'''
-''' >  Dim MyListener as MyTask            ' define a task, ie forked process\
-'''
-''' >  SharedMem.Begin(128000)             ' allocate 280000 byte of shared memory \
-''' >  'SharedMem.Begin("filename")        ' this alternate begin will load a saved memory space fromm a file and\
-''' >                                      ' Restore the original size, and variables\
-''' >  SharedMem\["MyVariable"\] = 9          ' Creates a shared variable and sets the type to integer then sets value to 9\
-''' >  SharedMem\["MyLong"\]    = clong(9)   ' This creates a long... etc including arrays and objects etc\
-'''
-''' >  Dim iInt as integer\
-''' >  iInt = SharedMem\["MyVariable"\]       ' returns the value of the variable.. all types\
-'''
-''' >  Dim MyAry as integer\[\] = \[1,2,3,4,5,6,7,8\]\
-''' >  SharedMem\["TheArray"\] = \[7,8,9,0,3,2,1\]     ' Defines an array.. can be most types\
-'''
-''' >  MyListener = new MyTask             ' Lets start my listener task\
-''' >  wait\
-''' >  inc SharedMem\["MyVariable"\]          ' This will Trigger a signal to the waiting task\
-'''
-''' >  SharedMem\["AnotherAry"\] = MyAry             ' same as above, copies the array to shared memory\
-''' >  MyAry = SharedMem\["TheArray"\]               ' makes a copy of the shared memory to MyArray\
-''' >  ' Individual array elements may be accessed as well\
-''' >  iInt = SharedMem\["TheArray", 2\]             ' this returns the second element of the array\
-''' >  inc SharedMem\["TheArray",2\]                 ' Increments the second element of array\
-'''
-''' >  Inc SharedMem\["MyVariable"\]                 ' This will Trigger a signal to the waiting task again\
-''' >  wait 1                                        ' Allow time to print response\
-'''
-''' >  SharedMem.end()                               ' Releases the shared memory and all variables\
-''' >  'SharedMem.end("filename")                    ' Alternately The Shared memory may be stored before closing\
-''' End\
-'''
-''' Class MyTask \
-''' Inherits Task\
-'''
-''' Public Sub main()\
-'''
-''' >  SharedMem.NotifyChange("MyVariable", me,-1) ' wait for MyVariable to change, -1 means get every time it changes\
-''' >  Print SharedMem["MyVariable"]               ' Print the shared memory value
-'''
-''' >  while true\
-''' >  >  wait 1                                  ' The Signal me cause this to dispatch early\
-''' >  wend\
-'''
-''' end\
-'''
-''' Public sub MyVariable_changed(Value as variant )    ' this method is called when a variable changes\
-'''
-''' >  Print "Got Change notification Value = ";Value      ' print the new value to the console\
-'''
-''' end\
-'''
-''' end                                           ' End Class
-'''
+''' Defined variables become are dynamic type at the time of creation and become fixed when
+''' a notification of change is requested may not change type until the notification is cancelled.\
 
 Export
 
-' Fast Unsafe
+'Fast Unsafe
+
 '' Notify every time value changes
 Public Const Repeat As Integer = -1
 '' Notify app once when value changes
@@ -140,6 +85,9 @@ Static Private InitSemaphors As Boolean = True
 
 Static Public UserMem As New Mem
 Static Public ColMem As New Mem
+
+Static Property Read Count As Long
+Static Property Read Vars As Collection
 
 '' This data type is not used, here to describe the format of each variable block header
 Public Struct MemHeader                   ' defines a model of the header but never used
@@ -588,7 +536,7 @@ Catch
 End
 
 '' Sync the content of memory with the last loaded file or write to default file storage
-'' this will update the file with the memory content of create and write the default file
+'' this will update the file with the memory content or create and write the default file
 '' with no parameters syncs all of memory, with symbol, syncs the variable to disk
 Static Public Sub Sync(Optional Symbol As String = ".", filename As String = ".") As Boolean
 
@@ -628,7 +576,7 @@ Static Public Sub Sync(Optional Symbol As String = ".", filename As String = "."
 
 End
 '' Restore the content of memory with the last saved file or read to default file storage
-'' this will update the memory with the file content of  read the default file
+'' this will update the memory with the file content or read the default file
 '' with no parameters restores all of memory, with symbol, restores the variable to shared memory
 '' . means all Memory
 
@@ -861,7 +809,7 @@ End
 '' Create a named block of memory or one which is given a variable name and can be locked during update or read opertation\
 '' Symbol is the name which the memory block will have\
 '' Memsize is the size of the memory to allocate\
-'' the object which will have it's own this shared memory
+'' the object will have its own information manager for its content
 Static Public Sub NamedAlloc(Symbol As String, MemSize As Integer, MyObject As Variant) As Pointer
 
   Dim MySymbol As SharedMemSymbol
@@ -1429,7 +1377,7 @@ Catch
   Error.Propagate()
 
 End
-'' a function which mat be called to dump the content of any memory area to a file
+'' a function which may be called to dump the content of any memory area to a file
 '' The default location if no name specified is the users desktop as dumpfile
 
 Static Public Sub DumpMem(mPointer As Pointer, IntLength As Integer, Optional Filename As String = User.home & "/Desktop/dumpfile.ghex")
@@ -1461,7 +1409,7 @@ Static Private Sub CollectionChanged() As Boolean
   'If CollectionLastUpdate <> float@(CollectionChangedIndicator + 1) Then                  ' Same
   'If memcmp(VarPtr(CollectionLastUpdate), ColMem.AddrReal(CollectionChangedIndicator + 1), SizeOf(gb.float)) <> 0 Then     ' best speed
 
-  If CollectionLastUpdate <> ColMem[CollectionChangedIndicator, gb.float] Then         ' try speed slow
+  If CollectionLastUpdate <> ColMem[CollectionChangedIndicator, gb.float] Then            ' try speed slow
     LoadCollection()
   Endif
 
@@ -1474,6 +1422,7 @@ Static Public Sub length() As Integer
   Return SymbolTable.Length
 
 End
+
 '' returns the amount of memory in the Shared memory block that has been used
 
 Static Public Sub used() As Integer
@@ -2121,9 +2070,25 @@ Static Public Sub NotifyList() As String[]
 
 End
 
+Static Private Function Count_Read() As Long
+
+  Return SymbolTable.Length
+
+End
 
 
+'' This returns a snap shot of the current variable collection
+'' The actuall collect may change while this is in use
+'' Do not depend on this to represent the current variable values
+Static Private Sub Vars_Read() As Collection
 
+  Dim c As New Collection(gb.ignorecase)
 
+  For Each s As SharedMemSymbol In SymbolTable
+    c.Add(s.Value, s.symname)
+  Next
 
+  Return c
+
+End
 

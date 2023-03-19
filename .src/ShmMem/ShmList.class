@@ -1,5 +1,10 @@
 ' Gambas class file
 
+'Author Westwood JustLostintime
+'Released Under:
+'  GNU GENERAL Public LICENSE
+'  Version 3, 29 June 2007
+'  See project license file.
 Export
 ''' Defines the Shm datatype - list
 ''' Lists are inherited by every other list based object
@@ -203,7 +208,11 @@ Public Sub {free}()                             '' Free the entire list
 
   sem_destroy(VarMem.RealDataAddress(ListHead.sema))
   VarMem.Free(ListHead.sema)
-  varmem.Free(VirtualAddress)
+
+  Try varmem.Free(VirtualAddress)
+  If Error Then
+    Error.Propagate()
+  Endif
 
   For Each pEntry As DList In pList
     FreeEntry(pEntry)

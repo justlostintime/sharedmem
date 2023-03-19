@@ -1,0 +1,35 @@
+' Gambas module file
+
+'Fast Unsafe
+
+Public Sub main()
+
+  Dim i As Integer
+  Dim vmem As New ShmMem
+  Dim tt As Float
+  Dim s As String
+
+  With vmem
+    tt = Timer
+    For i = 0 To 1000000
+      !goat = "hello mom"
+      !cat = "This cat"
+    Next
+    Print "Store text 1000000 times "; Timer - tt
+    tt = Timer
+    For i = 0 To 1000000
+      s = !goat
+      s = !cat
+    Next
+    Print "Retrieve text 1000000 times "; Timer - tt
+
+    Print !goat
+    Print !cat
+    .Print()
+  End With
+
+  vmem = Null
+
+  Wait
+
+End
