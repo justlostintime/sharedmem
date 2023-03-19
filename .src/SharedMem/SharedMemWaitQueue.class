@@ -1,7 +1,12 @@
 ' Gambas class file
 
+'Author Westwood JustLostintime
+'Released Under:
+'  GNU GENERAL Public LICENSE
+'  Version 3, 29 June 2007
+'  See project license file.
 Export
-'Fast Unsafe
+' Fast Unsafe
 
 Private WaitQueue As Variant[] = New Variant[]        ' we will queue wait requests here
 Private InitSignal As Integer = 0                     ' force the init on first call of wait

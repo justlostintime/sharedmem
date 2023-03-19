@@ -1,6 +1,16 @@
 ' Gambas class file
 
+'Author Westwood JustLostintime
+'Released Under:
+'  GNU GENERAL Public LICENSE
+'  Version 3, 29 June 2007
+'  See project license file.
 Export
+
+'Fast Unsafe
+
+Property Debug As Boolean Use $bDebug = False
+
 Const VarMemDefault As Long = 2000000
 Const MaxSymbolsDefault As Integer = 8000
 Const TimeOutDefault As Float = 0.1
@@ -17,10 +27,17 @@ Public SymStoreName As String
 Property Read Count As Integer
 Property Read Max As Integer
 Property Read Length As Integer
-Private $sKey As String
-Property Read Key As String
-Property Debug As Boolean Use $bDebug
+Property Read Key As String Use $sKey
+Property Read Used As Long
+Property Read Available As Long
+
 Property DefaultDirectory As String Use $sDefaultDirectory
+Property SyncMemFile As String Use $SyncMemFile = $sDefaultDirectory &/ Application.name
+Property SyncVarFile As String Use $SyncVarFile = ""
+
+Static Public DataTypes As String[] = ["Binary", "Boolean", "Byte", "Short", "Integer", "Long", "Single", "Float", "Date", "String",
+  "LongDate", "Pointer", "Variant", "Function", "Class", "NULL", "Object", "Not Array", "Type 19", "Type 20"
+"type 21", "type 22", "type 23", "type 24", "type 25"]
 
 
 '' Remove the memory by force
@@ -33,15 +50,17 @@ End
 
 
 '' Allocate the memory
-Public Sub _new(Optional VarMemLength As Long = VarMemDefault, MemName As String = "", MaxSymbols As Integer = MaxSymbolsDefault, LockTimeOut As Float = TimeOutDefault)
+Public Sub _new(Optional VarMemLength As Long = VarMemDefault, MemName As String = "", MaxSymbols As Integer = MaxSymbolsDefault, LockTimeOut As Float = TimeOutDefault, Cleanup As Boolean = False)
 
   $sDefaultDirectory = User.home &/ "vars"
 
   If MemName <> "" Then
+
     VarStoreName = Memname & "_Data"
     SymStoreName = Memname & "_Symbols"
-    VarStore = New ShmMemBlock(VarMemLength, VarStoreName, LockTimeOut)
-    symStore = New ShmMemBlock((ShmSymbolTable.SymbolLength() * MaxSymbols) + ShmSymbolTable.InfoLength(), SymStoreName, LockTimeOut)
+
+    VarStore = New ShmMemBlock(VarMemLength, VarStoreName, LockTimeOut, cleanup)
+    symStore = New ShmMemBlock((ShmSymbolTable.SymbolLength() * MaxSymbols) + ShmSymbolTable.InfoLength(), SymStoreName, LockTimeOut, cleanup)
   Else
     VarStoreName = ""
     SymStoreName = ""
@@ -124,7 +143,47 @@ End
 ''-----------------------------------------------------------------------------------
 '' Read and write images and variables
 ''-----------------------------------------------------------------------------------
+Public Sub Sync(Optional Symbol As String = ".", filename As String = ".")
+
+  If Symbol = "." Then
+    SaveImage(filename)
+  Else
+    SaveVar(Symbol, filename)
+  Endif
+
+End
+
+Public Sub End(Optional FileName As String = "\t\t")
+
+
+  If FileName = "\t\t" Then Return
+  If FileName = "." Then FileName = $SyncMemFile
+  SaveImage(filename)
+
+End
+
+
+Public Sub Restore(Optional Symbol As String = "", filename As String = "") As Boolean
+
+  If symbol <> "." And Symbol <> "" Then
+    LoadVar(Filename, Symbol)
+  Else If
+    LoadImage(filename)
+  Endif
+
+End
+
+Public Sub Merge(Optional FileName As String = ".") As Boolean
+
+  LoadImage(filename, False)
+
+End
+
+
+
 Public Sub SetPath(filePath As String, Optional defaultBaseName As String = "", defaultExtension As String = "") As String
+
+  If filePath = "." Then filePath = $SyncMemFile
 
   Dim basename As String = File.BaseName(filePath)
   Dim Extension As String = File.Ext(filePath)
@@ -147,6 +206,7 @@ Public Sub SaveImage(Optional FileName As String = Application.name & ".image")
     Error.propegate()
   Endif
   vars.Save(outfile)
+  $SyncMemFIle = outfile
   Close outfile
 
 End
@@ -166,7 +226,7 @@ Public Sub SaveVar(VarName As String, Optional filename As String = "")
 End
 
 
-Public Sub LoadImage(Optional FileName As String = Application.name & ".image")
+Public Sub LoadImage(Optional FileName As String = Application.name & ".image", cleanload As Boolean = True)
 
   Dim infileName As String = SetPath(FileName)
   Dim infile As File
@@ -175,7 +235,9 @@ Public Sub LoadImage(Optional FileName As String = Application.name & ".image")
   If Error Then
     Error.propegate()
   Endif
+  If cleanLoad Then vars.Clear()                     ' loading alway loads a fresh set of variables
   vars.Load(infile)
+  $SyncMemFIle = infile
   Close infile
 
 End
@@ -207,9 +269,15 @@ Public Sub {SizeOf}(Value As Variant) As Long
 
 End
 
-Public Sub {Print}()
+Public Sub _Print()
 
   Print vars.Text
+
+End
+
+Public Sub {Print}()
+
+  _Print()
 
 End
 '   Const VarMemDefault As Long = 2000000
@@ -314,7 +382,7 @@ End
 
 Private Function Length_Read() As Integer
 
-  Return vars.Count
+  Return varMnge.Length
 
 End
 
@@ -323,6 +391,15 @@ Private Function Key_Read() As String
   Return $sKey
 
 End
+
+
+'' Returns the amount of used space in the memory block
+Private Function Used_Read() As Long
+
+  Return VarMnge.Used
+
+End
+
 
 '' Returns the actual Physical address after traslating the Virtual pointer
 Public Sub RealAddress(VirtAddress As Pointer) As Pointer
@@ -341,3 +418,55 @@ Public Sub {alloc}(Length As Pointer) As Pointer
 
 End
 
+
+Private Function Available_Read() As Long
+
+  Return VarMnge.Available
+
+End
+
+'' This Will return a table of variables in the format string[]
+'' Filtered by the provided pattern
+Public Sub Variables(Optional filter As String = "*") As String[]
+
+  Dim varlist As New String[]
+  Dim Origin As String[] = Vars.SortedList()
+
+  For Each MySym As String In origin
+    If MySym Like filter Then
+      varlist.Add(MySym.symname)
+    Endif
+  Next
+
+  Return varlist
+
+End
+
+'' This function returns a list of comma seperated variable names
+'' a list formated set
+Public Sub VariableList() As String
+
+  Dim vList As String = ""
+  Dim Origin As String[] = Vars.SortedList()
+
+  For Each MySym As String In Origin
+
+    vList &= IIf(vList = "", MySym, " , " & MySym)
+
+  Next
+
+  Return vList
+
+End
+
+Private Function SyncVarFile_Read() As String
+
+
+
+End
+
+Private Sub SyncVarFile_Write(Value As String)
+
+
+
+End

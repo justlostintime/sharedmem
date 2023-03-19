@@ -1,6 +1,13 @@
 ' Gambas class file
 
+'Author Westwood JustLostintime
+'Released Under:
+'  GNU GENERAL Public LICENSE
+'  Version 3, 29 June 2007
+'  See project license file.
 Export
+
+'Fast Unsafe
 
 ''' Defines the Shm datatype - list
 ''' Lists are inherited by every other list based object
@@ -55,7 +62,7 @@ Public Sub _free()
     Return
   Endif
 
-  NotifyQueue.free()
+  Try NotifyQueue.free()
 
 End
 

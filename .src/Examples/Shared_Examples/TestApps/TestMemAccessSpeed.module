@@ -10,98 +10,99 @@ Public Sub main()
   Dim myDest As Pointer = 0
   Dim MyTime As Float = 0
   Dim MyResult As Float = 0
-  
-  
+
+
   SharedMem.begin(120000)
 
   SharedMem["MySource"] = CLong(0)
   SharedMem["MyDest"] = CLong(0)
-  
+
   With SharedMem
-  MySource = ._varptr("MySource")
-  MyDest = ._varptr("MyDest")
-  
-  Print "BEGIN MEM TIME TEST %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  
-  Print "Begin Store value test, Storelen = "; SharedMem._varlen("MySource")
-  MyTime = Timer
-  
-  For i As Integer = 1 To LoopCount
-    
-  .usermem[MySource] = 0
-  
-  Next
-  
-  Print "End Store value Test, Result for "; LoopCount; " cycles = "; Timer - MyTime
-  
-  Print "Begin Retrieve value test "
-  MyTime = Timer
-  
-  For i As Integer = 1 To LoopCount
-    
-  MyResult = .usermem[MySource]
-  
-  Next
-  
-  Print "End Retrieve value Test, Result for "; LoopCount; " cycles = "; Timer - MyTime
+    MySource = ._varptr("MySource")
+    MyDest = ._varptr("MyDest")
+
+    Print "BEGIN MEM TIME TEST %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+
+    Print "Begin Store value test, Storelen = "; SharedMem._varlen("MySource")
+    MyTime = Timer
+
+    For i As Integer = 1 To LoopCount
+
+      .usermem[MySource] = 0
+
+    Next
+
+    Print "End Store value Test, Result for "; LoopCount; " cycles = "; Timer - MyTime
+
+    Print "Begin Retrieve value test "
+    MyTime = Timer
+
+    For i As Integer = 1 To LoopCount
+
+      MyResult = .usermem[MySource]
+
+    Next
+
+    Print "End Retrieve value Test, Result for "; LoopCount; " cycles = "; Timer - MyTime
   End With
-  
+
   Dim MySymbol As SharedMemSymbol = SharedMem._symbol("MySource")
   Dim MyLong As Long = 1
-  
+
   Print "Begin  Store value test level 2"
   MyTime = Timer
-  
+
   For i As Integer = 1 To LoopCount
 
-  MySymbol.ShmWrite(MyLong)
-  
+    MySymbol.ShmWrite(MyLong)
+
   Next
-  
+
   Print "End Store value Test level 2, Result for "; LoopCount; " cycles = "; Timer - MyTime
-  
+
   Print "Begin Retrieve value test Level 2"
-  
-  
-  
+
+
+
   MyTime = Timer
-  
+
   For i As Integer = 1 To LoopCount
-    
-  MyResult = MySymbol.ShmRead()
-  
+
+    MyResult = MySymbol.ShmRead()
+
   Next
-  
+
   Print "End Retrieve value Test Level 2, Result for "; LoopCount; " cycles = "; Timer - MyTime
-   
+
   Print "Begin  Store value test level 3"
   MyTime = Timer
-  
+
   For i As Integer = 1 To LoopCount
-    
-  SharedMem["MyDest"] = MyLong
-  
+
+    SharedMem["MyDest"] = MyLong
+
   Next
-  
+
   Print "End Store value Test level 3, Result for "; LoopCount; " cycles = "; Timer - MyTime
-  
-  
+
+
   Print "Begin  Retrieve value test level 3"
   MyTime = Timer
-  
+
   For i As Integer = 1 To LoopCount
-    
-  MyResult = SharedMem["MySource"]
-  
+
+    MyResult = SharedMem["MySource"]
+
   Next
-  
+
   Print "End Retrieve value Test Level 3, Result for "; LoopCount; " cycles = "; Timer - MyTime
-   
+
   Print "END MEM TIME TEST %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  
-  
+
+
   SharedMem.End()
-  
-  Catch
-    Print Error.text, Error.where
+
+Catch
+  Print Error.text, Error.where
+
 End

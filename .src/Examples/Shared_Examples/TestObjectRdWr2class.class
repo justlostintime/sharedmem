@@ -7,14 +7,14 @@ Public y As String = "2 This is a silly string"
 Public pp As String[] = ["2This is ", "a", "big", "thing", "to", "do"]
 
 Public Sub callme()
-  
+
   Print "Hello"
   For Each s As String In pp
     Print s;;
   Next
   Print
   Print "x="; x
-  
+
 End
 
 ' Gambas class file

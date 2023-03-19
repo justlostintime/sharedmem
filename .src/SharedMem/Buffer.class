@@ -1,17 +1,24 @@
 ' Gambas class file
 
+'Author Westwood JustLostintime
+'Released Under:
+'  GNU GENERAL Public LICENSE
+'  Version 3, 29 June 2007
+'  See project license file.
+
 Export
 
 'Fast Unsafe
 
 
-Public RootAddress As Pointer = 0
-Public StorageLength As Integer = 0
-Public SymbolName As String = ""
-Public DataType As Integer = gb.byte
-Public CreatedByMe As Boolean = False
-Public Parent As Object = Null
-Public $oShm As Variant = Null
+'' Most properties are set by the creater of the buffer
+Property RootAddress As Pointer Use $RootAddress = 0
+Property StorageLength As Integer Use $StorageLength = 0
+Property SymbolName As String Use $SymbolName = ""
+Property DataType As Integer Use $DataType = gb.byte
+Property CreatedByMe As Boolean Use $CreatedByMe = False
+Property Parent As Object Use $Parent = Null
+Property oShm As Variant Use $oShm = Null
 
 
 Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "libc:6"
@@ -21,20 +28,27 @@ Extern memset(dest As Pointer, Value As Integer, Sizet As Integer) As Pointer In
 Extern rWrite(handle As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "write"
 Extern rRead(handel As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "read"
 
+Property SupportedDataTypes As Integer[] Use $SupportedDataTypes = [gb.byte, gb.short, gb.integer, gb.long, gb.string]
+InValidTypeMessage As String = "Invalid data type, must be Byte, Short,Integer,Long,Pointer,byte Requested : &1 Assuming Byte"
 
+'' The only creation input to this is the actual shared memory segment used
+'' The rest are assigned after the creation of this buffer
 Public Sub _new(Optional vshm As Variant = Null)
 
   $oShm = vshm
 
 End
 
+'' This function reads an object definition from the provided
+'' open input stream, the first integer must be the length
+'' of the object
 Public Sub _read(mFile As File)
 
   Dim iLen As Integer
 
   iLen = Read #mFile As Integer
-  If StorageLength < iLen Then
-    Error.Raise("Buffer too small size=" & Str(StorageLength) & ", Stored Object Read Size = " & Str(iLen))
+  If $StorageLength < iLen Then
+    Error.Raise("Buffer too small size=" & Str($StorageLength) & ", Stored Object Read Size = " & Str(iLen))
   Endif
 
   iLen = Me.Read(mFile)
@@ -44,7 +58,7 @@ End
 
 Public Sub _write(mFile As File)
 
-  Write #mFile, StorageLength As Integer
+  Write #mFile, $StorageLength As Integer
   Me.Write(mFile)
 
 End
@@ -59,59 +73,60 @@ Public Sub Access(symbol As String, Optional rdType As Integer = gb.byte) As Poi
     Return CPointer(Null)
   Endif
 
-  If Not (Datatype = gb.byte Or DataType = gb.integer Or datatype = gb.long Or datatype = gb.pointer Or gb.string) Then
-    Error.Raise("Invalid data type, must be Int,Long,Pointer,byte,string")
+  If Not $SupportedDataTypes.Exist(rdType) Then
+    Error.Raise(Format(InValidTypeMessage, rdType))
     Return CPointer(Null)
   Endif
 
-  RootAddress = MySymbol.DataAddress + 1
-  StorageLength = MySymbol.StorageLength - SharedMem.AllocHeaderLen - 1
-  DataType = rdType
-  SymbolName = symbol
-  Parent = MySymbol
+  $RootAddress = MySymbol.DataAddress + 1
+  $StorageLength = MySymbol.StorageLength - SharedMem.AllocHeaderLen - 1
+  $DataType = rdType
+  $SymbolName = symbol
+  $Parent = MySymbol
 
   If IsNull(MySymbol.SpecialObject) Then
     MySymbol.SpecialObject = Me
   Endif
 
-  Return RootAddress
+  Return $RootAddress
 
 End
 
-
+'' Create a shared memory segment to contain this buffer
 Public Sub Create(symbol As String, ilen As Integer, Optional rdType As Integer = gb.byte) As Pointer ' return the new buffer space
 
-  If Not IsNull(rootaddress) Then
+  If Not IsNull($rootaddress) Then
     Error.Raise("Buffer in Use")
     Return Null
   Endif
 
-  DataType = rdType
+  $DataType = rdType
 
-  If Not (Datatype = gb.byte Or DataType = gb.integer Or datatype = gb.long Or datatype = gb.pointer Or datatype = gb.string) Then
-    Error.Raise("Invalid data type, must be Int,Long,Pointer,byte")
+  If Not $SupportedDataTypes.Exist($DataType) Then
+    $DataType = gb.byte
+    Error.Raise(Format(InValidTypeMessage, $DataType))
     Return Null
   Endif
 
-  ilen = ilen * SizeOf(datatype)
-  RootAddress = SharedMem.NamedAlloc(symbol, ilen, Me)
-  StorageLength = ilen
-  symbolName = symbol
-  CreatedByMe = True
-  Parent = Null
+  ilen = ilen * SizeOf($DataType)
+  $RootAddress = SharedMem.NamedAlloc(symbol, ilen, Me)
+  $StorageLength = ilen
+  $symbolName = symbol
+  $CreatedByMe = True
+  $Parent = Null
 
-  Return RootAddress
+  Return $RootAddress
 
 End
 
 Public Sub Release() As Boolean ' release the memory
 
-  If Not CreatedByMe Then Return False
+  If Not $CreatedByMe Then Return False
 
-  SharedMem.free(SymbolName)
-  RootAddress = 0
-  SymbolName = ""
-  StorageLength = 0
+  SharedMem.free($SymbolName)
+  $RootAddress = 0
+  $SymbolName = ""
+  $StorageLength = 0
   Return True
 
 End
@@ -122,10 +137,10 @@ Public Sub Read(Optional mFile As Variant = "", start As Integer, ilength As Int
   Dim rFile As File = Null
   Dim rLen As Integer
 
-  If iLength = 0 Then iLength = StorageLength
+  If iLength = 0 Then iLength = $StorageLength
 
-  If iLength < 1 Or start + iLength > StorageLength Then
-    Error.Raise("Buffer too small size=" & Str(StorageLength) & ", Stored Object Read Size = " & Str(iLength) & " at index of " & Str(start))
+  If iLength < 1 Or start + iLength > $StorageLength Then
+    Error.Raise("Buffer too small size=" & Str($StorageLength) & ", Stored Object Read Size = " & Str(iLength) & " at index of " & Str(start))
     Return 0
   Endif
 
@@ -137,7 +152,7 @@ Public Sub Read(Optional mFile As Variant = "", start As Integer, ilength As Int
     Case gb.string
       Dim filename As String
       If mFile = "" Then
-        Filename = SharedMem.DefaultSaveLocation & symbolName & "_Raw"
+        Filename = SharedMem.DefaultSaveLocation & $symbolName & "_Raw"
       Else
         FileName = If(File.Dir(mFile) = "", SharedMem.DefaultSaveLocation & mFile, mfile)
       Endif
@@ -150,7 +165,7 @@ Public Sub Read(Optional mFile As Variant = "", start As Integer, ilength As Int
 
   End Select
 
-  rLen = rRead(handle, RootAddress + start, ilength)
+  rLen = rRead(handle, $RootAddress + start, ilength)
 
   If Not IsNull(rfile) Then Close rFile
 
@@ -164,9 +179,9 @@ Public Sub Write(Optional mFile As Variant = "", Optional start As Integer = 0, 
   Dim rFile As File = Null
   Dim rLen As Integer
 
-  If iLength = 0 Then iLength = StorageLength
+  If iLength = 0 Then iLength = $StorageLength
 
-  If iLength < 1 Or start + iLength > StorageLength Then
+  If iLength < 1 Or start + iLength > $StorageLength Then
     Error.Raise("Attempt to copy data from outside buffer")
     Return 0
   Endif
@@ -179,7 +194,7 @@ Public Sub Write(Optional mFile As Variant = "", Optional start As Integer = 0, 
     Case gb.string
       Dim filename As String
       If mFile = "" Then
-        Filename = SharedMem.DefaultSaveLocation & symbolName & "_Raw"
+        Filename = SharedMem.DefaultSaveLocation & $symbolName & "_Raw"
       Else
         FileName = mFile
       Endif
@@ -192,7 +207,7 @@ Public Sub Write(Optional mFile As Variant = "", Optional start As Integer = 0, 
 
   End Select
 
-  rLen = rWrite(handle, RootAddress + start, ilength)
+  rLen = rWrite(handle, $RootAddress + start, ilength)
 
   If Not IsNull(rfile) Then Close rFile
 
@@ -203,54 +218,54 @@ End
 
 Public Sub _get(index As Integer) As Variant
 
-  If index > Storagelength Or index < 0 Then
+  If index > $Storagelength Or index < 0 Then
     Error.Raise("Index outside of buffer")
     Return 0
   Endif
-  Select Case Datatype
+  Select Case $Datatype
     Case gb.Byte
-      Return Byte@(RootAddress + index)
+      Return Byte@($RootAddress + index)
     Case gb.Long
-      Return Long@(RootAddress + index)
+      Return Long@($RootAddress + index)
     Case gb.Pointer
-      Return Pointer@(RootAddress + index)
+      Return Pointer@($RootAddress + index)
     Case gb.integer
-      Return Integer@(RootAddress + index)
+      Return Integer@($RootAddress + index)
     Case gb.String
-      Return String@(RootAddress + index)
+      Return String@($RootAddress + index)
     Case gb.Binary
-      Return RootAddress + index       'just return a pointer if we are working with binary
+      Return $RootAddress + index       'just return a pointer if we are working with binary
   End Select
 
 End
 
 Public Sub _put(Data As Variant, index As Integer)
 
-  Dim LastWriteLength As Integer = 0
+  Dim $LastWriteLength As Integer = 0
   Dim RdType As Integer
 
-  Dim mempointer As Pointer = RootAddress + index
+  Dim mempointer As Pointer = $RootAddress + index
 
   rdType = TypeOf(data)
 
-  LastWriteLength = SizeOf(rdType)
-  If index < 0 Or (index + LastWriteLength) > StorageLength Then
-    Error.Raise(SymbolName & " Size " & Str(index) & " is Out of bounds")
+  $LastWriteLength = SizeOf(rdType)
+  If index < 0 Or (index + $LastWriteLength) > $StorageLength Then
+    Error.Raise($SymbolName & " Size " & Str(index) & " is Out of bounds")
     Return
   Endif
 
-  LastWriteLength = SizeOf(rdType)
+  $LastWriteLength = SizeOf(rdType)
 
   Select Case rdType
 
 
     Case gb.Pointer, gb.integer, gb.Long, gb.byte, gb.float, gb.date, gb.Boolean, gb.Short, gb.Single
-      memcpy(mempointer, VarPtr(data), LastWriteLength)
+      memcpy(mempointer, VarPtr(data), $LastWriteLength)
 
     Case gb.String
 
-      If index + data.len + 1 > StorageLength Then
-        Error.Raise(SymbolName & " String Refrence " & Str(index + data.len) & " size Out Of bounds")
+      If index + data.len + 1 > $StorageLength Then
+        Error.Raise($SymbolName & " String Refrence " & Str(index + data.len) & " size Out Of bounds")
         Return
       Endif
 
@@ -258,7 +273,7 @@ Public Sub _put(Data As Variant, index As Integer)
       memset(MemPointer + data.len, 0, 1)
 
     Default
-      Error.Raise(Symbolname & " Unsupported datatype " & SharedMem.DataTypes[rdType] & " for buffer copy")
+      Error.Raise($Symbolname & " Unsupported datatype " & SharedMem.DataTypes[rdType] & " for buffer copy")
 
   End Select
 
@@ -267,37 +282,37 @@ End
 Public Sub CopyTo(Dest As Pointer, index As Integer, length As Integer) As Pointer ' returns the pointer to the start of the copy
   ' well this is unsafe but here we go
 
-  If index > StorageLength - 1 Or index + Length > StorageLength Then
+  If index > $StorageLength - 1 Or index + Length > $StorageLength Then
     Error.Raise("Out Of Bounds")
     Return CPointer(Null)
   Endif
 
-  memcpy(dest, RootAddress + index, length)
+  memcpy(dest, $RootAddress + index, length)
   Return dest
 
 End
 
 Public Sub CopyFrom(src As Pointer, index As Integer, length As Integer) As Pointer ' returns the pointer to the start of the copy
 
-  If length < 0 Or index + length > storageLength Then
+  If length < 0 Or index + length > $storageLength Then
     Error.Raise("Out Of Bounds")
     Return Null
   Endif
-  memcpy(RootAddress + index, src, length)
-  Return RootAddress + index
+  memcpy($RootAddress + index, src, length)
+  Return $RootAddress + index
 
 End
 
 Public Sub FillMem(value As Integer, Optional index As Integer, length As Integer = 0)
 
-  If length = 0 Then length = StorageLength - index
+  If length = 0 Then length = $StorageLength - index
 
-  If index + length > StorageLength Then
-    Error.Raise(Symbolname & " index + len out of bounds")
+  If index + length > $StorageLength Then
+    Error.Raise($Symbolname & " index + len out of bounds")
     Return
   Endif
 
-  memset(RootAddress + index, value, length)
+  memset($RootAddress + index, value, length)
 
 End
 
@@ -306,8 +321,8 @@ Public Sub Duplicate(Symbol As String) As Buffer ' returns a pointer to the new 
 
   Dim myBuff As New Buffer($oShm)
 
-  myBuff.Create(symbol, StorageLength)
-  memcpy(myBuff(), Me(), storageLength)
+  myBuff.Create(symbol, $StorageLength)
+  memcpy(myBuff(), Me(), $storageLength)
   Return mybuff
 
 End
@@ -315,12 +330,12 @@ End
 
 Public Sub Compare(src As Pointer, length As Integer, Optional offset As Integer = 0) As Integer
 
-  If offset + length > StorageLength Then
+  If offset + length > $StorageLength Then
     Error.Raise("Out Of Bounds")
     Return Null
   Endif
 
-  Return memcmp(RootAddress + offset, src, length)
+  Return memcmp($RootAddress + offset, src, length)
 
 End
 
@@ -336,7 +351,7 @@ Private Sub VerifyCompare(src As Variant, length As Integer, offset As Integer) 
       Return 0
     Endif
     If length = 0 Then
-      length = If(src.Len() > StorageLength, StorageLength, src.Len())
+      length = If(src.Len() > $StorageLength, $StorageLength, src.Len())
     Endif
     Dest = src()
   Else
@@ -352,12 +367,12 @@ Private Sub VerifyCompare(src As Variant, length As Integer, offset As Integer) 
     Endif
   Endif
 
-  If offset + length > StorageLength Then
+  If offset + length > $StorageLength Then
     Error.Raise("Out Of Bounds")
     Return 0
   Endif
 
-  Return memcmp(RootAddress + offset, Dest, length)
+  Return memcmp($RootAddress + offset, Dest, length)
 
 End
 
@@ -382,27 +397,27 @@ End
 
 Public Sub _VarLen() As Integer
 
-  Return StorageLength
+  Return $StorageLength
 
 End
 
 
 Public Sub Len() As Integer
 
-  Return StorageLength
+  Return $StorageLength
 
 End
 
 
 Public Sub _VarPtr() As Pointer
 
-  Return RootAddress
+  Return $RootAddress
 
 End
 
 Public Sub _call() As Pointer
 
-  Return RootAddress
+  Return $RootAddress
 
 End
 
@@ -411,18 +426,18 @@ Public Sub _print()
   Dim MyStr As String = ""
   Dim MyByte As String
 
-  Print "\nMemory listing for "; SymbolName; " Length is "; StorageLength; " Bytes"
+  Print "\nMemory listing for "; $SymbolName; " Length is "; $StorageLength; " Bytes"
 
-  For i As Integer = 0 To StorageLength - 1
+  For i As Integer = 0 To $StorageLength - 1
 
-    MyByte = Chr(Byte@(RootAddress + i))
+    MyByte = Chr(Byte@($RootAddress + i))
 
     If i Mod 32 = 0 Then
-      Print " - " & MyStr & "\n"; RootAddress + i;;
+      Print " - " & MyStr & "\n"; $RootAddress + i;;
       MyStr = ""
     Endif
     MyStr &= If(IsAlnum(MyByte) Or (mybyte = " ") Or IsPunct(mybyte), MyByte, ".")
-    Print Hex$(Byte@(RootAddress + i), 2);;
+    Print Hex$(Byte@($RootAddress + i), 2);;
 
   Next
 
@@ -444,3 +459,15 @@ End
 
 
 
+
+Private Function SupportedDataTypes_Read() As Integer[]
+
+
+
+End
+
+Private Sub SupportedDataTypes_Write(Value As Integer[])
+
+
+
+End

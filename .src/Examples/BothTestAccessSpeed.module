@@ -1,0 +1,145 @@
+' Gambas module file
+
+'Fast Unsafe
+Public Const LoopCount As Integer = 100000
+TestSharedMem As Boolean = True           ' test the old format shared memory
+TestShmMem As Boolean = True              ' test the new format shared memory
+
+Public Sub main()
+
+  Dim tstart As Float
+  Dim tStop As Float
+  Dim j As Integer
+  Dim sj As String
+
+  If TestSharedMem Then
+    With sharedmem
+      Print "Begin Speed Access Test Shared Memory V2++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+
+      .begin(128000)
+
+      Print "Set value to zero"
+      !integer = CInteger(0)
+      '._print()
+      '**************************************************************************************************************************
+      Print "Start"
+      tstart = Timer
+      For i As Integer = 0 To LoopCount
+        !integer = i
+        !integer = "this is a long string"
+      Next
+      tstop = Timer
+      Print "i = "; !integer
+      Print "Int->str->int Write test ", tstop - tstart, " loops(" & Str(LoopCount) & ") = "; !integer
+      '._print()
+
+      '**************************************************************************************************************************
+      tstart = Timer
+      For i As Integer = 0 To loopcount
+        !ThisString = "This is a little message to be saved"
+      Next
+      tstop = Timer
+      Print "String write test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
+      '**************************************************************************************************************************
+      tstart = Timer
+      For i As Integer = 0 To loopcount
+        sj = !ThisString
+      Next
+      tstop = Timer
+      Print "String Read test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
+      '**************************************************************************************************************************
+      tstart = Timer
+      For i As Integer = 0 To loopcount
+        !ThisNumber = i
+      Next
+      tstop = Timer
+      Print "Integer write test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
+      '**************************************************************************************************************************
+      tstart = Timer
+      For i As Integer = 0 To loopcount
+        j = !ThisNumber
+      Next
+      tstop = Timer
+      Print "Integer read test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
+
+      Print "Number of shared variables =", .Count
+
+      PrintVariables(.Vars)
+
+      .End()
+      Print "End Speed Access Test ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+
+    End With
+  Endif
+  If TestShmMem Then
+    Dim myshm As New ShmMem(1000000)
+
+    With myshm
+      Print "Begin Speed Access Test Shared Memory V4++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+
+      Print "Set value to zero"
+      !integer = CInteger(0)
+      '._print()
+      '**************************************************************************************************************************
+      Print "Start"
+      tstart = Timer
+      For i As Integer = 0 To LoopCount
+        !integer = i
+        !integer = "this is a long string"
+      Next
+      tstop = Timer
+      Print "i = "; !integer
+      Print "Int->str->int Write test ", tstop - tstart, " loops(" & Str(LoopCount) & ") = "; !integer
+      '._print()
+
+      '**************************************************************************************************************************
+      tstart = Timer
+      For i As Integer = 0 To loopcount
+        !ThisString = "This is a little message to be saved"
+      Next
+      tstop = Timer
+      Print "String write test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
+      '**************************************************************************************************************************
+      tstart = Timer
+      For i As Integer = 0 To loopcount
+        sj = !ThisString
+      Next
+      tstop = Timer
+      Print "String Read test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
+      '**************************************************************************************************************************
+      tstart = Timer
+      For i As Integer = 0 To loopcount
+        !ThisNumber = i
+      Next
+      tstop = Timer
+      Print "Integer write test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
+      '**************************************************************************************************************************
+      tstart = Timer
+      For i As Integer = 0 To loopcount
+        j = !ThisNumber
+      Next
+      tstop = Timer
+      Print "Integer read test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
+
+      Print "Number of shared variables =", .Count
+
+      PrintVariables(MyShm)
+
+      Print "Used :"; .used, " Available :"; .available, " Length :"; .Length, "U+A="; .Used + .Available
+      Print "End Speed Access Test ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+
+    End With
+  Endif
+
+End
+
+Sub PrintVariables(thearray As Variant)
+
+  Print "\nSymbol Table \n"
+  For Each v As Variant In thearray
+    Print thearray.key; " = "; v
+  Next
+  Print "-----------------------------------"
+
+End
+

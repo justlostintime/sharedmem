@@ -1,6 +1,15 @@
 ' Gambas class file
 
+'Author Westwood JustLostintime
+'Released Under:
+'  GNU GENERAL Public LICENSE
+'  Version 3, 29 June 2007
+'  See project license file.
 Export
+
+'Fast Unsafe
+
+Property Debug As Boolean Use $bDebug = False
 Public Storage As ShmMemBlock
 
 Public Struct AllocHeader
@@ -20,8 +29,8 @@ Public Struct InfoHeader
 End Struct
 
 Extern memset(Dest As Pointer, value As Integer, length As Integer) As Pointer In "libc:6"
-Extern AllocInfo(dest As Pointer, src As Pointer, Len As Integer) As AllocHeader In "libc:6" Exec "memcpy"
-Extern InfoInfo(dest As Pointer, src As Pointer, Len As Integer) As InfoHeader In "libc:6" Exec "memcpy"
+'Extern AllocInfo(dest As Pointer, src As Pointer, Len As Integer) As AllocHeader In "libc:6" Exec "memcpy"
+'Extern InfoInfo(dest As Pointer, src As Pointer, Len As Integer) As InfoHeader In "libc:6" Exec "strncpy"
 Extern rWrite(handle As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "write"
 Extern rRead(handel As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "read"
 Extern rClose(Handle As Integer) As Integer In "libc:6" Exec "close"
@@ -36,17 +45,25 @@ Property Read Length As Long
 Property Read MAX As Long
 Private $lKey As String
 Property Read Key As String
-Property Debug As Boolean Use $bDebug
+Property Read Used As Long
+
+Property Read Available As Long
+
 
 
 Public Sub _new(MemBlock As ShmMemBlock, Optional CreateManagement As Boolean = True)
 
   Storage = MemBlock
+  Dim TmpPtr As Pointer = Storage.DataAddress
   If $bDebug Then Print Application.id, "_new 1 ShmManage.exclusive "
   Storage.Exclusive()
-  ManagedInfo = InfoInfo(Storage.DataAddress, Storage.DataAddress, 0)
-  Storage.Release()
+  If $bDebug Then Print Application.id, "_new 1 ShmManage.Locked "
+
+  ManagedInfo = TmpPtr                       ' InfoInfo(TmpPtr, TmpPtr, 0)
+
   If $bDebug Then Print Application.id, "_new 1 ShmManage.Release "
+  Storage.Release()
+  If $bDebug Then Print Application.id, "_new 1 ShmManage.Management "
 
   If Not CreateManagement Then
     Return
@@ -55,13 +72,16 @@ Public Sub _new(MemBlock As ShmMemBlock, Optional CreateManagement As Boolean = 
   If ManagedInfo.StartOfMem = 0 Then                           ' check if this area has already been initialized
     If $bDebug Then Print Application.id, "_new 2 ShmManage.exclusive "
     Storage.Exclusive()
+    If $bDebug Then Print Application.id, "_new Initialize ManagedInfo"
     ManagedInfo.FreeList = SizeOf(InfoHeader)
     ManagedInfo.length = Storage.DataLength
     ManagedInfo.StartOfMem = ManagedInfo.FreeList
     ManagedInfo.EndOfMem = Storage.DataLength - 1
     ManagedInfo.BlockCount = 1
     ManagedInfo.LastChanged = Timer
+    If $bDebug Then Print Application.id, "_new 2 Initialize free list "
     InitFreeList()
+    If $bDebug Then Print Application.id, "_new 2 ShmManage.Release "
     Storage.Release()
     If $bDebug Then Print Application.id, "_new 2 ShmManage.exclusive "
   Endif
@@ -75,7 +95,8 @@ Public Sub AllocPtr(VirtAddress As Pointer) As AllocHeader
   Endif
 
   Dim RealAddr As Pointer = Storage.DataAddress + VirtAddress
-  Return AllocInfo(RealAddr, RealAddr, 0)
+  Dim tmp As AllocHeader = RealAddr
+  Return tmp                                             'AllocInfo(RealAddr, RealAddr, 0)
 
 End
 
@@ -358,9 +379,14 @@ Public Sub free(VirtAddress As Pointer)
   If $bDebug Then Print Application.id, "Free ShmManage.exclusive " & VirtAddress
   Storage.Exclusive()
 
-  AddFree(VirtAddress)
-
-  Storage.Release()
+  Try AddFree(VirtAddress)
+  If Error Then
+    Storage.Release()
+    Dim emessage As String = Error.text
+    Error.Raise(emessage)
+  Else
+    Storage.Release()
+  Endif
   If $bDebug Then Print Application.id, "Free ShmManage.release " & VirtAddress
 
 End
@@ -381,6 +407,7 @@ Public Sub _PrintFreeList()
   Print Subst("                  Total  : &1, Blocks : &2", Format(total, "#########0"), blocks)
 
 End
+
 
 
 Public Sub _PrintBlocks(Optional vVarStorage As ShmVarStorage = Null)
@@ -529,7 +556,7 @@ End
 
 Private Function Length_Read() As Long
 
-  Return ManagedInfo.BlockCount
+  Return Storage.Length
 
 End
 
@@ -542,5 +569,25 @@ End
 Private Function Key_Read() As String
 
   Return $lKey
+
+End
+
+Private Function Available_Read() As Long
+
+  Dim vptr As AllocHeader = AllocPtr(ManagedInfo.freelist)
+  Dim total As Long = 0
+
+  While vptr
+    total += vptr.length
+    vptr = AllocPtr(vptr.next)
+  Wend
+
+  Return total
+
+End
+
+Private Function Used_Read() As Long
+
+  Return Storage.length - Available_Read()
 
 End

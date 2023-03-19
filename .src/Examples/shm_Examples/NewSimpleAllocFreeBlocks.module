@@ -1,6 +1,10 @@
 ' Gambas module file
 
+
+
 Public Sub main()
+
+  System.IgnoreOverflow = True
 
   Dim MyBlock As New ShmMemBlock(1000000)
   Dim mymem As New ShmManage(MyBlock)

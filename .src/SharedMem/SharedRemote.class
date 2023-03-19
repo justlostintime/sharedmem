@@ -1,7 +1,12 @@
 ' Gambas class file
 
+'Author Westwood JustLostintime
+'Released Under:
+'  GNU GENERAL Public LICENSE
+'  Version 3, 29 June 2007
+'  See project license file.
 Export
-
+'Fast Unsafe
 Library "libssh:4"
 
 Extern ssh_new() As Pointer
@@ -37,6 +42,8 @@ Ssh_session As Pointer = Null
 
 Public Sub _new(host As String, password As String, Optional port As Integer = 22, Verbosity As Integer = 2)
 
+  Dim iPort As Integer = port
+  Dim iVerbosity As Integer = Verbosity
   Dim result As Integer
 
   ssh_session = ssh_new()
@@ -44,8 +51,8 @@ Public Sub _new(host As String, password As String, Optional port As Integer = 2
   If ssh_session = Null Then Error.Raise("RemoteSession failed " & Error.text)
 
   ssh_options_set(ssh_session, 0, host)
-  ssh_options_set(ssh_session, 1, VarPtr(port))
-  ssh_options_set(ssh_session, 13, VarPtr(Verbosity))
+  ssh_options_set(ssh_session, 1, VarPtr(iport))
+  ssh_options_set(ssh_session, 13, VarPtr(iVerbosity))
 
   result = ssh_connect(ssh_session)
   If result <> 0 Then Error.Raise("RemoteSession failed error=" & result & ":" & String@(ssh_get_error(ssh_session)))

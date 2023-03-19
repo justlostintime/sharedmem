@@ -1,10 +1,11 @@
 ' Gambas module file
 
 'Public Vars As ShmSymbolTable
-Public Vars As New ShmMem(1128000, "mydata")
+Public Vars As ShmMem
 
 Public Sub main()
 
+  Vars = New ShmMem(1128000, "mydata", 800, 0.01, True)
   With vars
     !dog = 8
     !Cow = 6

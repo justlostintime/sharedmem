@@ -1,5 +1,10 @@
 ' Gambas class file
 
+'Author Westwood JustLostintime
+'Released Under:
+'  GNU GENERAL Public LICENSE
+'  Version 3, 29 June 2007
+'  See project license file.
 Export
 'Fast Unsafe
 ''' This class must be inherited if classes which will be shared between tasks/processes
@@ -241,5 +246,4 @@ Static Public Sub _convertObject(OtherObject As Variant) As Boolean
   Return Object.Class(OtherObject).New(OtherObject)
 
 End
-
 

@@ -1,36 +1,43 @@
 ' Gambas class file
 
+'Author Westwood JustLostintime
+'Released Under:
+'  GNU GENERAL Public LICENSE
+'  Version 3, 29 June 2007
+'  See project license file.
 Export
-
+'Fast Unsafe
 'Extern memset(dest As Pointer, Val As Integer, len As Integer) As Pointer In "libc:6"
-'Extern strncpy(dest As Pointer, src As Pointer, len As Integer) As String In "libc:6" ' defined as string to force gambas to copy len 0 and return string type
-Extern strcpy(dest As Pointer, src As Pointer) As String In "libc:6"
-Extern strlen(src As Pointer) As Integer In "libc:6"
-Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "libc:6"
-Extern smemcpy(dest As Pointer, src As String, Len As Integer) As Integer In "libc:6" Exec "memcpy"
-Extern memset(dest As Pointer, Value As Integer, Sizet As Integer) As Pointer In "libc:6"
+Extern strncpy(dest As Pointer, src As String, len As Integer) As Pointer In "libc:6" ' defined as string to force gambas to copy len 0 and return string type
+'Extern strcpy(dest As Pointer, src As Pointer) As String In "libc:6"
+'Extern strlen(src As Pointer) As Integer In "libc:6"
+'Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "libc:6"
+'Extern smemcpy(dest As Pointer, src As String, Len As Integer) As Integer In "libc:6" Exec "memcpy"
+'Extern memset(dest As Pointer, Value As Integer, Sizet As Integer) As Pointer In "libc:6"
 Extern rWrite(handle As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "write"
 Extern rRead(handel As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "read"
-Extern rClose(Handle As Integer) As Integer In "libc:6" Exec "close"
+'Extern rClose(Handle As Integer) As Integer In "libc:6" Exec "close"
 
-Public LastWriteLength As Integer = 0                      '' The length of the last write
-Public RootAddress As Pointer = CPointer(0)                '' The rootAddress of the actual memory
-Public MemoryLength As Long = -1                           '' The length of the memory pool if originally provided
-Public MemoryBlockSize As Long = -1                        '' Length of each block to allocate when out of space
+Property LastWriteLength As Integer Use $LastWriteLength = 0    '' The length of the last write
+Property RootAddress As Pointer Use $RootAddress = CPointer(0)  '' The rootAddress of the actual memory
+Property MemoryLength As Long Use $MemoryLength = -1            '' The length of the memory pool if originally provided
+Property MemoryBlockSize As Long Use $MemoryBlockSize = -1      '' Length of each block to allocate when out of space
 
 '' When this is set mem assumes its using real pointers not offset pointers, pointers must point to real data
 '' Indirection to objects and strings will not be used , just assumes its real pointers to data
 '' Root address should be set to zero if using actual memory or offset if still want to use the offset in shared memory
 '' Pointers need to point to the data portion of allocated buffers
-Public RealPointers As Boolean = False
+Property Read RealPointers As Boolean Use $RealPointers = False
 
 '' This sets the usage style of the object
 '' first parameter should set the base of the shared memory area or 0 for Realmemory access
 '' Sets if this instance is for real memory, not base offset calculation
-Public Sub _new(Optional BaseAddress As Pointer = 0, UsingRealMemoryAddress As Boolean = False, MemLength As Long = -1)
+Public Sub _new(Optional BaseAddress As Pointer = 0, UsingRealMemoryAddress As Boolean = False, MemLength As Long = -1, MemBlockSize As Long = -1)
 
-  RootAddress = BaseAddress
-  RealPOinters = UsingRealMemoryAddress
+  $RootAddress = BaseAddress
+  $RealPointers = UsingRealMemoryAddress
+  $MemoryLength = MemLength
+  $MemoryBlockSize = MemBlockSize
 
 End
 
@@ -83,10 +90,7 @@ End
 
 Public Sub SetType(Mempointer As Pointer, rdType As Integer)
 
-  Dim cvByte As Byte
-
-  cvByte = rdType
-  memcpy(RootAddress + MemPointer, VarPtr(cvByte), 1)
+  Byte@($RootAddress + MemPointer) = rdType
 
 End
 
@@ -94,103 +98,105 @@ End
 ''  Data - data as any data type
 ''  MemPointer - Actual memory address to store the value
 ''  rdType - override the datatype of the passed in variant
-''  notype - the memoryy location does not contain a memory variable type definition
-Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False) ' if fast value is 2 4 8 then the storage is there and created already
+''  notype - the memory location does not contain a memory variable type definition
+''  if fast value is 2 4 8 then the storage is there and created already
+Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False)
 
   Dim mfile As File
-  Dim cvByte As Byte
 
   If mempointer < 0 Then
     Print "Bad pointer : "; mempointer
     Stop
   Endif
+
+  Dim BasePtr As Pointer = $RootAddress + MemPointer
+
   If Not notype Then
     If rdType = -1 Then                                    ' if this is -1 we assume this is a new or default call
       rdType = TypeOf(data)
-      cvByte = rdType
-      memcpy(RootAddress + MemPointer, VarPtr(cvByte), 1)
+      Byte@(BasePtr) = rdType
     Endif
     Inc mempointer
+    Inc BasePtr
   Endif
 
-  LastWriteLength = SizeOf(rdType)
-
+  $LastWriteLength = SizeOf(rdType)
+  'Error "_put type = "; rdtype;; SharedMem.DataTypes[rdtype]
   Select Case rdType
 
     Case gb.Long
-      Dim ivar As Long = data
-      memcpy(Mempointer + Rootaddress, VarPtr(iVar), SizeOf(gb.Long))
+      Long@(BasePtr) = data
 
     Case gb.integer
-      Dim ivar1 As Integer = data
-      memcpy(Mempointer + Rootaddress, VarPtr(iVar1), SizeOf(gb.integer))
+      Integer@(BasePtr) = data
 
     Case gb.pointer
-      Dim ivar2 As Pointer = data
-      memcpy(Mempointer + Rootaddress, VarPtr(iVar2), SizeOf(gb.pointer))
+      Pointer@(BasePtr) = data
 
     Case gb.short
-      Dim ivar3 As Short = data
-      memcpy(Mempointer + Rootaddress, VarPtr(iVar3), SizeOf(gb.short))
+      Short@(BasePtr) = data
 
     Case gb.float
-      Dim ivar4 As Float = data
-      memcpy(Mempointer + Rootaddress, VarPtr(iVar4), SizeOf(gb.float))
+      Float@(BasePtr) = data
 
     Case gb.boolean
-      Dim ivar5 As Boolean = data
-      memcpy(Mempointer + Rootaddress, VarPtr(iVar5), SizeOf(gb.boolean))
+      Boolean@(BasePtr) = data
 
     Case gb.byte
-      Dim ivar6 As Byte = data
-      memcpy(Mempointer + Rootaddress, VarPtr(iVar6), SizeOf(gb.byte))
+      Byte@(BasePtr) = data
 
     Case gb.date
-      Dim ivar7 As Date = data
-      memcpy(Mempointer + Rootaddress, VarPtr(iVar7), SizeOf(gb.date))
+      Date@(BasePtr) = data
 
     Case gb.Single
-      Dim ivar8 As Single = data
-      memcpy(Mempointer + Rootaddress, VarPtr(iVar8), SizeOf(gb.Single))
+      Single@(BasePtr) = data
 
     Case gb.String
-      Dim iString As String = data
-      If Not RealPointers Then
+      'Dim iString As Byte[] = byte[].fromString(data)
+
+      If Not $RealPointers Then
         MemPointer = Me[MemPointer, gb.Pointer, True]                            ' Pointer@(RootAddress + MemPointer)
-        'Print mempointer
-        memPointer += RootAddress + SharedMem.DataOffset + 1
+        memPointer += $RootAddress + SharedMem.DataOffset + 1
       Endif
 
-      If istring = "" Then
-        memset(Mempointer, 0, 1)          ' empty string ummm oh well
-      Else
-        smemcpy(MemPointer, iString, Len(iString) + 1)
-      Endif
+      ' Error "String Pointer = $"; Hex(memPointer);; "Length = "; iString.count + 1
+      strncpy(Mempointer, data, data.len)
+      ' If istring.count = 0 Then
+      '   Byte@(Mempointer) = 0 ' empty string then
+      ' Else
+      '   Dim t As Pointer = mempointer
+      '   For it As Integer = 0 To iString.max
+      '     Byte@(t) = iString[it]
+      '     Inc t
+      '   Next
+      '   Byte@(t) = 0
+      ' Endif
 
-      LastWriteLength = strlen(Mempointer)
+      $LastWriteLength = data.len + 1
+      ' Error "LastWrite Length = "; LastWriteLength
 
     Case gb.object
-      If Not RealPointers Then
+      If Not $RealPointers Then
         MemPointer = Me[MemPointer, gb.pointer, True]                     ' Pointer@(RootAddress + MemPointer)
-        MemPointer += RootAddress + SharedMem.DataOffset + 1
+        MemPointer += $RootAddress + SharedMem.DataOffset + 1
       Endif
       mfile = Memory MemPointer For Write
       Write #mFile, Data As Object
-      LastWriteLength = Seek(mFile)
+      $LastWriteLength = Seek(mFile)
       Close mFile
 
     Case gb.Class
       Error.Raise("Class must have _write Static method To be saved but not supported")
-      LastWriteLength = 0
+      $LastWriteLength = 0
 
     Case gb.function
     Case gb.NULL
 
     Default
-      Print #File.err, "Mem default write... eeeek"
+      Print #File.err, "Mem default write... eeeek DataType = "; rdType
       mfile = Memory MemPointer For Write
       Write #mFile, Data As Variant
-      LastWriteLength = Seek(mFile)
+      $LastWriteLength = Seek(mFile)
       Close mFile
 
   End Select
@@ -198,11 +204,11 @@ Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integ
 
 End
 
-'' Put variable into memory
+'' Get variable from memory
 ''
 '' Mempointer - the location to get the daya from
 '' rdType - the type of data to be read, this is an over ride for the stored data type or used when no datatype stored
-'' notype - the storgae location first has to data type specified
+'' notype - the storgae location first has no data type specified
 Public Sub _get(MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False) As Variant
 
   Dim cvVariant As Variant
@@ -211,10 +217,12 @@ Public Sub _get(MemPointer As Pointer, Optional rdType As Integer = -1, notype A
   '' print"MEM GET request: prt="; MemPointer; " RDTYPE = "; rdType
   If Not notype Then
     If rdtype = -1 Then   ' and not notype
-      rdType = Byte@(RootAddress + MemPointer)  ' get the data type
+      rdType = Byte@($RootAddress + MemPointer)  ' get the data type
     Endif
     Inc mempointer
   End If
+
+  Dim BasePtr As Pointer = $RootAddress + MemPointer
 
   'DataTypes = ["*Binary", "*Boolean", "*Byte", "*Short", "*Integer", "*Long", "*Single", "*Float", "*Date", "*String",
   '                                       "*LongDate", "*Pointer", "*Variant", "*Function", "*Class", "NULL", "*Object", "Not Array", "", "", "", "", "", ""]
@@ -223,21 +231,19 @@ Public Sub _get(MemPointer As Pointer, Optional rdType As Integer = -1, notype A
 
 
 DoPointer:
-  'memcpy(VarPtr(cvPointer), mempointer, SizeOf(gb.pointer))
-  ' printcvPointer
-  'Return cvPointer
-  Return Pointer@(RootAddress + MemPointer)
+
+  Return Pointer@(BasePtr)
 
 DoInteger:
-  Return Integer@(RootAddress + MemPointer)
+  Return Integer@(BasePtr)
 
 DoLong:
-  Return Long@(RootAddress + MemPointer)
+  Return Long@(BasePtr)
 
 DoString:
-  If Not RealPointers Then
-    MemPointer = Pointer@(RootAddress + MemPointer)
-    MemPointer = RootAddress + MemPointer + SharedMem.DataOffset + 1
+  If Not $RealPointers Then
+    MemPointer = Pointer@($RootAddress + MemPointer)
+    MemPointer = $RootAddress + MemPointer + SharedMem.DataOffset + 1
     Return String@(MemPointer)
   Else
     Return String@(MemPointer)
@@ -246,14 +252,14 @@ DoString:
 DoObject:
 DoVariant:
   Dim MyObject As Object
-  If Not RealPointers Then
-    MemPointer = Pointer@(RootAddress + MemPointer)
-    MemPointer += RootAddress + SharedMem.DataOffset + 1
+  If Not $RealPointers Then
+    MemPointer = Pointer@($RootAddress + MemPointer)
+    MemPointer += $RootAddress + SharedMem.DataOffset + 1
   Endif
   mfile = Memory MemPointer For Read
   Try MyObject = Read #mFile As Object
   If Error Then Print #File.err, "Object read failed"
-  LastWriteLength = Seek(mFile)
+  $LastWriteLength = Seek(mFile)
   Close mFile
   Return MyObject
 
@@ -262,68 +268,68 @@ DoClass:
   Return Null
 
 DoBoolean:
-  Return Boolean@(RootAddress + Mempointer)
+  Return Boolean@(BasePtr)
 
 DoShort:
-  Return Short@(RootAddress + mempointer)
+  Return Short@(BasePtr)
 
 DoByte:
-  Return Byte@(RootAddress + mempointer)
+  Return Byte@(BasePtr)
 
 Dofloat:
-  Return Float@(RootAddress + mempointer)
+  Return Float@(BasePtr)
 
 DoDate:
-  Return Date@(RootAddress + mempointer)
+  Return Date@(BasePtr)
 
 DoSingle:
-  Return Single@(RootAddress + mempointer)
+  Return Single@(BasePtr)
 
 DoFunction:
 DoNull:
   Return Null
-DoBinary:
-  Return RootAddress + mempointer
 
+DoBinary:
+  Return BasePtr
 
 DoLongDate:
-  mfile = Memory RootAddress + MemPointer For Read
+  mfile = Memory BasePtr For Read
   cvVariant = Read #mfile As Variant
   Close mFile
   Return cvVariant
 
 End
 
-'' This function return the address of the data portion of the memory location
+'' This function returns the address of the data portion of the memory location
 '' notype will always assume binary type and return the address of binary blob at the address
 '' The read type can override the normal value for the variable
 Public Sub AddrData(MemPointer As Pointer, Optional rdtype As Integer = -1, notype As Boolean = False) As Pointer
 
-  If RealPointers Then
+  If $RealPointers Then
     Error.Raise("AddrData is not valid in realAddressMode")
     Return Null
   Endif
 
   If Not notype Then
     If rdtype = -1 Then ' And Not notype Then
-      rdType = Byte@(RootAddress + MemPointer)  ' get the data type
+      rdType = Byte@($RootAddress + MemPointer)  ' get the data type
     Endif
     Inc mempointer
   End If
 
   Select Case rdtype
     Case gb.string, gb.object, gb.Variant
-      MemPointer = Pointer@(RootAddress + MemPointer)
-      Mempointer += RootAddress + SharedMem.DataOffset + 1
+      MemPointer = Pointer@($RootAddress + MemPointer)
+      Mempointer += $RootAddress + SharedMem.DataOffset + 1
     Default
-      mempointer += RootAddress
+      mempointer += $RootAddress
   End Select
 
   Return mempointer
 
 End
 
-'' This function return the relative addr of the data portion of the memory location
+'' This function returns the relative addr of the data portion of the memory location
 '' notype will always assume binary type and return the address of binary blob at the address
 '' The read type can override the normal value for the variable
 
@@ -331,28 +337,36 @@ Public Sub DataOffset(MemPointer As Pointer, Optional rdtype As Integer = -1, no
 
   Dim addrptr As Pointer = AddrData(Mempointer, rdtype, notype)
 
-  Return addrptr - rootaddress
+  Return addrptr - $rootaddress
 
 End
 
+'' AddrReal returns the Real memory address of the data,
+'' Most address used within this class are virtual addresses
+'' within the allocated shared memory block
 Public Sub AddrReal(mempointer As Pointer) As Pointer
 
-  Return RootAddress + Mempointer
+  Return $RootAddress + Mempointer
 
 End
 
+'' Load data from afile into virtual memory
+'' Address provided id the virtual memory offset
 Public Sub ReadData(mPointer As Pointer, mFile As File, DataLength As Integer, Optional rdType As Integer = -1, noType As Boolean = False)
 
   rRead(mFile.handle, AddrData(mPointer, rdType, noType), DataLength)
 
 End
 
+'' Write a block of data from virtual memory
+'' address provided is virtual i.e. the offset with the allocated
+'' Shared memory block
 Public Sub WriteData(mPointer As Pointer, mFile As File, DataLength As Integer, Optional rdType As Integer = -1, noType As Boolean = False)
 
   rWrite(mFile.handle, AddrData(mPointer, rdType, noType), datalength)
 
 End
-'' a function which mat be called to dump the content of any memory area to a file
+'' a function which may be called to dump the content of any memory area to a file
 '' The default location if no name specified is the users desktop as dumpfile
 
 Static Public Sub DumpMem(mPointer As Pointer, IntLength As Integer, Optional Filename As String = User.home & "/Desktop/dumpfile")
@@ -374,7 +388,7 @@ End
 '' Dump all the memory for this mem object
 Public Sub DumpAllMem()
 
-  DumpMem(RootAddress, MemoryLength)
+  DumpMem($RootAddress, $MemoryLength)
 
 End
 
