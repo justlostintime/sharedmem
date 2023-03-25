@@ -1200,9 +1200,9 @@ Catch
 End
 '' Set the value of a shared memory variable\
 '' Forms are\
-'' x = SharedMem["MyVar"] of x = SharedMem["MyVar",6] <- index into an array type value
+'' x = SharedMem["MyVar"] or x = SharedMem["MyVar",6] <- index into an array type value
 
-Static Public Sub _put(data As Variant, index As String, Optional subscript As Integer = -1)
+Static Public Sub _put(data As Variant, index As Variant, Optional subscript As Integer = -1)
 
   Dim px As SharedMemSymbol
   Dim waitcount As Integer = 0
@@ -1211,8 +1211,13 @@ Static Public Sub _put(data As Variant, index As String, Optional subscript As I
     Error.raise("Sharedmem Access Assign value before BEGIN()")
   Endif
 
-  CollectionChanged()
-  px = SymbolTable[index]
+  If TypeOf(index) = gb.string Then
+    CollectionChanged()
+    px = SymbolTable[index]
+  Else
+    px = index
+  Endif
+
   If Not IsNull(px) And Subscript < 0 And If px.symtype <> TypeOf(data)
     If Not px._waiting() Then 'allow To change the type Of data stored by a symbol
       Me.free(index)
@@ -1232,6 +1237,7 @@ Static Public Sub _put(data As Variant, index As String, Optional subscript As I
   Wend
 
   px = SymbolTable[index]
+
   If Not IsNull(px) Then
 
     If px.symtype = gb.object And If subscript < 0 Then
@@ -1260,7 +1266,7 @@ Static Public Sub _put(data As Variant, index As String, Optional subscript As I
   If memcmp(usermem.AddrReal(px.ShmWait + 1), zPointer, SizeOf(gb.long)) ' if waiting
 
     If px.ShmLastWriteTime = Null Then
-      Error.Raise("last write time is nill" & px.SymName)
+      Error.Raise("Last write time is null" & px.SymName)
     Endif
 
     UserMem[px.ShmLastWriteTime, gb.float] = Now + Timer
@@ -1269,7 +1275,8 @@ Static Public Sub _put(data As Variant, index As String, Optional subscript As I
 
     sched_yield()
     Try WaitQueue.dispatch()
-    If Error Then Error.Raise("Dispatch error on variable changed " & Error.text & ":" & Error.where)
+
+    If Error Then Error.Raise("Dispatch error on variable change event creation " & Error.text & ":" & Error.where)
     sched_yield()
 
   Else

@@ -45,7 +45,7 @@ Public Sub Object(var As Object) As Pointer
   fLength = Seek(mFile)
   Close mFile
 
-  mMemPtr = Alloc(fLength)
+  mMemPtr = Alloc(fLength, 1)
   mFile = Memory mMemPtr For Write
   Write #mFile, var As Object
   Close mFile

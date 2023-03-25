@@ -412,27 +412,29 @@ Public Sub ShmWriteSub(data As Variant, subscript As Integer)
 
   If SpecialType = 1 Then
     If subscript < ElementCount
-      If ElementType = TypeOf(data)
-        If Not ((ElementType = gb.object) Or (ElementType = gb.string)) Then
-          SharedMem.UserMem[ShmElementAddress(subscript), ElementType, True] = data
-        Else
-          Select Case ElementType
-            Case gb.String
-              Dim MyString As String[] = ShmRead()
-              MyString[subscript] = data
-              ShmWrite(MyString)
-              Return
-            Case gb.object
-              Dim MyObject As Object[] = ShmRead()
-              MyObject[subscript] = data
-              ShmWrite(MyObject)
-              Return
-          End Select
-          Error.Raise("Unsupported data type for subscript in " & SymName)
-        Endif
+      'If ElementType = TypeOf(data)
+      If Not ((ElementType = gb.object) Or (ElementType = gb.string)) Then
+        SharedMem.UserMem[ShmElementAddress(subscript), ElementType, True] = data
       Else
-        Error.Raise("Element Data type mismatch " & SymName)
+        Select Case ElementType
+          Case gb.String
+            Dim MyString As String[] = ShmRead()
+            MyString[subscript] = data
+            ShmWrite(MyString)
+            ElementCount = MyString.Count
+            Return
+          Case gb.object
+            Dim MyObject As Object[] = ShmRead()
+            MyObject[subscript] = data
+            ShmWrite(MyObject)
+            ElementCount = MyObject.Count
+            Return
+        End Select
+        Error.Raise("Unsupported data type for subscript in " & SymName)
       Endif
+      'Else
+      ' Error.Raise("Element Data type mismatch " & SymName)
+      'Endif
     Else
       Error.Raise("SubScript out of range " & SymName)
     Endif
@@ -442,19 +444,32 @@ Public Sub ShmWriteSub(data As Variant, subscript As Integer)
 
 End
 
+' This calculates the offset/Virtual Address from the beginning of the array
+' The the element we are processing is located, Updated for Gambas 3.18
+
 Public Sub ShmElementAddress(index As Integer) As Pointer
 
   Dim bLen As Byte
-  'Dim offset As Integer = dataAddress - rootaddress + 3
+  Dim inSave As Integer = 0
   Dim offset As Integer = 0
+  Dim RealLoc As Pointer = DataPtr()
 
+  ' Bypass calculation for objects stored with a write object instruction 3.18 version
+  blen = Byte@(RealLoc + 1)        ' Get the length of the object name
+  inSave = CInt(blen) + 2 + 1      ' Add the length of the name header and first byte of array info
+  RealLoc += inSave                ' bypass the object write information stored in memory
   'bLen = Byte@(SharedMem.UserMem[RootAddress + offset])
-  blen = Byte@(DataPtr() + 2)
+  ' Get the byte which identifies how many elements in array
+  ' SharedMem.UserMem.DumpMem(RealLoc, 200, "PointToArray.mem")
 
-  offset += If(BTst(bLen, 7), If(BTst(bLen, 6), 4, 2), 1) + 2 ' skip the element count
+  blen = Byte@(RealLoc)                                   ' Read the array element count value
+
+  offset = If(BTst(bLen, 7), If(BTst(bLen, 6), 4, 2), 1)  ' skip the element count
   offset += SizeOf(ElementType) * index
+  'For testing make sure we point To the correct entry
+  'RealLoc += offset
 
-  Return DataOffsetPtr() + offset
+  Return DataOffsetPtr() + offset + inSave
 
 End
 

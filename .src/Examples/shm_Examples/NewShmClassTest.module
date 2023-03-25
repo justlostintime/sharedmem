@@ -10,6 +10,12 @@
 smem As ShmMem
 loopcount As Integer = 1000000
 
+Public Struct xegen
+  gen2 As Integer
+  gen3 As Float
+  gen4 As Long
+End Struct
+
 Public Sub main()
 
   Dim MyVar As Variant
@@ -45,8 +51,10 @@ Public Sub main()
     Next
     Print "Named Pointer write Value X " & loopcount & "       time :";; Timer - Starttime
 
+    '=======================================================================================================
+
     smem = New ShmMem
-    Print "\nUnnammed shered block, Ie. forked tasks only"
+    Print "\nUnnamed shared block, Ie. forked tasks only"
     !cats = 45
 
     StartTime = Timer
@@ -87,10 +95,27 @@ Public Sub main()
     !Fox = [1, 2, 3, 4, 5, 6, 7, 8, 9]
     !Hen = ["a", "b", "c"]
     !Riot = ["Baton": 1, "Hood": 2, "Gun": 4]
+    !Short = CShort(20)
+    !Byte = CByte(23)
+    !Long = CLong(89)
+    !boolean = True
+    !integer = 45
+    !float = 0.20
+    !single = CSingle(1.34)
+    !date = CDate("01/02/1980")
+    !String = "This is a string"
 
+    Dim xx As New Xegen
+    Print xegen.name
+    !Struct = New Xegen
+    !Struct.gen2 = 1234
+    !Struct.gen3 = 1.2
+    !Struct.gen4 = 8907654
 
     !goat = "this is a small goat and it will eat all your grass"
+
     .Print()
+
   End With
 
 End

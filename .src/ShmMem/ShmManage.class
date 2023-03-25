@@ -315,7 +315,7 @@ Private Sub BestFit(DataLen As Long) As AllocHeader
 End
 
 
-Public Sub Alloc(dataLen As Long) As Pointer                       '' returns a virtual memory address
+Public Sub {Alloc}(dataLen As Long) As Pointer                       '' returns a virtual memory address
 
   Dim MyBlock As Pointer
   Dim BlkPtr As AllocHeader

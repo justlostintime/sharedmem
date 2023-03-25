@@ -1,0 +1,82 @@
+' Gambas module file
+
+Public Struct elevation
+  a As Short
+  b As Long
+  c As Float
+  d As Short
+  e As String
+End Struct
+
+Public Sub main()
+
+  Dim b, d As Object
+  Dim a As New Elevation
+  Dim aa As Elevation
+  Dim aaa As Elevation
+  Dim ee As New TestElevationClass
+
+  Dim c As New Shmmem
+  Dim p As Pointer = Alloc(20000, 1)
+  Dim pp As Pointer = Alloc(10000, 1)
+  Dim ptr As Pointer = 0
+
+  c.dog = "cat"
+
+  b = Object.Class(a)
+  d = Object.Class(c)
+
+  a.a = 45
+  a.b = 98765
+  a.c = 67.456
+  a.d = 1
+  a.e = "hello a.........."
+
+  aa = pp
+  aa.a = 45
+  aa.b = 98765
+  aa.c = 67.465
+  aa.d = 1
+  aa.e = "hello aa........"
+
+  Dim f As File
+  f = Memory p For Write
+  Write #f, a As Elevation
+  Close #f
+
+  f = Memory p For Read
+  aaa = Read #f As Elevation
+
+  For i As Integer = 0 To 50
+    Print Hex(Byte@(p + i), 2);;
+  Next
+  Print
+
+  For i As Integer = 0 To 50
+    Print Hex(Byte@(pp + i), 2);;
+  Next
+  Print
+
+  Print a.a, a.b, a.c, a.d, a.e
+  Print aaa.a, aaa.b, aaa.c, aaa.d, aaa.e
+
+  f = Memory p For Write
+  Write #f, ee As TestElevationClass
+  Close #f
+
+  For i As Integer = 0 To 50
+    Print Hex(Byte@(p + i), 2);;
+  Next
+  Print
+
+  f = Memory p For Read
+  ee = Read #f As TestElevationClass
+  Print ee.Text
+
+  'ptr = a.data
+
+  Free(p)
+  Free(pp)
+
+End
+

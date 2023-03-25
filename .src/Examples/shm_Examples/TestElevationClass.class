@@ -1,0 +1,43 @@
+' Gambas class file
+
+Public Struct elevation
+  a As Short
+  b As Long
+  c As Float
+  d As Short
+  e As String
+End Struct
+
+Public Value As Elevation
+
+Property Read text As String
+
+
+Public Sub _new()
+
+  value = New Elevation
+  value.a = 45
+  value.b = 98765
+  value.c = 67.465
+  value.d = 1
+  value.e = "hello Value ............................."
+
+End
+
+Public Sub _write(outfile As File)
+
+  Write #outfile, value As Elevation
+
+End
+
+Public Sub _read(infile As File)
+
+  value = Read #infile As Elevation
+
+End
+
+Private Function text_Read() As String
+
+  Return Subst("&1\t&2\t&3\t&4\t&5", Value.a, Value.b, Value.c, Value.d, Value.e)
+
+End

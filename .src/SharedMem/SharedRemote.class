@@ -169,7 +169,7 @@ Public Sub ShellLink(Writebuff As String)
 
   Dim ssh_channel As Pointer
   Dim result As Integer
-  Dim buffer As Pointer = Alloc(4096)
+  Dim buffer As Pointer = Alloc(4096, 1)
   Dim errbuffer As New Byte[4096]
   Dim WriteData As String
 
