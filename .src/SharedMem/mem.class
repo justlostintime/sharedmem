@@ -161,6 +161,7 @@ Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integ
 
       ' Error "String Pointer = $"; Hex(memPointer);; "Length = "; iString.count + 1
       strncpy(Mempointer, data, data.len)
+      Byte@(Mempointer + data.len) = 0
       ' If istring.count = 0 Then
       '   Byte@(Mempointer) = 0 ' empty string then
       ' Else

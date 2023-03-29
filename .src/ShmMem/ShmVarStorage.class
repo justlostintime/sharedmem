@@ -11,7 +11,8 @@ Export
 
 Private varmem As ShmManage
 Private Storage As ShmMemBlock
-Static Public DefaultAlloc As Integer = 1024 '' Default increments used when allocating string and object memory
+Static Public DefaultAlloc As Integer = 1024   '' Default increments used when allocating string and object memory
+Static Public VariantHeaderLen As Integer = 64 '' Define the max size of a class name for this useage
 
 Public Struct AllocHeader
   Length As Long                         '' Length including header
@@ -416,14 +417,17 @@ End
 Private Sub PutObject(value As Variant, vptr As DPointer)
 
   Dim length, ObjLen As Long
+  Dim myclass As Class = Object.Class(value)
 
-  If Object.Class(Value).Exist("_Assign") Then
+  If MyClass.Exist("_Assign") Then
     Object.Call(Value, "_Assign", [vPtr])
     Return
   Endif
 
+  Dim ClassName As String = MyClass.name
+
   ObjLen = Me.SizeOf(value)
-  Length = ((ObjLen + DefaultAlloc) / DefaultAlloc) * DefaultAlloc
+  Length = ((ObjLen + DefaultAlloc + VariantHeaderLen) / DefaultAlloc) * DefaultAlloc
   If vptr.value > 0 Then
     Dim tmpptr As DStrObj = GetPointer(ObjData, vptr.Value)
     If tmpptr.ObjLen < length Then
@@ -431,6 +435,7 @@ Private Sub PutObject(value As Variant, vptr As DPointer)
       vptr.value = 0
     Endif
   Endif
+
   If vptr.value = 0 Then
     Dim HeadLenExtra As Long = SizeOf(DStrObjInfo) - SizeOf(AllocHeader)
     vptr.value = varmem.Alloc(length + HeadLenExtra)
@@ -441,13 +446,13 @@ Private Sub PutObject(value As Variant, vptr As DPointer)
 
   Dim mfile As File
   mfile = Memory tmpptr.Value.Data For Write
-  Write #mFile, value As Object
+  Write #mFile, value As Variant
   Close mFile
   tmpptr.writelen = ObjLen
 
 End
 
-Private Sub getObject(vptr As DPointer) As Object
+Private Sub getObject(vptr As DPointer) As Variant
 
   Dim tmpptr As DStrObj = GetPointer(ObjData, vptr.Value)
 
@@ -458,7 +463,7 @@ Private Sub getObject(vptr As DPointer) As Object
   Dim MyObject As Object
   Dim mfile As File
   mfile = Memory tmpptr.Value.data For Read
-  Try MyObject = Read #mFile As Object
+  Try MyObject = Read #mFile As Variant
   If Error Then
     Error.Raise("Object read/Access failed")
   Endif

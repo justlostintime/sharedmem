@@ -6,6 +6,7 @@ Public Struct elevation
   c As Float
   d As Short
   e As String
+  f As Float
 End Struct
 
 Public Sub main()
@@ -14,6 +15,7 @@ Public Sub main()
   Dim a As New Elevation
   Dim aa As Elevation
   Dim aaa As Elevation
+  Dim aStruct As Elevation
   Dim ee As New TestElevationClass
 
   Dim c As New Shmmem
@@ -22,6 +24,8 @@ Public Sub main()
   Dim ptr As Pointer = 0
 
   c.dog = "cat"
+  c.struct = a
+  aStruct = c.struct
 
   b = Object.Class(a)
   d = Object.Class(c)
@@ -33,6 +37,9 @@ Public Sub main()
   a.e = "hello a.........."
 
   aa = pp
+  Dim orig As Pointer = Object.data(aa)
+  Print "AA @"; pp;; "orig @"; orig;; "Sizeof()"; Object.SizeOf(aa)
+
   aa.a = 45
   aa.b = 98765
   aa.c = 67.465
@@ -41,7 +48,7 @@ Public Sub main()
 
   Dim f As File
   f = Memory p For Write
-  Write #f, a As Elevation
+  Write #f, a As Object
   Close #f
 
   f = Memory p For Read
@@ -57,26 +64,40 @@ Public Sub main()
   Next
   Print
 
-  Print a.a, a.b, a.c, a.d, a.e
-  Print aaa.a, aaa.b, aaa.c, aaa.d, aaa.e
+  Print "A       :", a.a, a.b, a.c, a.d, a.e
+  Print "AAA     :", aaa.a, aaa.b, aaa.c, aaa.d, aaa.e
+  'Print "aStruct :", aStruct.a, aStruct.b, aStruct.c, aStruct.d, aStruct.e
 
   f = Memory p For Write
-  Write #f, ee As TestElevationClass
+  Write #f, ee As Object
   Close #f
 
-  For i As Integer = 0 To 50
-    Print Hex(Byte@(p + i), 2);;
-  Next
-  Print
+  dumpmem(p, 50)
 
   f = Memory p For Read
-  ee = Read #f As TestElevationClass
+  ee = Read #f As Object
   Print ee.Text
 
-  'ptr = a.data
+  ptr = Object.Data(a)
 
   Free(p)
   Free(pp)
+  Quit 0
+
+End
+
+Sub dumpmem(addr As Pointer, len As Integer)
+
+  For i As Integer = 0 To len - 1
+    Dim value As Integer = Byte@(addr + i)
+    Print Hex(value, 2);
+    If IsAlnum(Chr(value)) Then
+      Print "(" & Chr$(value) & ")";;
+    Else
+      Print "(.)";;
+    Endif
+  Next
+  Print
 
 End
 

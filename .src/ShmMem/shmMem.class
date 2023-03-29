@@ -86,7 +86,7 @@ End
 
 Public Sub _property(...) As Boolean
 
-  Debug Param.count
+  'Debug Param.count
   Return True
 
 End

@@ -6,6 +6,7 @@ Public Struct elevation
   c As Float
   d As Short
   e As String
+  f As Float
 End Struct
 
 Public Value As Elevation
