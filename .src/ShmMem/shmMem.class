@@ -9,6 +9,7 @@ Export
 
 'Fast Unsafe
 
+Property Version As String Use $Version = "3.18.1"
 Property Debug As Boolean Use $bDebug = False
 
 Const VarMemDefault As Long = 2000000

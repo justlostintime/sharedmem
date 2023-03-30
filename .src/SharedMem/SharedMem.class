@@ -19,6 +19,7 @@
 Export
 
 'Fast Unsafe
+Static Public Version As String = "3.18.1"
 
 '' Notify every time value changes
 Public Const Repeat As Integer = -1

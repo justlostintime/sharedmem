@@ -1,6 +1,6 @@
 # Gambas Project File 3.0
 Title=Shared Memory object - SHMV2.0 and SHaredMem V1.0 both interfaces
-Startup=NewReadWriteStrings
+Startup=TestStringsStructs
 Version=3.18.1
 Component=gb.image
 Component=gb.debug
