@@ -1,15 +1,15 @@
 # Gambas Project File 3.0
-Title=Shared Memory object - SHMV2.0 and SHaredMem V1.0 both interfaces
-Startup=TestStringsStructs
-Version=3.18.1
+Title=Shared Memory object - SHMV2.1 and SHaredMem V1.2 both interfaces
+Startup=TestBufferClass
+Version=3.18.3
 Component=gb.image
 Component=gb.debug
 Component=gb.eval
 Component=gb.eval.highlight
 Component=gb.pcre
 Component=gb.signal
-Description="SharedMem is a library to enable shared memory between tasks and threads within a single machine  with real time change notification, un-named shared memory and named shared memory.\nLatest Version Beta 3.18.1\n\nVersion 2 improves on speed 50% increase and variable lock/unlock reliability\n\nProject contains both versions\nVersion              SharedMem release 3.17.1          production quality\nVersion              ShmMem      release 3.17.1          Beta quality"
-Authors="Brian G"
+Description="SharedMem is a library to enable shared memory between tasks and threads within a single machine  with real time change notification, un-named shared memory and named shared memory.\nLatest Version Beta 3.18.1\n\nVersion 2 improves on speed 50% increase and variable lock/unlock reliability\n\nProject contains both versions\nVersion              SharedMem release 3.18.3          production quality\nVersion              ShmMem      release 3.18.3          Beta quality"
+Authors="Westwood"
 TabSize=2
 Language=en_US
 Type=Component

@@ -753,6 +753,7 @@ Static Public Sub Element(RootVar As Variant, symbol As String, index As Integer
   MyElement = New Element(Me)
   MySymbol = PointerAlloc(symbol, MyElement, RootSymbol.RootAddress, RootObject.RootAddress + index, ilen, Datatype)
 
+  MyElement.RelativeAddress = RootObject.RelativeAddress + index
   MyElement.RootAddress = RootObject.RootAddress + index
   MyElement.StorageLength = ilen
   MyElement.DataType = DataType

@@ -9,10 +9,43 @@ Public Sub main()
   Dim MyLong As Long = 0
   Dim MyPnt As Pointer = Null
   Dim MyElement, MyELong As Element
+  Dim NewStyleCopy As Buffer
 
   Print "Begin Buffer Test ???????????????????????????????????????????????????????????????????????????????????????????????????????????????????"
 
-  SharedMem.begin(1000)
+  SharedMem.begin(5000)
+
+  Dim NewStyle As New Buffer(Null, 500, "NewStyle")
+
+  With NewStyle
+    .myaint(567.67)
+
+    .MyString(60, -1, gb.string)
+    .MyString = "This is a string"
+
+    .MyStr(60, -1, gb.string)
+    .MyStr = "this silly thing"
+
+    .MyConstant("this is another string")
+    .MyInt(1)
+    .MyLong(CLong(2345))
+
+    Print .MyInt, .MyLong, .myaint, Quote(.MyStr);; Quote(.MyString);;
+    Print Quote(.MyConstant);;
+    Print "Current Used Bytes : "; NewStyle.BytesUsed
+
+    NewStyleCopy = NewStyle.Duplicate("NewStyleCopy")
+    With NewStyleCopy
+      Print .MyInt, .MyLong, .myaint, Quote(.MyStr);; Quote(.MyString);;
+      Print Quote(.MyConstant);;
+      Print "Current Used Bytes : "; .BytesUsed
+    End With
+
+    For Each f As BufferFields In NewStyle.Fields
+      Print f._print()
+    Next
+
+  End With
 
   MyBuff.Create("TheBuffer", 200)
 
@@ -24,10 +57,10 @@ Public Sub main()
   SharedMem.DumpMem(MyBuff(), MyBuff.Len())
 
   Dim MyStore As New Buffer
-  Dim MyBuff2 As Buffer
+  MyStore.Access("TheBuffer")                        ' This creates another pointer to the same buffer area in memory, but does not redefine fields
 
-  MyStore.Access("TheBuffer")
-  MyBuff2 = MyBuff.Duplicate("TheBuff2")
+  Dim MyBuff2 As Buffer
+  MyBuff2 = MyBuff.Duplicate("TheBuff2")    ' This creates a new variable which is a buffer that is a copy of the original
 
   MyElement = SharedMem.Element(MyBuff, "MyBuff.Str", 20, gb.string, 60)
   MyElong = SharedMem.Element(MyBuff, "MyBuff.Long", 1, gb.Long)
@@ -47,16 +80,17 @@ Public Sub main()
 
   Print " Compare if Access  are equal      answer is "; If(MyBuff.Equal(MyStore), "Pass", "Fail"); "."
   Print " Compare if buffers are equal      answer is "; If(MyBuff.Equal(MyBuff2), "Fail", "Pass"); "."
-  Print " Compare if buffers are greater    answer is "; If(MyBuff.Greater(MyBuff2), "Fail", "Pass"); "."
-  Print " Compare if buffers are Less       answer is "; If(MyBuff.Less(MyBuff2), "Pass", "Fail"); "."
+  Print " Compare if buffers are greater    answer is "; If(MyBuff.Greater(MyBuff2), "Pass", "Fail"); "."
+  Print " Compare if buffers are Less       answer is "; If(MyBuff.Less(MyBuff2), "Fail", "Pass"); "."
 
   SharedMem["MyInt"] = 28
+
   Print " Compare if Element indirect =     answer is "; If(SharedMem["MyInt"] = 28, "Pass", "Fail"); "."
 
   Print " Compare long to long value        answer is "; If(MyELong[0] = 99, "Yes", "No")
   MyELong[0] = 2098
   Print " Compare long to long value        answer is "; If(MyELong[0] = 2098, "Yes", "No")
-  SharedMem["MyBuff.Long"] = 2121
+  SharedMem["MyBuff.Long"] = CLong(2121)
   Print " Compare long to long value        answer is "; If(MyELong[0] = 2121, "Yes", "No")
   MyLong = SharedMem["MyBuff.Long"]
   Print " Compare long to long value        answer is "; If(MyELong[0] = MyLong, "Yes", "No")

@@ -1,0 +1,50 @@
+' Gambas class file
+
+Export
+
+Property Offset As Integer Use $offset
+Property Length As Integer Use $Length
+Property DataType As Integer Use $DataType
+Property name As String Use $name
+Property ParentBuffer As Buffer Use $Buffer
+
+Public Sub _new(SourceBuffer As Buffer, Optional FieldName As String = "", FieldOffset As Integer = 0, FieldLength As Integer = 0, FieldType As Integer = gb.byte)
+
+  $Offset = FieldOffset
+  $Name = FieldName
+  $Length = FieldLength
+  $DataType = FieldType
+  $buffer = SourceBuffer
+
+End
+
+Public Sub _print() As String
+
+  Dim result As String = "Name = " & Left$($Buffer.SymbolName & "_" & $Name & Space(30), 30) &
+    " , Offset = " & Format$($Offset, "####0") & " , Length = " & Format($Length, "####0") & " , Type = " & SharedMem.DataTypes[$DataType] & "(" & $DataType & ")"
+
+  Return result
+
+End
+
+Public Sub _call(...) As Variant
+
+
+
+End
+
+
+Public Sub _get(...) As Variant
+
+
+
+End
+
+
+Public Sub _put(value As Variant, ...)
+
+
+
+End
+
+

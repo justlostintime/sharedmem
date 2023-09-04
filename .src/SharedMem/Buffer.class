@@ -12,14 +12,17 @@ Export
 
 
 '' Most properties are set by the creater of the buffer
-Property RootAddress As Pointer Use $RootAddress = 0
+Property RootAddress As Pointer Use $RootAddress = 0                         ' Actual phisical address of the memory we are using
+Property RelativeAddress As Pointer Use $RelativeAddress = 0              ' address relative to the named shared segment
 Property StorageLength As Integer Use $StorageLength = 0
 Property SymbolName As String Use $SymbolName = ""
 Property DataType As Integer Use $DataType = gb.byte
 Property CreatedByMe As Boolean Use $CreatedByMe = False
 Property Parent As Object Use $Parent = Null
 Property oShm As Variant Use $oShm = Null
-
+Property Fields As Collection Use $Fields
+Property Methods As Collection Use $Methods
+Property BytesUsed As Integer Use $BytesUsed = 0
 
 Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "libc:6"
 Extern memcmp(CompVal1 As Pointer, CompVal2 As Pointer, NumBerOfBytes As Integer) As Integer In "libc:6"
@@ -31,13 +34,132 @@ Extern rRead(handel As Integer, buf As Pointer, cnt As Integer) As Integer In "l
 Property SupportedDataTypes As Integer[] Use $SupportedDataTypes = [gb.byte, gb.short, gb.integer, gb.long, gb.string]
 InValidTypeMessage As String = "Invalid data type, must be Byte, Short,Integer,Long,Pointer,byte Requested : &1 Assuming Byte"
 
+
 '' The only creation input to this is the actual shared memory segment used
 '' The rest are assigned after the creation of this buffer
-Public Sub _new(Optional vshm As Variant = Null)
+Public Sub _new(Optional vshm As Variant = Null, BufLength As Integer = 0, SymName As String = "", BufType As Integer = gb.byte)
 
   $oShm = vshm
+  If BufLength > 0 Then
+    If symname <> "" Then
+      Create(SymName, BufLength, BufType)
+    Else
+      Error.Raise("Missing Buffer definition symbol name")
+    Endif
+  Endif
+  $Fields = New Collection(gb.ignorecase)
+  $Methods = New Collection(gb.ignorecase)
 
 End
+
+Public Sub {Define}(ElementName As String, ElOffset As Integer, ElLength As Integer, Optional ElType As Integer = gb.byte) As BufferFields
+
+  Dim newField As BufferFields
+
+  If Eloffset > $StorageLength Then
+    Error.Raise("Element offset greater than buffer length")
+  Endif
+  If ElOffset + ElLength > $StorageLength Then
+    Error.Raise("Element Offset+ Length greater  than buffer length")
+  Endif
+  newField = New BufferFields(ElementName, ElOffset, ElLength, ElType)
+  $Fields.add(newField, ElementName)
+
+End
+
+Private $isProperty As Boolean = True
+
+Public Sub _property(...) As Boolean
+
+  $IsProperty = $Fields.exist(Param.name)
+
+  If Not $IsProperty Then
+    $Fields.Add(Null, Param.name)
+    Debug "Warning Automatic creation of Buffer Field entry : ";; Param.name
+  Endif
+
+  Return $IsProperty
+
+End
+
+Public Sub _Unknown(...) As Variant
+
+  Dim theField As BufferFields
+  Dim RealOffset As Pointer
+
+  If $isProperty Then
+    $isProperty = False
+    If $Fields.exist(Param.name) Then
+      theField = $Fields[Param.Name]
+      RealOffset = theField.Offset + $RelativeAddress
+      If Param.Count = 0
+        Return SharedMem.UserMem._get(RealOffset, theField.DataType, True, True, True)
+      Else If Param.Count = 1 Then
+        SharedMem.UserMem._put(Param[0], realOffset, theField.DataType, True, True, True)
+      Endif
+    Else
+      Error.Raise("Buffer unknow Field name : " & Param.Name)
+    Endif
+
+  Else
+    If $Methods.exist(Param.name) Then
+
+    Else
+      Dim newField As New BufferFields(Me, Param.name, $BytesUsed)
+
+      If Param.count >= 2 And If Param[1] <> -1 Then    ' we got length and offset
+        newField.Offset = Param[1]
+      Endif
+
+      If Param.Count >= 1 Then
+        If Param.count = 1
+          If TypeOf(Param[0]) = gb.string Then
+            newField.length = Param[0].len + 1
+            newField.DataType = gb.string
+          Else
+            newField.DataType = TypeOf(Param[0])
+            newField.Length = SizeOf(TypeOf(Param[0]))
+          Endif
+        Else
+          newField.Length = Param[0]
+        Endif
+      Endif
+    Endif
+
+    If Param.count = 3 Then                     ' we also have a data type for the field
+      newField.DataType = Param[2]
+      If Param[0] = -1 Then
+        newField.length = SizeOf(Param[2])
+      Else If SizeOf(param[2]) > NewField.Length
+        Error.Raise("Buffer Field length Is Too small To contain requested datatype")
+      Endif
+      ' Else
+      '   If TypeOf(Param[0]) = gb.string Then
+      '     newField.DataType = gb.string
+      '   Else
+      '     newField.DataType = gb.byte
+      '   Endif
+    Endif
+
+    If newField.Offset + newField.Length > $StorageLength Then
+      Error.Raise("Buffer Field Definition exceeds buffer capacity")
+    Endif
+
+    If $BytesUsed < (newField.offset + newField.length) Or If Param.count = 1 Then
+      $BytesUsed = newField.offset + newField.length
+    Endif
+
+    $Fields[Param.name] = newField
+
+    'If TypeOf(Param[0]) = gb.string Then
+    If Param.count = 1 Then
+      RealOffset = NewField.Offset + $RelativeAddress
+      SharedMem.UserMem._put(Param[0], realOffset, NewField.DataType, True, True, True)
+    Endif
+  Endif
+
+End
+
 
 '' This function reads an object definition from the provided
 '' open input stream, the first integer must be the length
@@ -78,7 +200,8 @@ Public Sub Access(symbol As String, Optional rdType As Integer = gb.byte) As Poi
     Return CPointer(Null)
   Endif
 
-  $RootAddress = MySymbol.DataAddress + 1
+  $RelativeAddress = MySymbol.DataAddress + 1
+  $RootAddress = SharedMem.PhysicalAddress($RelativeAddress)
   $StorageLength = MySymbol.StorageLength - SharedMem.AllocHeaderLen - 1
   $DataType = rdType
   $SymbolName = symbol
@@ -109,7 +232,8 @@ Public Sub Create(symbol As String, ilen As Integer, Optional rdType As Integer 
   Endif
 
   ilen = ilen * SizeOf($DataType)
-  $RootAddress = SharedMem.NamedAlloc(symbol, ilen, Me)
+  $RelativeAddress = SharedMem.NamedAlloc(symbol, ilen, Me)
+  $RootAddress = SharedMem.PhysicalAddress($RelativeAddress)
   $StorageLength = ilen
   $symbolName = symbol
   $CreatedByMe = True
@@ -124,6 +248,7 @@ Public Sub Release() As Boolean ' release the memory
   If Not $CreatedByMe Then Return False
 
   SharedMem.free($SymbolName)
+  $RelativeAddress = 0
   $RootAddress = 0
   $SymbolName = ""
   $StorageLength = 0
@@ -232,19 +357,26 @@ Public Sub _get(index As Integer) As Variant
     Case gb.integer
       Return Integer@($RootAddress + index)
     Case gb.String
-      Return String@($RootAddress + index)
+      Dim thestring As String = String@($RootAddress + index)
+      Return theString
     Case gb.Binary
       Return $RootAddress + index       'just return a pointer if we are working with binary
   End Select
 
 End
 
+
 Public Sub _put(Data As Variant, index As Integer)
 
   Dim $LastWriteLength As Integer = 0
   Dim RdType As Integer
 
+  If $RelativeAddress = Null Or If $RootAddress = Null Then
+    Error.Raise("UnInitialized Buffer or element ")
+  Endif
+
   Dim mempointer As Pointer = $RootAddress + index
+  Dim srcptr As Pointer = VarPtr(data)
 
   rdType = TypeOf(data)
 
@@ -258,9 +390,8 @@ Public Sub _put(Data As Variant, index As Integer)
 
   Select Case rdType
 
-
     Case gb.Pointer, gb.integer, gb.Long, gb.byte, gb.float, gb.date, gb.Boolean, gb.Short, gb.Single
-      memcpy(mempointer, VarPtr(data), $LastWriteLength)
+      memcpy(mempointer, srcptr, $LastWriteLength)
 
     Case gb.String
 
@@ -269,7 +400,7 @@ Public Sub _put(Data As Variant, index As Integer)
         Return
       Endif
 
-      memcpy(MemPointer, VarPtr(data), data.len)
+      memcpy(MemPointer, srcptr, data.len)
       memset(MemPointer + data.len, 0, 1)
 
     Default
@@ -320,9 +451,20 @@ End
 Public Sub Duplicate(Symbol As String) As Buffer ' returns a pointer to the new storage area
 
   Dim myBuff As New Buffer($oShm)
+  Dim TheRoot, bufroot As Pointer
 
-  myBuff.Create(symbol, $StorageLength)
+  TheRoot = myBuff.Create(symbol, $StorageLength)
+  bufRoot = myBuff.RootAddress
   memcpy(myBuff(), Me(), $storageLength)
+  myBuff.Fields = $Fields.Copy()
+  mybuff.Methods = $Methods.copy()
+  myBuff.BytesUsed = $BytesUsed
+
+  myBuff.DataType = $DataType
+  myBuff.CreatedByMe = $CreatedByMe
+  myBuff.Parent = $Parent
+  myBuff.oShm = $oShm
+
   Return mybuff
 
 End
@@ -372,7 +514,8 @@ Private Sub VerifyCompare(src As Variant, length As Integer, offset As Integer) 
     Return 0
   Endif
 
-  Return memcmp($RootAddress + offset, Dest, length)
+  Dim result As Integer = memcmp($RootAddress + offset, Dest, length)
+  Return result
 
 End
 
@@ -385,13 +528,17 @@ End
 
 Public Sub Less(src As Variant, Optional length As Integer = 0, offset As Integer = 0) As Boolean
 
-  Return If(VerifyCompare(src, length, offset) < 0, True, False)
+  Dim result As Integer = If(VerifyCompare(src, length, offset) < 0, True, False)
+
+  Return result
 
 End
 
 Public Sub Greater(src As Variant, Optional length As Integer = 0, offset As Integer = 0) As Boolean
 
-  Return If(VerifyCompare(src, length, offset) > 0, True, False)
+  Dim result As Boolean = If(VerifyCompare(src, length, offset) > 0, True, False)
+
+  Return result
 
 End
 
@@ -447,27 +594,5 @@ Public Sub _print()
   Wend
 
   Print " - " & MyStr & "\n"
-
-End
-
-
-
-
-
-
-
-
-
-
-
-Private Function SupportedDataTypes_Read() As Integer[]
-
-
-
-End
-
-Private Sub SupportedDataTypes_Write(Value As Integer[])
-
-
 
 End

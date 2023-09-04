@@ -3,22 +3,23 @@
 Inherits Task
 Public MyFile As File
 Public Cycles As Integer = 10
+Public LogFileName As String = User.home &/ "Desktop/gambas.BGLogFile.txt"
 
 Public Sub main() As Integer
 
-  MyFile = Open User.home &/ "Desktop/gambas.BGFile.txt" For Write Create
+  MyFile = Open LogFileName For Write Create
 
   Print #MyFile, "BG: Testing Change notify Function ", Application.id
 
   SharedMem.NotifyChange("WaitTest", Me, -1)
+  Print #MyFile, "BG: Added Notify Request for when Variable 'WaitTest' Changes"
 
-  SharedMem["WaitTest"] += 1
-  Print #MyFile, "BG: Start count at "; SharedMem["WaitTest"];; "for";; Cycles;; "Cycles"
+  Print #MyFile, "BG: Start count at "; SharedMem!WaitTest;; "for";; Cycles;; "Cycles"
   Wait 1
 
   For i As Integer = 1 To Cycles
-    Print #MyFile, " Inc the counter "; i
-    Inc SharedMem["WaitTest"]
+    Print #MyFile, "BG: Inc the Variable 'WaitTest' to "; SharedMem!WaitTest + 1
+    Inc SharedMem!WaitTest
     Wait 0.01
   Next
 
@@ -38,10 +39,11 @@ Catch
 
 End
 
-Public Sub WaitTest_changed(NewValue As Variant)
+Public Sub WaitTest_changed(NewValue As Variant, Optional Symname As Variant)
 
   'Print #myFile, "BG: wait test changed ", NewValue
-  Print "BG: wait test changed ", NewValue
+  Print #MyFile, "BG: Recieved Notice that Variable "; Quote(SymName); " changed ", NewValue
+  Flush
 
 End
 

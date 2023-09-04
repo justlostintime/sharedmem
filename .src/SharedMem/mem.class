@@ -100,7 +100,7 @@ End
 ''  rdType - override the datatype of the passed in variant
 ''  notype - the memory location does not contain a memory variable type definition
 ''  if fast value is 2 4 8 then the storage is there and created already
-Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False)
+Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False, RealPointers As Boolean = $RealPointers, AbsIndexed As Boolean = False)
 
   Dim mfile As File
 
@@ -110,6 +110,8 @@ Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integ
   Endif
 
   Dim BasePtr As Pointer = $RootAddress + MemPointer
+  If AbsIndexed Then MemPointer = BasePtr
+
   'DumpMem(Baseptr, 200)
   If Not notype Then
     If rdType = -1 Then                                    ' if this is -1 we assume this is a new or default call
@@ -154,7 +156,7 @@ Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integ
     Case gb.String
       'Dim iString As Byte[] = byte[].fromString(data)
 
-      If Not $RealPointers Then
+      If Not RealPointers Then
         MemPointer = Me[MemPointer, gb.Pointer, True]                            ' Pointer@(RootAddress + MemPointer)
         memPointer += $RootAddress + SharedMem.DataOffset + 1
       Endif
@@ -177,7 +179,7 @@ Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integ
       ' Error "LastWrite Length = "; LastWriteLength
 
     Case gb.object
-      If Not $RealPointers Then
+      If Not RealPointers Then
         MemPointer = Me[MemPointer, gb.pointer, True]                     ' Pointer@(RootAddress + MemPointer)
         MemPointer += $RootAddress + SharedMem.DataOffset + 1
       Endif
@@ -207,10 +209,10 @@ End
 
 '' Get variable from memory
 ''
-'' Mempointer - the location to get the daya from
+'' Mempointer - the location to get the data from
 '' rdType - the type of data to be read, this is an over ride for the stored data type or used when no datatype stored
 '' notype - the storgae location first has no data type specified
-Public Sub _get(MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False) As Variant
+Public Sub _get(MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False, RealPointers As Boolean = $RealPointers, AbsIndexed As Boolean = False) As Variant
 
   Dim cvVariant As Variant
   Dim mFile As File
@@ -224,6 +226,7 @@ Public Sub _get(MemPointer As Pointer, Optional rdType As Integer = -1, notype A
   End If
 
   Dim BasePtr As Pointer = $RootAddress + MemPointer
+  If AbsIndexed Then Mempointer = BasePtr
 
   'DataTypes = ["*Binary", "*Boolean", "*Byte", "*Short", "*Integer", "*Long", "*Single", "*Float", "*Date", "*String",
   '                                       "*LongDate", "*Pointer", "*Variant", "*Function", "*Class", "NULL", "*Object", "Not Array", "", "", "", "", "", ""]
@@ -242,7 +245,7 @@ DoLong:
   Return Long@(BasePtr)
 
 DoString:
-  If Not $RealPointers Then
+  If Not RealPointers Then
     MemPointer = Pointer@($RootAddress + MemPointer)
     MemPointer = $RootAddress + MemPointer + SharedMem.DataOffset + 1
     Return String@(MemPointer)
@@ -253,7 +256,7 @@ DoString:
 DoObject:
 DoVariant:
   Dim MyObject As Object
-  If Not $RealPointers Then
+  If Not RealPointers Then
     MemPointer = Pointer@($RootAddress + MemPointer)
     MemPointer += $RootAddress + SharedMem.DataOffset + 1
   Endif
