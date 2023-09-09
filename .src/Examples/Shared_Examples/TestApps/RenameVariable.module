@@ -1,0 +1,20 @@
+' Gambas module file
+
+Public Sub main()
+
+  SharedMem.begin(120000)
+
+  With SharedMem
+    .bigBuckBunny = "this is funny"
+    Print "First created :";; Quote(.bigBuckBunny)
+    .Rename("bigbuckbunny", "bigNuckBunny")
+    Print "Renamed value :";; Quote(.bigNuckBunny)
+    .bigBuckBunny = "More bunny tails"
+    Try .Rename("bigNuckBunny", "BigBuckBunny")
+    If Error Then
+      Print Error.Text
+      Print "this error is correctly given"
+    Endif
+  End With
+
+End

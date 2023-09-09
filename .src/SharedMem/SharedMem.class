@@ -1213,8 +1213,8 @@ Static Public Sub Rename(symbol As String, newname As String, Optional force As 
 
   CollectionChanged()
 
-  If Exist(Symbol) Then
-    If Not Exist(newname) Or If force Then
+  If SymbolTable.Exist(Symbol) Then
+    If Not SymbolTable.Exist(newname) Or If force Then
 
       While sem_trywait(UserMem.AddrReal(MemMutex))
         Inc waitcount
@@ -1233,7 +1233,7 @@ Static Public Sub Rename(symbol As String, newname As String, Optional force As 
       sem_post(UserMem.AddrReal(MemMutex))
 
     Else
-      Error.Raise("Sharedmem Rename New name exists ", newname)
+      Error.Raise("Sharedmem Rename New name exists " & newname)
     Endif
   Else
     Error.Raise("Sharedmem Rename Symbol not found " & Symbol)
