@@ -1,14 +1,14 @@
 # Gambas Project File 3.0
 Title=Shared Memory object - SHMV2.1 and SHaredMem V1.2 both interfaces
 Startup=TestBufferClass
-Version=4.1.1
+Version=3.19.1
 Component=gb.image
 Component=gb.debug
 Component=gb.eval
 Component=gb.eval.highlight
 Component=gb.pcre
 Component=gb.signal
-Description="SharedMem is a library to enable shared memory between tasks and threads within a single machine  with real time change notification, un-named shared memory and named shared memory.\nLatest Version 4.1.1, added rename and speed refinements\n\nVersion 2 improves on speed 50% increase and variable lock/unlock reliability\n\nProject contains both versions\nVersion              SharedMem release 3.18.3          production quality\nVersion              ShmMem      release 3.18.3          Beta quality"
+Description="SharedMem is a library to enable shared memory between tasks and threads within a single machine  with real time change notification, un-named shared memory and named shared memory.\nLatest Version 3.19.1, added rename and speed refinements\n\nVersion 2 improves on speed 50% increase and variable lock/unlock reliability\n\nProject contains both versions\nVersion              SharedMem release 3.18.3          production quality\nVersion              ShmMem      release 3.18.3          Beta quality"
 Authors="Westwood"
 TabSize=2
 Language=en_US
@@ -20,7 +20,7 @@ Address=brian@westwoodsvcs.com
 Url=www.westwoodsvcs.com
 License=General Public License
 Prefix=1
-PackageName=gambas3-gb-sharedmem-4.1.1
+PackageName=gambas3-gb-sharedmem-3.19.1
 CreateEachDirectory=1
 RuntimeVersion="3.17"
 Packager=1
