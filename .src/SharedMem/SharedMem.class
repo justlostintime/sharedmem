@@ -1084,6 +1084,7 @@ Catch
   Stop
 
 End
+
 '' free a variables storage and move the block to the free list
 
 Static Public Sub free(symbolKey As String, Optional bLock As Boolean = True) As Boolean       ' note here the symbols shared memory will be freed and the symbol table entry will be deleted true if deleted
@@ -1200,10 +1201,49 @@ Catch
   Return Null
 
 End
+
+'' Rename a variable from one name to another
+Static Public Sub Rename(symbol As String, newname As String, Optional force As Boolean = False)
+
+  Dim waitcount As Integer = 0
+
+  If Not InSession Then
+    Error.raise("Sharedmem Access Assign value before BEGIN()")
+  Endif
+
+  CollectionChanged()
+
+  If Exist(Symbol) Then
+    If Not Exist(newname) Or If force Then
+
+      While sem_trywait(UserMem.AddrReal(MemMutex))
+        Inc waitcount
+        If waitcount > WaitTimeout Then
+          Error.Raise("Race condition sharedmem.put")
+          Return
+        Endif
+        sched_yield()
+      Wend
+
+      SymbolTable[newname] = SymbolTable[symbol]
+      SymbolTable[newname].Symname = newname
+      SymbolTable.Remove(symbol)
+
+      SaveCollection()
+      sem_post(UserMem.AddrReal(MemMutex))
+
+    Else
+      Error.Raise("Sharedmem Rename New name exists ", newname)
+    Endif
+  Else
+    Error.Raise("Sharedmem Rename Symbol not found " & Symbol)
+  Endif
+
+End
+
 '' Set the value of a shared memory variable\
 '' Forms are\
 '' x = SharedMem["MyVar"] or x = SharedMem["MyVar",6] <- index into an array type value
-
 Static Public Sub _put(data As Variant, index As Variant, Optional subscript As Integer = -1)
 
   Dim px As SharedMemSymbol

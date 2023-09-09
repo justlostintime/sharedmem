@@ -2,7 +2,7 @@ TestBufferClass
 Shared Memory object - SHMV2.1 and SHaredMem V1.2 both interfaces
 #sharedmem
 0
-3.18.3
+4.1.1
 
 gb.image
 gb.debug
