@@ -89,6 +89,7 @@ Static Public ColMem As New Mem
 
 Static Property Read Count As Long
 Static Property Read Vars As Collection
+Static Property key As String Use $key
 
 '' This data type is not used, here to describe the format of each variable block header
 Public Struct MemHeader                   ' defines a model of the header but never used
@@ -2101,6 +2102,7 @@ Static Public Sub _unknown(...) As Variant ' this will only work for simple data
 
 End
 
+
 Static Public Sub NotifyList() As String[]
 
   Dim results As New String[]
@@ -2116,6 +2118,37 @@ Static Public Sub NotifyList() As String[]
   Next
 
   Return results
+
+End
+
+Static Private nextlist As New String[]
+
+'' This returns a sorted  enumerated list of current variable names
+'' it is a snap shot of the variables at the time the started
+'' user should verify the names exsist before accessing them
+Static Public Sub _next() As Variant
+
+  If Enum.Index = Null Then
+    nextlist.Clear()
+    CollectionChanged()
+    If SymbolTable.count = 0 Then
+      Enum.Stop()
+      Return
+    Endif
+    For Each s As Variant In SymbolTable
+      nextlist.Add(SymbolTable.key)
+    Next
+    nextlist.Sort()
+    Enum.index = 0
+  Else
+    If Enum.index = nextlist.Max Then
+      Enum.Stop()
+      Return
+    Endif
+    Inc Enum.index
+  Endif
+  $key = nextlist[Enum.index]
+  Return $key
 
 End
 

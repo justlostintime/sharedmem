@@ -1,0 +1,16 @@
+' Gambas module file
+
+Public Sub main()
+
+  SharedMem.Begin(2000000)
+  With SharedMem
+    .["$a"] = 100
+    .["$b"] = "hello world"
+  End With
+
+  For Each s As String In SharedMem
+    Print s
+  Next
+
+End
+
