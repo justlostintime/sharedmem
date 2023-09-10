@@ -44,7 +44,7 @@ Public RootRef As Pointer = VarPtr(RootAddress)
 Public UnsupportedList As String[] = ["File", "Stream"]
 
 Property Value As Variant
-
+Property Read LastWriteTime As Date
 
 Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "libc:6"
 ' Extern rWrite(handle As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "write"
@@ -200,7 +200,7 @@ End
 Public Sub _wait() As Integer
 
   If SharedMem.UserMem[ShmLastWriteTime, gb.float] = 0.0 Then
-    SharedMem.UserMem[ShmLastWriteTime, gb.float] = Now + Timer
+    SharedMem.UserMem[ShmLastWriteTime, gb.float] = Now + Frac(Timer)
   Endif
 
   SharedMem.UserMem[ShmWait] += 1
@@ -242,7 +242,7 @@ Public Sub SetLastWrite() As Float
     Error.Raise("last write time pointer is nill" & SymName)
   Endif
 
-  SharedMem.UserMem[ShmLastWriteTime, gb.float] = Now + Timer
+  SharedMem.UserMem[ShmLastWriteTime, gb.float] = Now + Frac(Timer)
   Return SharedMem.UserMem[ShmLastWriteTime, gb.float]
 
 End
@@ -608,5 +608,14 @@ End
 Private Sub Value_Write(vValue As Variant)
 
   ShmWrite(vValue)
+
+End
+
+Private Function LastWriteTime_Read() As Date
+
+  Dim ltime As Float = getLastWrite() - CFloat(System.timezone)
+  Dim ldate As Date = CDate(ltime)
+
+  Return ldate
 
 End
