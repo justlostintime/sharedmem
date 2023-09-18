@@ -1,0 +1,30 @@
+' Gambas module file
+
+Public Sub main()
+
+  SharedMem.Begin(2000000)
+
+  With SharedMem
+    .["$a"] = 100
+    .["$b"] = "hello world"
+
+
+    For Each s As String In SharedMem
+      Print s
+      Dim a As SharedMemSymbol = SharedMem.SymbolTable[s]
+      Print CFloat(Now), a.lastwritetime, CDate(a.LastWriteTime)
+    Next
+    Wait 3.0
+    .["$a"] = 2000
+    .["$b"] = "by by by now"
+
+    For Each s As String In SharedMem
+      Print s
+      a = SharedMem.SymbolTable[s]
+      Print CDate(a.LastWriteTime)
+    Next
+
+  End With
+
+End
+

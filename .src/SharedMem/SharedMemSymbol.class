@@ -44,7 +44,7 @@ Public RootRef As Pointer = VarPtr(RootAddress)
 Public UnsupportedList As String[] = ["File", "Stream"]
 
 Property Value As Variant
-Property Read LastWriteTime As Date
+Property Read LastWriteTime As Float
 
 Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "libc:6"
 ' Extern rWrite(handle As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "write"
@@ -199,10 +199,7 @@ End
 
 Public Sub _wait() As Integer
 
-  If SharedMem.UserMem[ShmLastWriteTime, gb.float] = 0.0 Then
-    SharedMem.UserMem[ShmLastWriteTime, gb.float] = Now + Frac(Timer)
-  Endif
-
+  SetLastWrite()
   SharedMem.UserMem[ShmWait] += 1
 
 End
@@ -242,8 +239,12 @@ Public Sub SetLastWrite() As Float
     Error.Raise("last write time pointer is nill" & SymName)
   Endif
 
-  SharedMem.UserMem[ShmLastWriteTime, gb.float] = Now + Frac(Timer)
-  Return SharedMem.UserMem[ShmLastWriteTime, gb.float]
+  Dim currentTime As Float = Now
+  Dim Fracpart As Float = Frac(Timer)
+  currenttime += FracPart
+  SharedMem.UserMem[ShmLastWriteTime, gb.float] = currenttime
+
+  Return currenttime
 
 End
 
@@ -288,7 +289,7 @@ Public Sub AllocStorage(iLength As Integer) As Boolean
         ShmWait = RootAddress + SharedMem.WaitOffset
         ShmLastWriteTime = RootAddress + SharedMem.LastWriteOffset
         SharedMem.UserMem.SetType(DataAddress, symtype)
-        SharedMem.UserMem[ShmLastWriteTime] = 0.0
+        SharedMem.UserMem[ShmLastWriteTime] = Now + Frac(Timer)
         SharedMem.UserMem[shmWait] = CLong(0)
       Endif
     Endif
@@ -309,7 +310,7 @@ Public Sub AllocStorage(iLength As Integer) As Boolean
     ShmWait = RootAddress + SharedMem.WaitOffset
     ShmLastWriteTime = RootAddress + SharedMem.LastWriteOffset
 
-    SharedMem.UserMem[ShmLastWriteTime] = 0.0
+    SharedMem.UserMem[ShmLastWriteTime] = Now + Frac(Timer)
     SharedMem.UserMem[shmwait] = CLong(0)
 
   Endif
@@ -611,11 +612,10 @@ Private Sub Value_Write(vValue As Variant)
 
 End
 
-Private Function LastWriteTime_Read() As Date
+Private Function LastWriteTime_Read() As Float
 
-  Dim ltime As Float = getLastWrite() - CFloat(System.timezone)
-  Dim ldate As Date = CDate(ltime)
+  Dim ltime As Float = getLastWrite()
 
-  Return ldate
+  Return ltime
 
 End

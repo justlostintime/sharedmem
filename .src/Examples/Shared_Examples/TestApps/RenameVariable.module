@@ -2,19 +2,28 @@
 
 Public Sub main()
 
-  SharedMem.begin(120000)
+  SharedMem.beginnamed("remjunk", 120000, True)
 
   With SharedMem
     .bigBuckBunny = "this is funny"
+    .a = 100
+    .b = "getburg"
+    .g = 100000000000000000000.0
+
     Print "First created :";; Quote(.bigBuckBunny)
-    .Rename("bigbuckbunny", "bigNuckBunny")
-    Print "Renamed value :";; Quote(.bigNuckBunny)
+    Try .Rename("bigbuckbunny", "bigNuckBunny")
+    If Error Then
+      Print "An error in renaming :";; "BigBuckBunny"
+      Quit 1
+    Endif
+    Print "Renamed value :";; Quote(.bigNuckBunny);; .a;; .b;; .g
     .bigBuckBunny = "More bunny tails"
     Try .Rename("bigNuckBunny", "BigBuckBunny")
     If Error Then
       Print Error.Text
       Print "this error is correctly given"
     Endif
+    .End()
   End With
 
 End

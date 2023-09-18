@@ -19,7 +19,8 @@
 Export
 
 'Fast Unsafe
-Static Public Version As String = "3.18.1"
+Static Property Read Version As String Use $Version = "3.19.1"
+Static Public MemSigConst As Integer = 3191
 
 '' Notify every time value changes
 Public Const Repeat As Integer = -1
@@ -29,39 +30,40 @@ Static Public DataTypes As String[] = ["Binary", "Boolean", "Byte", "Short", "In
   "LongDate", "Pointer", "Variant", "Function", "Class", "NULL", "Object", "Not Array", "Type 19", "Type 20"
 "type 21", "type 22", "type 23", "type 24", "type 25"]
 
-Static Private WaitQueue As SharedMemWaitQueue                 ' we will queue wait requests here
+Static Private WaitQueue As SharedMemWaitQueue                          ' we will queue wait requests here
 
-Static Private MemoryStorage As Pointer = Null                 ' actual storage address
-Static Private MemoryRoot As Pointer = Null                    ' then link address of this block
-Static Private MemoryOffset As Long = 0                        ' adjustment for all memory operations
-Static Public MemoryAddress As Pointer = Null                  ' As Pointer = Null  ' array of memory mapped blocks
-Static Private MemoryLength As Pointer = Null                  ' As Integer = 0     ' total length of memory we allocate
-Static Private MemoryInUse As Pointer = Null                     ' track how many applications are accessing this memory block
-Static Private ChunkLength As Pointer = Null                   ' As Integer
-Static Private NextFree As Pointer = Null                      ' As Pointer         ' next free address in chunk
-Static Private EndOfBlock As Pointer = Null                    ' As Pointer         ' end of block address
-Static Private MemMutex As Pointer = Null                      ' as log             ' mutex to prevent table from corrupting
+Static Private MemoryStorage As Pointer = Null                                  ' actual storage address
+Static Private MemoryRoot As Pointer = Null                                        ' then link address of this block
+Static Private MemoryOffset As Long = 0                                               ' adjustment for all memory operations
+Static Public MemoryAddress As Pointer = Null                                    ' As Pointer = Null  ' array of memory mapped blocks
+Static Private MemoryLength As Pointer = Null                                     ' As Integer = 0     ' total length of memory we allocate
+Static Private MemoryInUse As Pointer = Null                                       ' track how many applications are accessing this memory block
+Static Private ChunkLength As Pointer = Null                                         ' As Integer
+Static Private NextFree As Pointer = Null                                                ' As Pointer         ' next free address in chunk
+Static Private EndOfBlock As Pointer = Null                                           ' As Pointer         ' end of block address
+Static Private MemMutex As Pointer = Null                                            ' as log             ' mutex to prevent table from corrupting
+Static Private MemSignature As Pointer                                                  ' Address of a database signature
 
-Static Private FreeListStart As Pointer = Null                  ' pointer to first block of free space, format pointer,length
-Static Private FreeListEnd As Pointer = Null                    ' pointer to end of free list
+Static Private FreeListStart As Pointer = Null                                        ' pointer to first block of free space, format pointer,length
+Static Private FreeListEnd As Pointer = Null                                           ' pointer to end of free list
 
-Static Private CollectionStorage As Pointer = Null              ' root of collection in shared memory
-Static Private Mutex As Pointer = Null                          ' Mutex for locking memory for update
-Static Private CollectionAddress As Pointer = Null              ' pointer to where we will store the collection in shared memory
-Static Private CollectionChangedIndicator As Pointer = Null     ' pointer to changed indicator
-Static Private CollectionEntries As Pointer = Null              ' points to the number of entries in the symbol table
-Static Public CollectMemLen As Integer = 1512000                ' the length of space reserved for storing the collection of items
-Static Private CollectionLastUpdate As Float = 0.0              ' the time the last addition of item to collection happened
+Static Private CollectionStorage As Pointer = Null                              ' root of collection in shared memory
+Static Private Mutex As Pointer = Null                                                     ' Mutex for locking memory for update
+Static Private CollectionAddress As Pointer = Null                              ' pointer to where we will store the collection in shared memory
+Static Private CollectionChangedIndicator As Pointer = Null            ' pointer to changed indicator
+Static Private CollectionEntries As Pointer = Null                                 ' points to the number of entries in the symbol table
+Static Public CollectMemLen As Integer = 1512000                              ' the length of space reserved for storing the collection of items
+Static Private CollectionLastUpdate As Float = 0.0                              ' the time the last addition of item to collection happened
 
 '' Collection of the Symbols defined in the Shared Memory Area
 Static Public SymbolTable As New Collection(gb.IgnoreCase)         ' as symbols must be defined before a new task is started
 Static Public DefaultSaveLocation As String = User.Home & "/vars/" ' the default location for creating stored variables or mem
-Static Public LastMemorySync As String = "."                       ' The Last file that was restored for memory
-Static Public NamedMemHandle As Integer = -1                       ' Handle of the named memory area
-Static Public NamedMemName As String = ""                          ' Name of the shared memory created
-Static Public NamedMemCollectionHandle As Integer = -1             ' Handle to collection area
+Static Public LastMemorySync As String = "."                                        ' The Last file that was restored for memory
+Static Public NamedMemHandle As Integer = -1                                  ' Handle of the named memory area
+Static Public NamedMemName As String = ""                                       ' Name of the shared memory created
+Static Public NamedMemCollectionHandle As Integer = -1              ' Handle to collection area
 
-Static Private InSession As Boolean = False                        ' Set to true when in Begin - end session
+Static Private InSession As Boolean = False                                           ' Set to true when in Begin - end session
 
 Static Private Const PROT_READ As Integer = &H01
 Static Private Const PROT_WRITE As Integer = &H02
@@ -77,10 +79,10 @@ Static Private Const O_EXCL As Integer = &O0200
 Static Private Const EEXIST As Integer = 11
 Static Private Const WaitTimeout As Integer = 3000000
 
-'Static Private InitSignal As Integer = 0                        ' force the init on first call of wait
-Static Private zValue As Long = 0                               ' value to be used for compare
-Static Private zPointer As Pointer = VarPtr(zValue)             ' a pointer to this zero value
-Static Private NullPointer As Pointer = 0
+'Static Private InitSignal As Integer = 0                                                    ' force the init on first call of wait
+Static Private zValue As Long = 0                                                              ' value to be used for compare
+Static Private zPointer As Pointer = VarPtr(zValue)                           ' a pointer to this zero value
+Static Private NullPointer As Pointer = 0                                                 ' A null pointer to pass when needed
 
 Static Private InitSemaphors As Boolean = True
 
@@ -92,16 +94,15 @@ Static Property Read Vars As Collection
 Static Property key As String Use $key
 
 '' This data type is not used, here to describe the format of each variable block header
-Public Struct MemHeader                   ' defines a model of the header but never used
-  NextBlock As Pointer            ' 8
-  length As Long                  ' 8
-  ShmWait As Long                 ' 8 4 pointers 32
-  ShmL01 As Long                  ' 8 4 pointers 32
-  ShmL02 As Long                  ' 8 4 pointers 32
-  ShmLo3 As Long                  ' 8 4 pointers 32
-  LastWrite As Long               ' 8
-  '28 but calc to 56
-End Struct
+Public Struct MemHeader                                                                             ' defines a model of the header but never used
+  NextBlock As Pointer                                                                                   ' 8
+  length As Long                                                                                                ' 8
+  ShmWait As Long                                                                                           ' 8 4 pointers 32
+  ShmL01 As Long                                                                                             ' 8 4 pointers 32
+  ShmL02 As Long                                                                                             ' 8 4 pointers 32
+  ShmLo3 As Long                                                                                             ' 8 4 pointers 32
+  LastWrite As Long                                                                                          ' 8
+End Struct                                                                                                           ' 28 but calc to 56
 
 ' Public Struct WaitHeader
 '     OldTime As Long
@@ -111,7 +112,8 @@ End Struct
 '     Symbol As String
 ' End Struct
 '' length of Shared memory header
-Static Public SharedMemoryControlHeader As Integer = (SizeOf(Gb.long) * 6) + (SizeOf(gb.long) * 11) + 17   'yes I know hard coded
+Static Public SharedMemoryControlHeader As Integer
+Static Public SharedMemoryControlLength As Integer = (SizeOf(Gb.long) * 6) + (SizeOf(gb.long) * 11) + 17 + 5  'yes I know hard coded
 
 'Static Public DummyHeader As Struct MemHeader
 '' Length of shared Allocation Variable block header
@@ -287,7 +289,22 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
 
   If MemoryStorage = Null Then
 
-    BlockSize += SharedMemoryControlHeader ' add the length of the header, management area
+    MemoryRoot = 0                                                                                                                   ' measured offset is always zero
+    MemoryLength = MemoryRoot + SizeOf(gb.long) + 1                                               ' As Integer = 0     ' total length of memory we allocate changed so all of these are offsets not pointers
+    ChunkLength = MemoryLength + SizeOf(gb.long) + 1                                                ' As Integer
+    MemoryInUse = ChunkLength + SizeOf(gb.Long) + 1                                                 ' counts all refs to this memory block by different applications
+    NextFree = MemoryInUse + SizeOf(gb.long) + 1                                                         ' As Pointer         ' next free address in chunk
+    EndOfBlock = NextFree + SizeOf(gb.long) + 1                                                            ' As Pointer         ' end of block address
+    FreeListStart = EndOfBlock + SizeOf(gb.long) + 1                                                     ' Pointer to the free list of  top
+    FreeListEnd = FreeListStart + SizeOf(gb.long) + 1                                                      ' Pointer to end of free list
+    MemMutex = FreeListEnd + SizeOf(gb.long) + 1                                                         ' Locking mutex for controll access to variables
+    MemSignature = MemMutex + (SizeOf(gb.long) * 8) + 8                                          ' 4 byte integer Signature of the memory database being used
+    MemoryAddress = MemSignature + SizeOf(gb.integer) + 1                                    ' pointer to the start of the memory
+
+    SharedMemoryControlHeader = MemoryAddress + SizeOf(gb.pointer) + 1          ' Total length of the segment header yes I know hard coded
+
+    BlockSize += SharedMemoryControlHeader                                                                ' add the length of the header, management area
+
     If NamedMemHandle = -1 Then
       MemoryStorage = mmap(Null, BlockSize, (PROT_READ Or PROT_WRITE), (MAP_SHARED Or MAP_ANONYMOUS), NamedMemHandle, 0) 'Or MAP_ANONYMOUS
     Else
@@ -301,21 +318,12 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
       Stop
     Endif
 
-    UserMem.RootAddress = MemoryStorage                                     ' All internal address are now offsets to addresses
-    UserMem.MemoryLength = BlockSize                                        ' The length of the memory created
-    UserMem.MemoryBlockSize = BlockSize                                     ' The size of memory block to add when out of memory
-    MemoryRoot = 0                                                          ' measured offset is always zero
-    MemoryLength = MemoryRoot + SizeOf(gb.long) + 1                         ' As Integer = 0     ' total length of memory we allocate changed so all of these are offsets not pointers
-    ChunkLength = MemoryLength + SizeOf(gb.long) + 1                        ' As Integer
-    MemoryInUse = ChunkLength + SizeOf(gb.Long) + 1                         ' counts all refs to this memory block by different applications
-    NextFree = MemoryInUse + SizeOf(gb.long) + 1                            ' As Pointer         ' next free address in chunk
-    EndOfBlock = NextFree + SizeOf(gb.long) + 1                             ' As Pointer         ' end of block address
-    FreeListStart = EndOfBlock + SizeOf(gb.long) + 1
-    FreeListEnd = FreeListStart + SizeOf(gb.long) + 1
-    MemMutex = FreeListEnd + SizeOf(gb.long) + 1
-    MemoryAddress = MemMutex + (SizeOf(gb.long) * 8) + 8
+    UserMem.RootAddress = MemoryStorage                                                                 ' All internal address are now offsets to addresses
+    UserMem.MemoryLength = BlockSize                                                                           ' The length of the memory created
+    UserMem.MemoryBlockSize = BlockSize                                                                     ' The size of memory block to add when out of memory
 
-    If IsNull(UserMem[MemoryAddress, gb.pointer]) Then                             ' memory is initialized to zero, so if empty we are primary
+
+    If IsNull(UserMem[MemoryAddress, gb.pointer]) Then                                             ' memory is initialized to zero, so if empty we are primary
       UserMem[FreeListEnd] = NullPointer
       UserMem[FreeListStart] = NullPointer
       UserMem[MemoryAddress] = MemoryAddress + SizeOf(gb.pointer) + 1
@@ -323,6 +331,9 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
       UserMem[MemoryLength] = BlockSize
       UserMem[NextFree] = UserMem[MemoryAddress]
       UserMem[EndOfBlock] = UserMem[MemoryAddress] + UserMem[MemoryLength] - 1
+      UserMem[MemSignature] = MemSigConst
+    Else If UserMem[MemSignature] <> MemSigConst
+      Error.Raise("Abort:20: Memory Database Signature is invalid Expected:" & MemSigConst & " Got:" & UserMem[MemSignature])
     End If
 
     UserMem[MemoryInUse] = If(SetInUseZero, 1, UserMem[MemoryInUse] + 1)
@@ -347,18 +358,19 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
 
     ColMem.RootAddress = CollectionStorage
     ColMem.MemoryLength = CollectMemLen
-    Mutex = 0 ' we will now use offsets CollectionStorage
-    CollectionChangedIndicator = Mutex + (SizeOf(gb.long) * 8) + 8
-    CollectionEntries = CollectionChangedIndicator + SizeOf(gb.long) + 1
-    CollectionAddress = CollectionEntries + SizeOf(gb.long) + 1
+    Mutex = 0                                                                                                                         ' we will now use offsets CollectionStorage
+    CollectionChangedIndicator = Mutex + (SizeOf(gb.long) * 8) + 8                  ' Changed content by a task
+    CollectionEntries = CollectionChangedIndicator + SizeOf(gb.long) + 1       ' Number of entries in the index of database
+    CollectionAddress = CollectionEntries + SizeOf(gb.long) + 1                         ' The address of the collection
+
     If InitSemaphors Then sem_init(ColMem.AddrReal(Mutex), 1, 1)
 
     SymbolTable.Clear()
 
-    If ColMem[CollectionEntries, gb.Long] = 0 Then  ' the memory is cleared when first allocated for security reasons
-      SaveCollection()                        ' if memory is already defined just sync here
+    If ColMem[CollectionEntries, gb.Long] = 0 Then                                                   ' the memory is cleared when first allocated for security reasons
+      SaveCollection()                                                                                                            ' if memory is already defined just sync here
     Else
-      LoadCollection()                        ' sync with current symbol table
+      LoadCollection()                                                                                                           ' sync with current symbol table
     Endif
 
   Endif
@@ -1312,7 +1324,7 @@ Static Public Sub _put(data As Variant, index As Variant, Optional subscript As 
       Error.Raise("Last write time is null" & px.SymName)
     Endif
 
-    UserMem[px.ShmLastWriteTime, gb.float] = Now + Timer
+    UserMem[px.ShmLastWriteTime, gb.float] = Now + Frac(Timer)
 
     sem_post(UserMem.AddrReal(MemMutex))
 
@@ -1324,6 +1336,7 @@ Static Public Sub _put(data As Variant, index As Variant, Optional subscript As 
 
   Else
 
+    UserMem[px.ShmLastWriteTime, gb.float] = Now + Frac(Timer)
     sem_post(UserMem.AddrReal(MemMutex))
 
   Endif
