@@ -327,7 +327,7 @@ Public Sub {Alloc}(dataLen As Long) As Pointer                       '' returns 
 
   BlkPtr = BestFit(dataLen)                                     '' get the block with the best fit for this allocation
   If BlkPtr = Null Or If BlkPtr.length < datalen Then
-    Stop
+    '    Stop
     _Print()
     Error.Raise("Out Of Variable Memory")
   Endif

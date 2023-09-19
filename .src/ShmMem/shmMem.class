@@ -163,6 +163,18 @@ Public Sub End(Optional FileName As String = "\t\t")
 
 End
 
+Public Sub {copy}(SymbolName As String, NewName As String)
+
+  vars.Copy(SymbolName, NewName)
+
+End
+
+
+Public Sub Rename(SymbolName As String, NewName As String, Optional force As Boolean = False)
+
+  vars.Rename(SymbolName, NewName, force)
+
+End
 
 Public Sub Restore(Optional Symbol As String = "", filename As String = "") As Boolean
 

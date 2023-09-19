@@ -1,0 +1,91 @@
+' Gambas class file
+
+''' This Class is a template to use when creating classes that will be stored ito the memory database
+''' Using this is relatively slow
+
+Property Value As Variant Use $Value = 0
+Property Index As Integer Use $Index = 100
+
+Property ShmSymName As String Use $SymName = ""
+Property ShmIF As ShmSymbolTable Use $ShmIF = Null
+
+Public Sub _commit()
+
+  $ShmIF[$SymName] = Me
+
+End
+
+'' Write out all the data that will be saved onto the database
+
+Public Sub _write(OutStream As Stream)
+
+  Write #outstream, $Value As Variant
+  Write #outStream, $Index As Integer
+
+End
+
+'' Read back All data for the object from the database
+Public Sub _read(InStream As Stream)
+
+  $Value = Read #InStream As Variant
+  $Index = Read #InStream As Integer
+
+End
+
+
+'' Modify this to do something useful, it right now does something almost silly
+Public Sub _compare(OtherObject As Variant) As Integer
+
+  If TypeOf(OtherObject) <> gb.object Then
+
+    If TypeOf(OtherObject) = gb.integer Then
+      If $Index = OtherObject Then Return 0
+      If $Index > OtherObject Then Return 1
+      Return -1
+    Else
+      If $Value = OtherObject Then Return 0
+      If $Value > OtherObject Then Return 1
+      Return -1
+    Endif
+
+  Else
+
+    If OtherObject.Value = $value And If OtherObject.Index = $Index Then Return 0
+    If OtherObject.value = $value Then
+      If $Index > OtherObject.Index Then Return 1
+      Return -1
+    Else
+      If $Value > OtherObject.Value Then Return 1
+      Return -1
+    Endif
+
+  Endif
+
+End
+
+
+Private Function Value_Read() As Variant
+
+  Return $Value
+
+End
+
+Private Sub Value_Write(vValue As Variant)
+
+  $Value = vValue
+  Me._commit()
+
+End
+
+Private Function Index_Read() As Integer
+
+  Return $Index
+
+End
+
+Private Sub Index_Write(Value As Integer)
+
+  $Index = Value
+  Me._commit()
+
+End

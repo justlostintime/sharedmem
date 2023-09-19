@@ -114,6 +114,7 @@ Public Sub _new(Optional SharedLength As Long = DefaultLength, SharedName As Str
   Else
     MemoryAddress = CreateNamedMem(SharedName, MemoryLength, cleanup)
   Endif
+
   If NewMemoryBlock Then
     SemLock = MemoryAddress
     If sem_init(SemLock, 1, 0) Then
@@ -124,7 +125,7 @@ Public Sub _new(Optional SharedLength As Long = DefaultLength, SharedName As Str
       Endif
       Error.Raise("Failed to create Lock for :" & Name & System.Error & " : " & String@(strerror(System.Error)))
     Endif
-    BlockInfo = MemoryAddress                      'SetBlockInfo(MemoryAddress, MemoryAddress, 0)
+    BlockInfo = MemoryAddress                                                        'SetBlockInfo(MemoryAddress, MemoryAddress, 0)
     BlockInfo.InUseCounter = 1
     BlockInfo.MemoryLength = MemoryLength
     BlockInfo.MemoryBlockSize = SharedLength
@@ -141,14 +142,14 @@ Public Sub _new(Optional SharedLength As Long = DefaultLength, SharedName As Str
   Else
     SemLock = MemoryAddress
     sem_wait(SemLock)
-    BlockInfo = MemoryAddress                         'SetBlockInfo(MemoryAddress, MemoryAddress, 0)
+    BlockInfo = MemoryAddress                                                           'SetBlockInfo(MemoryAddress, MemoryAddress, 0)
     Inc BlockInfo.InUseCounter
     MemoryBlockSize = BlockInfo.MemoryBlockSize
     DataAddress = SemLock + BlockInfo.DataAddress
     DataLength = BlockInfo.DataLength
     LockTimeOut = BlockInfo.LockTimeOut
     If MemoryLength <> BlockInfo.MemoryLength Then
-      RemapNamed(BlockInfo.MemoryLength)                 '' called when the requested length does not match the actual length
+      RemapNamed(BlockInfo.MemoryLength)                               '' called when the requested length does not match the actual length
       MemoryLength = BlockInfo.MemoryLength
     Endif
     sem_post(SemLock)
@@ -222,6 +223,7 @@ Public Sub CreateNamedMem(Optional MemName As String = User.name & Application.n
     shm_unlink(MemName)
     Error.Raise("Unable to ftruncate memory" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error)))
   Endif
+
   ' Print "Do real mapping of allocated storage"
 
   Return MapMemory(MemSize)

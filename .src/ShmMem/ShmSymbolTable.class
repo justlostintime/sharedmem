@@ -361,6 +361,43 @@ Public Sub GetSymIndex(Symbol As String) As Pointer
 
 End
 
+'' Copy Value to new variable
+'' Creates a copy of the variables value and then
+'' Creates a new variable or assigns the value of the given name
+Public Sub {Copy}(SymbolName As String, NewName As String)
+
+  If Not Me.Exist(SymbolName) Then
+    Error.Raise("ShmMem :22:Copy Unknown symbol:" & SymbolName)
+  Endif
+
+  Dim value As Variant = Me._get(SymbolName)
+  If TypeOf(value) = gb.object Then
+    value = value.copy()
+  Endif
+  Me._put(value, NewName)
+
+End
+
+
+'' Rename the symbol to a new name
+'' allow to force rename to new name even if exists
+Public Sub Rename(SymbolName As String, NewName As String, Optional force As Boolean = False)
+
+  If Not Me.Exist(SymbolName) Then
+    Error.Raise("ShmMem :21:Rename Unknown symbol:" & SymbolName)
+  Endif
+  If Me.Exist(NewName) Then
+    If force Then
+      Me.Remove(NewName)
+    Else
+      Error.Raise("ShmMem:22:Rename New Name already exists:" & NewName)
+    Endif
+  Endif
+  Dim value As Variant = Me._get(SymbolName)
+  Me.Add(NewName, Value)
+  Me.remove(SymbolName)
+
+End
 
 '' Return the slot number insert the name and change the lastupdated time
 '' Create a basic variable storage to go along with this symbol
@@ -374,6 +411,12 @@ Public Sub Add(symName As String, value As Variant) As Long
   Symname = Lower(symname)
 
   Dim HashValue As Pointer = Hash(symName)
+
+  If TypeOf(value) = gb.object Then
+    If Object.Class(value).Exist("ShmSymName") Then value.ShmSymName = SymName
+    If Object.Class(Value).Exist("ShmIF") Then value.ShmIF = Me
+  Endif
+
 
   If $bDebug Then Print Application.id, "Add SymTblmem.exclusive " & SymName
   SymTblMem.Exclusive()
@@ -437,6 +480,8 @@ End
 
 Public Sub _get(SymName As String) As Variant
 
+  Dim Value As Variant
+
   UpdateCache()
 
   If Not SymbolCache.exist(SymName) Then
@@ -447,9 +492,15 @@ Public Sub _get(SymName As String) As Variant
 
   If $bDebug Then Print Application.id, "_get ShmSymbolTable VarMem.Lock " & SymName
   VarMem.Lock()
-  Dim value As Variant = VarMem[SymMem.Table[index].Address]
+  value = VarMem[SymMem.Table[index].Address]
   VarMem.Unlock()
   If $bDebug Then Print Application.id, "_get ShmSymbolTable Varmem.UnLock " & SymName
+
+  If TypeOf(value) = gb.object Then
+    If Object.Class(value).Exist("ShmSymName") Then value.ShmSymName = SymName
+    If Object.Class(Value).Exist("ShmIF") Then value.ShmIF = Me
+  Endif
+
   Return value
 
 End
