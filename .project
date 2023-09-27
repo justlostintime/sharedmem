@@ -1,6 +1,6 @@
 # Gambas Project File 3.0
 Title=Shared Memory object - SHMV2.1 and SHaredMem V1.2 both interfaces
-Startup=NewCopy
+Startup=TestShmAllocAndFree
 Version=3.19.1
 Component=gb.image
 Component=gb.debug
@@ -21,7 +21,7 @@ Url=www.westwoodsvcs.com
 License=General Public License
 Prefix=1
 PackageName=gambas3-gb-sharedmem-3.19.1
-PackageVersion=3
+PackageVersion=4
 CreateEachDirectory=1
 RuntimeVersion="3.17"
 Packager=1

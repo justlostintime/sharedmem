@@ -13,17 +13,19 @@ Public Sub aStringGetsbigger()
     Dim starttime As Float = Timer
     For i As Integer = 0 To 100000
       .["myString"] = .["MyString"] & "++ "
+      Dim LastWR As Integer = mystring.LastWriteLength
+      Dim LenWR As Integer = .mystring.len
       If MyString.storageLength < MyString.dataLength Then
         Assert.Fail("invalid memory allocation for string")
-      Else If mystring.LastWriteLength <> .mystring.len Then
+      Else If mystring.LastWriteLength <> .mystring.len + 1 Then  ' need to account for the write of the null terminator byte
         Assert.Fail("Invalid write length/possible data corruption")
       Endif
     Next
-    Assert.Equals(MyString.LastWriteLength, .mystring.len, "Grow String Time=" & Str(Timer - starttime) & " : " & .mystring.len & "," & .len("myString") & "," & Len(.mystring) & "," & mystring.LastWriteLength & "," & MyString.storageLength)
+    Assert.Equals(MyString.LastWriteLength, .mystring.len + 1, "Grow String Time=" & Str(Timer - starttime) & " : " & .mystring.len & "," & .len("myString") & "," & Len(.mystring) & "," & mystring.LastWriteLength & "," & MyString.storageLength)
     Dim oldstoragelen As Integer = MyString.storageLength
     .MyString = "Hello"
     Assert.equals(oldStorageLen, MyString.storageLength, "Grow Shrink" & " : " & .mystring.len & "," & .len("myString") & "," & Len(.mystring) & "," & mystring.LastWriteLength & "," & MyString.storageLength)
-    Assert.equals(MyString.LastWriteLength, .mystring.len, "Verify that variable size shrinks")
+    Assert.equals(MyString.LastWriteLength, .mystring.len + 1, "Verify that variable size shrinks")
     '._print()
 
 

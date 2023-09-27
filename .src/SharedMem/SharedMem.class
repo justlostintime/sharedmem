@@ -65,6 +65,7 @@ Static Public NamedMemCollectionHandle As Integer = -1              ' Handle to 
 
 Static Private InSession As Boolean = False                                           ' Set to true when in Begin - end session
 
+'' This section is imported from the shared memory map h file
 Static Private Const PROT_READ As Integer = &H01
 Static Private Const PROT_WRITE As Integer = &H02
 Static Private Const MAP_SHARED As Integer = &H01
@@ -93,7 +94,7 @@ Static Property Read Count As Long
 Static Property Read Vars As Collection
 Static Property key As String Use $key
 
-'' This data type is not used, here to describe the format of each variable block header
+'' This data type is not used, it is here to describe the format of each variable block header
 Public Struct MemHeader                                                                             ' defines a model of the header but never used
   NextBlock As Pointer                                                                                   ' 8
   length As Long                                                                                                ' 8
@@ -111,6 +112,7 @@ End Struct                                                                      
 '     Method As String
 '     Symbol As String
 ' End Struct
+
 '' length of Shared memory header
 Static Public SharedMemoryControlHeader As Integer
 Static Public SharedMemoryControlLength As Integer = (SizeOf(Gb.long) * 6) + (SizeOf(gb.long) * 11) + 17 + 5  'yes I know hard coded
@@ -669,8 +671,8 @@ Static Public Sub End(Optional FileName As String = "\t\t") ' free all the block
 
   Dec UserMem[MemoryInUse]                                          ' free from our point of view
   Dim InUseFlag As Integer = UserMem[MemoryInUse]
-
-  munmap(MemoryStorage, UserMem[MemoryLength])
+  Dim releaseLen As Integer = UserMem[MemoryLength]
+  munmap(MemoryStorage, releaseLen)
   munmap(CollectionStorage, CollectMemLen)
 
   MemoryStorage = Null
@@ -1013,10 +1015,12 @@ Static Public Sub ListFreeBlocks() As Pointer[]
     mPointer = If(IsNull(UserMem[MPointer]), Null, UserMem[mPointer])
   Wend
 
+  lPointers.Add(UserMem[NextFree])
+
   Return lPointers
 
 End
-'' Returns a list of all memory block allocated from the Shared Memory area
+'' Returns a list of all memory blocks allocated from the Shared Memory area
 
 Static Public Sub ListAllBlocks() As Pointer[]
 
@@ -1035,7 +1039,7 @@ Static Public Sub ListAllBlocks() As Pointer[]
 
 End
 
-'' returns a list of all sizes of the free block in the free block list
+'' returns a list of all sizes of the free blocksfreelen) in the free block list
 Static Public Sub ListFreeBlockLen() As Integer[]
 
   Dim lLengths As Integer[] = New Integer[]
@@ -1047,13 +1051,13 @@ Static Public Sub ListFreeBlockLen() As Integer[]
     lLengths.Add(UserMem[mPointer + LenOffset])
     mPointer = If(IsNull(UserMem[mPointer]), Null, UserMem[mPointer])
   Wend
-
+  lLengths.Add(UserMem[nextFree + LenOffset])
   Return lLengths
 
 End
 
 
-'' returns a block of the side request from the free list if available
+'' returns a block of the size requested from the free list if available
 Static Public Sub ShmFreeChk(DataSize As Integer) As Pointer
 
   Dim FPointer As Pointer = Null
@@ -1629,9 +1633,11 @@ Static Public Sub _print(Optional ShortForm As Boolean = False)
 
   Print "Dump Shared Memory Begin *********************************************************************************************"
   Print "Start = "; UserMem[MemoryAddress], " End = "; CLong(UserMem[EndOfBlock]), "Length = "; UserMem[MemoryLength]
-  Print "Allocation Starts at :"; CLong(UserMem[MemoryAddress]), "Next free block: "; CLong(UserMem[NextFree]); " Total Allocated bytes = "; CInt(UserMem[NextFree] - UserMem[MemoryAddress])
-  Print "Free list Start :"; If(UserMem[FreeListStart, gb.pointer], UserMem[FreeListStart], "NULL"),
-    Print "Free List End :"; If(UserMem[FreeListEnd, gb.pointer], UserMem[FreeListEnd], "NULL")
+  Print "Allocation Starts at :"; CLong(UserMem[MemoryAddress]), "Next free block: "; CLong(UserMem[NextFree]);;
+  Print "Total Allocated bytes = "; CInt(UserMem[NextFree] - UserMem[MemoryAddress]);;
+  Print "Free Bytes";; CLong(UserMem[MemoryLength] - CInt(UserMem[NextFree]))
+  Print "Free list Start :"; If(UserMem[FreeListStart, gb.pointer], UserMem[FreeListStart, gb.pointer], "NULL"),
+    Print "Free List End :"; If(UserMem[FreeListEnd, gb.pointer], UserMem[FreeListEnd, gb.pointer], "NULL")
   If UserMem[MemoryAddress] <> UserMem[NextFree] Then
     Print "Allocated block list:"
     blkPointer = UserMem[MemoryAddress]
@@ -1703,15 +1709,15 @@ End
 '' this may be called.
 Static Public Sub _write(mFile As File) As Boolean
 
-  Dim symbol As SharedMemSymbol
+  Dim wsymbol As SharedMemSymbol
   'Dim SrcPointer As Pointer
 
   Write #mFile, UserMem[MemoryLength] As Integer      ' total length of allocated memory
   Write #mFile, UserMem[ChunkLength] As Integer       ' length of each allocated chunk
   Write #mFile, SymbolTable.length As Integer         ' number of entries in the symbol table
 
-  For Each symbol In SymbolTable
-    symbol._write(mFile, True)                        ' write the data as well as the parameters
+  For Each wsymbol In SymbolTable
+    wsymbol._write(mFile, True)                        ' write the data as well as the parameters
   Next
 
   Return True

@@ -1,6 +1,6 @@
 [TestSuites]
 Count=2
-TestWith=2
+TestWith=1
 
 [TestSuites/1]
 Name="NewShm"

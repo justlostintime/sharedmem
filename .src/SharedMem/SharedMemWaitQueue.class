@@ -172,7 +172,7 @@ Public Sub dispatch()
 
 End
 
-'' Place an entry into the list of applications waiting to be notifies of a change in a variable
+'' Place an entry into the list of applications waiting to be notified of a change in a variable
 Public Sub NotifyChange(Symbol As String, NotifyObject As Variant, Optional iTimeOut As Long = 0, FunctionName As String = "") As Boolean
 
   Dim FuncName As String = FunctionName
