@@ -19,7 +19,7 @@
 Export
 
 'Fast Unsafe
-Static Property Read Version As String Use $Version = "3.19.1"
+Static Property Read Version As String Use $Version = "3.19.1.5"
 Static Public MemSigConst As Integer = 3191
 
 '' Notify every time value changes
