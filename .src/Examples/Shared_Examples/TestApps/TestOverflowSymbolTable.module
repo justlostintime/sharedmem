@@ -1,0 +1,15 @@
+' Gambas module file
+
+Public Sub main()
+
+  Dim i As Integer
+
+  With sharedmem
+    .begin(20000)
+    For i = 0 To 1000
+      .["Var" & CStr(i)] = i
+    Next
+    .End()
+  End With
+
+End

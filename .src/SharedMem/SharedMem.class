@@ -19,7 +19,7 @@
 Export
 
 'Fast Unsafe
-Static Property Read Version As String Use $Version = "3.19.1"
+Static Property Read Version As String Use $Version = "3.19.1.5"
 Static Public MemSigConst As Integer = 3191
 
 '' Notify every time value changes
@@ -194,6 +194,10 @@ Static Public Sub _init()
 
 End
 
+Public Const MREMAP_MAYMOVE As Integer = 1
+Public Const MREMAP_FIXED As Integer = 2
+
+
 Static Private Sub AllocChunk() As Pointer
 
   Dim p As Pointer
@@ -202,8 +206,10 @@ Static Private Sub AllocChunk() As Pointer
     Error.Raise("Unable to allocate new memory Block, Can not move as other pid's ref to this shared memory")
   Endif
 
-  P = mremap(UserMem.RootAddress, UserMem.MemoryLength, (UserMem.MemoryLength + UserMem.MemoryBlockSize), 1)
-
+  ' P = mremap(UserMem.RootAddress, UserMem.MemoryLength, (UserMem.MemoryLength + UserMem.MemoryBlockSize), MREMAP_MAYMOVE)
+  If InitSemaphors Then sem_destroy(usermem.AddrReal(MemMutex))
+  P = mremap(UserMem.RootAddress, UserMem.MemoryLength, (UserMem.MemoryLength + UserMem.MemoryBlockSize), MREMAP_MAYMOVE)
+  Print "Old Map ="; Hex(UserMem.RootAddress);; "New Map = ";; Hex(p)
   If p <> UserMem.RootAddress Then
     If p = -1 Then
       Error.Raise("Remap error new =" & Str(p) & " system error =" & Str(System.Error))
@@ -216,8 +222,11 @@ Static Private Sub AllocChunk() As Pointer
   Else
     UserMem.MemoryLength = (UserMem.MemoryLength + UserMem.MemoryBlockSize)
   Endif
-
-  UserMem[EndOfBlock] = UserMem[MemoryAddress] + UserMem[MemoryLength] - 1
+  'UserMem[EndOfBlock] = UserMem[MemoryAddress] + UserMem[MemoryLength] - 1
+  Dim oldend As Long = UserMem[EndOfBlock]
+  UserMem[EndOfBlock] = UserMem[MemoryLength] - 1 - SharedMemoryControlHeader
+  Print "Old end Block :";; oldend;; "New end Block :";; UserMem[EndOfBlock]
+  If InitSemaphors Then sem_init(usermem.AddrReal(MemMutex), 1, 1)
   _print()
 
 Catch
@@ -289,6 +298,11 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
     Endif
   Endif
 
+  ' block size must be a multiple of 4096
+  If blocksize % 4096 <> 0 Then
+    blocksize = ((blocksize \ 4096) * 4096) + 4096
+  Endif
+
   If MemoryStorage = Null Then
 
     MemoryRoot = 0                                                                                                                   ' measured offset is always zero
@@ -305,12 +319,12 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
 
     SharedMemoryControlHeader = MemoryAddress + SizeOf(gb.pointer) + 1          ' Total length of the segment header yes I know hard coded
 
-    BlockSize += SharedMemoryControlHeader                                                                ' add the length of the header, management area
+    'BlockSize += 4096  ' SharedMemoryControlHeader             add 4096 for basic header           ' add the length of the header, management area
 
     If NamedMemHandle = -1 Then
-      MemoryStorage = mmap(Null, BlockSize, (PROT_READ Or PROT_WRITE), (MAP_SHARED Or MAP_ANONYMOUS), NamedMemHandle, 0) 'Or MAP_ANONYMOUS
+      MemoryStorage = mmap(Null, BlockSize + 4096, (PROT_READ Or PROT_WRITE), (MAP_SHARED Or MAP_ANONYMOUS), NamedMemHandle, 0) 'Or MAP_ANONYMOUS
     Else
-      MemoryStorage = mmap(Null, BlockSize, (PROT_READ Or PROT_WRITE), MAP_SHARED, NamedMemHandle, 0) 'Or MAP_ANONYMOUS
+      MemoryStorage = mmap(Null, BlockSize + 4096, (PROT_READ Or PROT_WRITE), MAP_SHARED, NamedMemHandle, 0) 'Or MAP_ANONYMOUS
       setInUseZero = False
     Endif
 
@@ -321,7 +335,7 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
     Endif
 
     UserMem.RootAddress = MemoryStorage                                                                 ' All internal address are now offsets to addresses
-    UserMem.MemoryLength = BlockSize                                                                           ' The length of the memory created
+    UserMem.MemoryLength = BlockSize + 4096                                                             ' The length of the memory created
     UserMem.MemoryBlockSize = BlockSize                                                                     ' The size of memory block to add when out of memory
 
 
@@ -330,9 +344,10 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
       UserMem[FreeListStart] = NullPointer
       UserMem[MemoryAddress] = MemoryAddress + SizeOf(gb.pointer) + 1
       UserMem[ChunkLength] = BlockSize
-      UserMem[MemoryLength] = BlockSize
+      UserMem[MemoryLength] = BlockSize + 4096
       UserMem[NextFree] = UserMem[MemoryAddress]
-      UserMem[EndOfBlock] = UserMem[MemoryAddress] + UserMem[MemoryLength] - 1
+      ' UserMem[EndOfBlock] = UserMem[MemoryAddress] + (UserMem[MemoryLength] - 1 - SharedMemoryControlHeader)
+      UserMem[EndOfBlock] = UserMem[MemoryLength] - 1 - SharedMemoryControlHeader
       UserMem[MemSignature] = MemSigConst
     Else If UserMem[MemSignature] <> MemSigConst
       Error.Raise("Abort:20: Memory Database Signature is invalid Expected:" & MemSigConst & " Got:" & UserMem[MemSignature])
@@ -886,6 +901,7 @@ Static Public Sub ShmAlloc(MemSize As Integer) As Pointer
     Return p
   Endif
 
+RetryAfterAlloc:
   If usermem[Nextfree] + MemSize <= usermem[EndOfBlock] Then
 
     p = usermem[NextFree]
@@ -900,8 +916,7 @@ Static Public Sub ShmAlloc(MemSize As Integer) As Pointer
   Else
 
     AllocChunk()
-
-    Return ShmAlloc(MemSize)
+    Goto RetryAfterAlloc
 
   Endif
 
@@ -1346,6 +1361,7 @@ Static Public Sub _put(data As Variant, index As Variant, Optional subscript As 
   Endif
 
 Catch
+  Dim sMessage As String = Error.text & "-" & Error.where
   Dim iCount As Integer
   If Not InSession Then
     Error.Propagate()
@@ -1359,12 +1375,14 @@ End
 
 
 
-'' Saved the collection to a special a special shared memory block\
+'' Saved the collection to a special shared memory block\
 '' A flag is set to let other tasks know that the symbol table has been updated
 Static Private Sub SaveCollection()
 
   Dim MFile As File
   Dim counter As Integer = 0
+  Dim TotalLength As Long = 0
+  Dim TotalEntries As Long = 0
 
   While sem_trywait(ColMem.AddrReal(Mutex))
     Inc counter
@@ -1379,7 +1397,14 @@ Static Private Sub SaveCollection()
   mFile = Memory ColMem.AddrReal(CollectionAddress) For Write
 
   For Each ISym As SharedMemSymbol In SymbolTable
+    Inc TotalEntries
+    TotalLength += ISym.Length
+    If TotalLength > Colmem.MemoryLength Then
+      Error.Raise("SharedMem out of Symbol index space :" & Str(TotalEntries))
+    Endif
+
     ISym._write(MFile)
+
   Next
 
   Close MFile
@@ -1647,7 +1672,10 @@ Static Public Sub _print(Optional ShortForm As Boolean = False)
       Print "Length = "; Format(UserMem[blkPointer + lenOffset], "##########0");;
       Print "LastUsed = "; Format(UserMem[blkPointer + LastWriteOffset, gb.float], "##########0.00000");;
       Print "DataType = "; Left(DataTypes[Byte@(UserMem.AddrReal(blkPointer + DataOffset))] & Space(10), 10);;
-      Print "Var = "; GetVarByAddress(blkpointer)
+      Print "Var = "; GetVarByAddress(blkpointer);;
+      If SharedMem.Exist(GetVarByAddress(blkpointer)) Then
+        Print " Value = "; SharedMem[GetVarByAddress(blkpointer)]
+      Endif
       'If(Byte@(UserMem.AddrReal(blkPointer + DataOffset)) > DataTypes.max, Byte@(UserMem.AddrReal(blkPointer + DataOffset)), DataTypes[Byte@(UserMem.AddrReal(blkPointer + DataOffset))])
 
       blkPointer += UserMem[blkPointer + LenOffset]

@@ -91,6 +91,8 @@ End
 Public Sub SetType(Mempointer As Pointer, rdType As Integer)
 
   Byte@($RootAddress + MemPointer) = rdType
+Catch
+  Error.Propagate()
 
 End
 
@@ -203,7 +205,6 @@ Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integ
       Close mFile
 
   End Select
-
 
 End
 

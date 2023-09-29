@@ -45,6 +45,8 @@ Public UnsupportedList As String[] = ["File", "Stream"]
 
 Property Value As Variant
 Property Read LastWriteTime As Float
+Property Read Length As Integer
+
 
 Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "libc:6"
 ' Extern rWrite(handle As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "write"
@@ -194,6 +196,9 @@ Public Sub SetSymbol(Sname As String, data As Variant, Optional extrastorage As 
 
   Return True
 
+Catch
+  Error.Propagate()
+
 End
 
 
@@ -322,7 +327,8 @@ Public Sub AllocStorage(iLength As Integer) As Boolean
   Endif
 
 Catch
-  Error.Raise("AllocStorage set error", Error.text, Error.where)
+  Dim emsg As String = "AllocStorage set error : " & Error.text & "-" & Error.where
+  Error.Raise(emsg)
   Stop
 
 End
@@ -617,5 +623,28 @@ Private Function LastWriteTime_Read() As Float
   Dim ltime As Float = getLastWrite()
 
   Return ltime
+
+End
+
+Private Function Length_Read() As Integer
+
+  Dim blklen As Integer = 0
+
+  blklen += SymName.len + 1
+  blklen += SizeOf(gb.integer) + 1   ' SymType As Integer
+  blklen += SizeOf(gb.integer) + 1  ' SpecialType As Integer
+  blklen += ClassName.Len + 1
+  blklen += ObjectName.Len + 1
+  blklen += SizeOf(gb.integer) + 1   'ElementCount As Integer
+  blklen += SizeOf(gb.integer) + 1  'ElementType As Integer
+  blklen += SizeOf(gb.pointer) + 1  'RootAddress As Pointer
+  blklen += SizeOf(gb.pointer) + 1  'ataAddress As Pointer
+  blklen += SizeOf(gb.pointer) + 1  'ShmWait As Pointer
+  blklen += SizeOf(gb.integer) + 1  'storageLength As Integer
+  blklen += SizeOf(gb.integer) + 1  'dataLength As Integer
+  blklen += SizeOf(gb.integer) + 1  'LastWriteLength As Integer
+  blklen += SizeOf(gb.pointer) + 1 'ShmLastWriteTime As Pointer
+
+  Return blklen
 
 End
