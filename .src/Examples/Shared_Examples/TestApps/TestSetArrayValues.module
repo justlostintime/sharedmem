@@ -1,0 +1,23 @@
+' Gambas module file
+
+Public Sub main()
+
+  SharedMem.beginnamed("remjunk", 120000, True)
+
+  With SharedMem
+    .a = ["a", "b", "c", "d"]
+    .b = [1, 2, 3, 4, 5, 6, 7, 8]
+    .a[1] = "big"
+    Print .a[0], .a[1], .a[2]
+    Try .["a", -1] = "bye"
+    If Error Then Print Error.Text
+    .["a", 2] = "blast past"
+    .["b", 4] = 6000
+    Print .a.join(",")
+    Print .B[0], .B[1], .B[2], .B[3], .B[4], .B[5]
+    .End()
+  End With
+
+End
+
+

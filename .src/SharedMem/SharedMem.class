@@ -1172,7 +1172,7 @@ End
 '' forms are \
 '' Sharedmem["MyVar"] or for arrays SharedMem["MyVar",6] <- includes the array index\
 '' The Data Type of the variable is defined by the first use of the variable
-Static Public Sub _get(index As String, Optional subscript As Integer = -1) As Variant
+Static Public Sub _get(index As String, ...) As Variant
 
   Dim px As SharedMemSymbol
   Dim rx As Variant
@@ -1205,11 +1205,13 @@ Static Public Sub _get(index As String, Optional subscript As Integer = -1) As V
 
   If px.SpecialType > ShmTypeAry Then        ' type 1 is an array, type 2 is a buffer, type 3 is a element in a buffer
 
-    rx = px.SpecialObject[If(subscript < 0, 0, subscript)]
+    rx = px.SpecialObject[If(Param.Count = 0, 0, Param[0])]
 
   Else
-    If subscript >= 0 Then
-      rx = px.ShmReadSub(SubScript)
+    If Param.count > 0 Then
+      Dim params As Variant[] = Param.all
+      rx = Object.Call(px, "ShmReadSub", params)
+      ' rx = px.ShmReadSub(Param[0])
     Else
       rx = px.ShmRead()
     Endif
@@ -1276,7 +1278,7 @@ End
 '' Set the value of a shared memory variable\
 '' Forms are\
 '' x = SharedMem["MyVar"] or x = SharedMem["MyVar",6] <- index into an array type value
-Static Public Sub _put(data As Variant, index As Variant, Optional subscript As Integer = -1)
+Static Public Sub _put(data As Variant, index As Variant, ...)
 
   Dim px As SharedMemSymbol
   Dim waitcount As Integer = 0
@@ -1292,7 +1294,7 @@ Static Public Sub _put(data As Variant, index As Variant, Optional subscript As 
     px = index
   Endif
 
-  If Not IsNull(px) And Subscript < 0 And If px.symtype <> TypeOf(data)
+  If Not IsNull(px) And Param.count = 0 And If px.symtype <> TypeOf(data)
     If Not px._waiting() Then 'allow To change the type Of data stored by a symbol
       Me.free(index)
       px = Null
@@ -1314,14 +1316,18 @@ Static Public Sub _put(data As Variant, index As Variant, Optional subscript As 
 
   If Not IsNull(px) Then
 
-    If px.symtype = gb.object And If subscript < 0 Then
+    If px.symtype = gb.object And If Param.count = 0 Then
       px.updateobjectinfo(data)
     Endif
 
     If px.SpecialType > ShmTypeAry Then
-      px.SpecialObject[If(subscript < 0, 0, subscript)] = data
-    Else If subscript >= 0 Then
-      px.ShmWriteSub(data, subscript)
+      px.SpecialObject[If(Param.Count = 0, 0, Param[0])] = data
+    Else If Param.count > 0 Then
+      Dim params As New Variant[]
+      params.Add(data)
+      params.Insert(Param.all)
+      Object.Call(px, "ShmWriteSub", params)
+      'px.ShmWriteSub(data, subscript)
     Else
       px.ShmWrite(data)
       If px.symtype = gb.string Or px.symtype = gb.object Then
@@ -1369,7 +1375,7 @@ Catch
 
   sem_getvalue(UserMem.AddrReal(MemMutex), VarPtr(iCount))
   If iCount = 0 Then sem_post(UserMem.AddrReal(MemMutex))
-  Print #File.err, "Sharedmem._put Error:";; Error.text
+  Print #File.err, "Sharedmem._put Error:";; sMessage
 
 End
 

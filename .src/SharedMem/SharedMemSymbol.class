@@ -355,29 +355,29 @@ Catch
 
 End
 
-Public Sub ShmReadSub(subscript As Integer) As Variant
+Public Sub ShmReadSub(...) As Variant
 
   If SpecialType = 1 Then
-    If subscript < ElementCount
+    If param.count > 0 And If Param[0] >= 0 And If Param[0] < ElementCount
       If Not ((ElementType = gb.object) Or (ElementType = gb.string))
-        Dim ElementAddress As Pointer = ShmElementAddress(subscript)
+        Dim ElementAddress As Pointer = ShmElementAddress(Param[0])
         Return SharedMem.UserMem[ElementAddress, ElementType, True]
       Else
         Select Case ElementType
           Case gb.String
             Dim MyString As String[] = ShmRead()
-            Return MyString[subscript]
+            Return MyString[Param[0]]
           Case gb.object
             Dim MyObject As Object[] = ShmRead()
-            Return MyObject[subscript]
+            Return MyObject[Param[0]]
         End Select
         Error.Raise("Unsupported data type for subscript " & SymName)
       Endif
     Else
-      Error.Raise("SubScript out of range " & SymName)
+      Error.Raise("SubScript out of range for" & Quote(SymName) & "[MAX=" & Str(ElementCount - 1) & "]")
     Endif
   Else
-    Error.Raise("Not supported array type in " & SymName)
+    Error.Raise("Unsupported array type in " & SymName)
   Endif
 
 
@@ -415,24 +415,24 @@ Catch
 
 End
 
-Public Sub ShmWriteSub(data As Variant, subscript As Integer)
+Public Sub ShmWriteSub(data As Variant, ...)
 
   If SpecialType = 1 Then
-    If subscript < ElementCount
+    If Param.count > 0 And If Param[0] >= 0 And If Param[0] < ElementCount
       'If ElementType = TypeOf(data)
       If Not ((ElementType = gb.object) Or (ElementType = gb.string)) Then
-        SharedMem.UserMem[ShmElementAddress(subscript), ElementType, True] = data
+        SharedMem.UserMem[ShmElementAddress(Param[0]), ElementType, True] = data
       Else
         Select Case ElementType
           Case gb.String
             Dim MyString As String[] = ShmRead()
-            MyString[subscript] = data
+            MyString[Param[0]] = data
             ShmWrite(MyString)
             ElementCount = MyString.Count
             Return
           Case gb.object
             Dim MyObject As Object[] = ShmRead()
-            MyObject[subscript] = data
+            MyObject[Param[0]] = data
             ShmWrite(MyObject)
             ElementCount = MyObject.Count
             Return
@@ -443,10 +443,10 @@ Public Sub ShmWriteSub(data As Variant, subscript As Integer)
       ' Error.Raise("Element Data type mismatch " & SymName)
       'Endif
     Else
-      Error.Raise("SubScript out of range " & SymName)
+      Error.Raise("SubScript out of range  for " & Quote(SymName) & "[MAX=" & Str(ElementCount - 1) & "]")
     Endif
   Else
-    Error.Raise("Not supported array type in " & SymName)
+    Error.Raise("Unsupported array type in " & SymName)
   Endif
 
 End
