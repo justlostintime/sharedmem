@@ -7,12 +7,17 @@ Public Sub main()
   With SharedMem
     .a = ["a", "b", "c", "d"]
     .b = [1, 2, 3, 4, 5, 6, 7, 8]
+    .c = ["this": 1, "that": 500, "them": "most", "post": "mull"]
+    .d = "this is a string to be slices"
+
     .a[1] = "big"
     Print .a[0], .a[1], .a[2]
     Try .["a", -1] = "bye"
     If Error Then Print Error.Text
     .["a", 2] = "blast past"
     .["b", 4] = 6000
+    .["c", "that"] = "not numbers"
+    Print .["d", 2]
     Print .a.join(",")
     Print .B[0], .B[1], .B[2], .B[3], .B[4], .B[5]
     .End()

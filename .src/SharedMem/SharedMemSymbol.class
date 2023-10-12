@@ -358,7 +358,7 @@ End
 Public Sub ShmReadSub(...) As Variant
 
   If SpecialType = 1 Then
-    If param.count > 0 And If Param[0] >= 0 And If Param[0] < ElementCount
+    If param.count > 0
       If Not ((ElementType = gb.object) Or (ElementType = gb.string))
         Dim ElementAddress As Pointer = ShmElementAddress(Param[0])
         Return SharedMem.UserMem[ElementAddress, ElementType, True]
@@ -376,6 +376,9 @@ Public Sub ShmReadSub(...) As Variant
     Else
       Error.Raise("SubScript out of range for" & Quote(SymName) & "[MAX=" & Str(ElementCount - 1) & "]")
     Endif
+  Else If SpecialType = 0 Then
+    Dim MyObjectSingle As Variant = ShmRead()
+    Return MyObjectSingle[Param[0]]
   Else
     Error.Raise("Unsupported array type in " & SymName)
   Endif
@@ -418,7 +421,7 @@ End
 Public Sub ShmWriteSub(data As Variant, ...)
 
   If SpecialType = 1 Then
-    If Param.count > 0 And If Param[0] >= 0 And If Param[0] < ElementCount
+    If Param.count > 0                ' we have some subscripts
       'If ElementType = TypeOf(data)
       If Not ((ElementType = gb.object) Or (ElementType = gb.string)) Then
         SharedMem.UserMem[ShmElementAddress(Param[0]), ElementType, True] = data
@@ -445,6 +448,11 @@ Public Sub ShmWriteSub(data As Variant, ...)
     Else
       Error.Raise("SubScript out of range  for " & Quote(SymName) & "[MAX=" & Str(ElementCount - 1) & "]")
     Endif
+  Else If specialtype = 0 Then
+    Dim MyObjectSingle As Variant = ShmRead()
+    MyObjectSingle[Param[0]] = data
+    ShmWrite(MyObjectSingle)
+    ElementCount = MyObjectSingle.Count
   Else
     Error.Raise("Unsupported array type in " & SymName)
   Endif
