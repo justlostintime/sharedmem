@@ -364,12 +364,9 @@ Public Sub ShmReadSub(...) As Variant
         Return SharedMem.UserMem[ElementAddress, ElementType, True]
       Else
         Select Case ElementType
-          Case gb.String
-            Dim MyString As String[] = ShmRead()
-            Return MyString[Param[0]]
-          Case gb.object
-            Dim MyObject As Object[] = ShmRead()
-            Return MyObject[Param[0]]
+          Case gb.String, gb.object
+            Dim MyValue As Variant = ShmRead()
+            Return MyValue[Param[0]]
         End Select
         Error.Raise("Unsupported data type for subscript " & SymName)
       Endif
@@ -427,17 +424,11 @@ Public Sub ShmWriteSub(data As Variant, ...)
         SharedMem.UserMem[ShmElementAddress(Param[0]), ElementType, True] = data
       Else
         Select Case ElementType
-          Case gb.String
-            Dim MyString As String[] = ShmRead()
-            MyString[Param[0]] = data
-            ShmWrite(MyString)
-            ElementCount = MyString.Count
-            Return
-          Case gb.object
-            Dim MyObject As Object[] = ShmRead()
-            MyObject[Param[0]] = data
-            ShmWrite(MyObject)
-            ElementCount = MyObject.Count
+          Case gb.String, gb.Object
+            Dim MyValue As Variant = ShmRead()
+            MyValue[Param[0]] = data
+            ShmWrite(MyValue)
+            ElementCount = MyValue.Count
             Return
         End Select
         Error.Raise("Unsupported data type for subscript in " & SymName)
