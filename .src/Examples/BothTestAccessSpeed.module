@@ -1,6 +1,6 @@
 ' Gambas module file
 
-'Fast Unsafe
+Fast Unsafe
 Public Const LoopCount As Integer = 100000
 TestSharedMem As Boolean = True           ' test the old format shared memory
 TestShmMem As Boolean = True              ' test the new format shared memory
@@ -71,6 +71,7 @@ Public Sub main()
 
     End With
   Endif
+
   If TestShmMem Then
     Dim myshm As New ShmMem(1000000)
 

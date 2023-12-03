@@ -260,6 +260,32 @@ Static Public Sub NotifyChange(Symbol As String, NotifyObject As Object, Optiona
 
 End
 
+'' Get a low level list of all symbols in the notify queue
+Static Public Sub notifylist() As String[]
+
+  Return WaitQueue.NotifyList()
+
+End
+
+'' Get a list of the high level sysmbol count of waiting pids
+Static Public Sub NotifyWaiting() As String[]
+
+  Dim results As New String[]
+  Dim WaitCount As Integer
+
+
+  For Each s As SharedMemSymbol In SymbolTable
+    WaitCount = s.getWaitCount()
+    If WaitCount > 0 Then
+      results.Add(Subst("[&1,&2,&3]", s.symname, datatypes[s.SymType], WaitCount) & WaitQueue.getWhoWaiting(s.symname))
+    Endif
+
+  Next
+  Return results
+
+End
+
+
 '' This Method must be called before any Shared memory Variable is created\
 '' It May be called in two ways
 ''
@@ -2152,25 +2178,6 @@ Static Public Sub _unknown(...) As Variant ' this will only work for simple data
   Else
     SharedMem[Param.name] = Param[0]
   Endif
-
-End
-
-
-Static Public Sub NotifyList() As String[]
-
-  Dim results As New String[]
-  Dim WaitCount As Integer
-
-
-  For Each s As SharedMemSymbol In SymbolTable
-    WaitCount = s.getWaitCount()
-    If WaitCount > 0 Then
-      results.Add(Subst("[&1,&2,&3]", s.symname, datatypes[s.SymType], WaitCount) & WaitQueue.getWhoWaiting(s.symname))
-    Endif
-
-  Next
-
-  Return results
 
 End
 

@@ -49,6 +49,19 @@ Public Sub GetWhoWaiting(sym As String) As String
 
 End
 
+' return a printable list of objects waiting for a notification of value change
+Public Sub NotifyList() As String[]
+
+  Dim result As New String[]
+
+  For Each s As Waitheader In WaitQueue
+    result.Add(Subst(" &6  [ &1, &2, &3, &4, &5 ]", CStr(s.timeout), CStr(s.oldtime), CStr(s.pid), s.method, s.CallBackClass, s.sym.symname))
+  Next
+
+  Return result
+
+End
+
 ''NotifyChange(Symbol As String, NotifyObject As Object, Optional iTimeOut As Long = 0, FunctionName As String = "") As Boolean
 '' timeout can be  = 0 = wait forever until first occurance          call _change
 ''                 < 0 = notify me everytime a location changes      call _change
