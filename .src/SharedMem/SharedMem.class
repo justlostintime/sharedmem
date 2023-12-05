@@ -261,7 +261,7 @@ Static Public Sub NotifyChange(Symbol As String, NotifyObject As Object, Optiona
 End
 
 '' Get a low level list of all symbols in the notify queue
-Static Public Sub notifylist() As String[]
+Static Public Sub NotifyList() As String[]
 
   Return WaitQueue.NotifyList()
 
@@ -1695,8 +1695,9 @@ Static Public Sub _print(Optional ShortForm As Boolean = False)
   Print "Free Bytes";; CLong(UserMem[MemoryLength] - CInt(UserMem[NextFree]))
   Print "Free list Start :"; If(UserMem[FreeListStart, gb.pointer], UserMem[FreeListStart, gb.pointer], "NULL"),
     Print "Free List End :"; If(UserMem[FreeListEnd, gb.pointer], UserMem[FreeListEnd, gb.pointer], "NULL")
+
   If UserMem[MemoryAddress] <> UserMem[NextFree] Then
-    Print "Allocated block list:"
+    Print "Allocated block list: ******************************************************************************************************"
     blkPointer = UserMem[MemoryAddress]
     While blkPointer < UserMem[NextFree]
 
@@ -1706,7 +1707,24 @@ Static Public Sub _print(Optional ShortForm As Boolean = False)
       Print "DataType = "; Left(DataTypes[Byte@(UserMem.AddrReal(blkPointer + DataOffset))] & Space(10), 10);;
       Print "Var = "; GetVarByAddress(blkpointer);;
       If SharedMem.Exist(GetVarByAddress(blkpointer)) Then
-        Print " Value = "; SharedMem[GetVarByAddress(blkpointer)]
+        Dim value As Variant = SharedMem[GetVarByAddress(blkpointer)]
+        If TypeOf(value) = gb.string Then
+          If value.len > 10 Then
+            If Not ShortForm Then
+              Print "\nValue begins +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+              Print Value
+              Print "\nValue Ends+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+            Else
+              Print Quote(Right(value, 10)); "..."
+            Endif
+          Else
+            Print "Value = "; Quote(value)
+          Endif
+        Else
+          Print " Value = "; value
+        Endif
+      Else
+        Print
       Endif
       'If(Byte@(UserMem.AddrReal(blkPointer + DataOffset)) > DataTypes.max, Byte@(UserMem.AddrReal(blkPointer + DataOffset)), DataTypes[Byte@(UserMem.AddrReal(blkPointer + DataOffset))])
 
@@ -1718,7 +1736,7 @@ Static Public Sub _print(Optional ShortForm As Boolean = False)
   If IsNull(UserMem[FreeListStart]) Then
     Print " No Free List - empty"
   Else
-    Print "Free Block List:"
+    Print "Free Block List:*************************************************************************************************************"
     blkPointer = UserMem[FreeListStart]
     While (Not IsNull(blkPointer))
       Print "Address:"; CLong(blkPointer), "End:"; CLong(blkpointer + UserMem[blkPointer + lenOffset] - 1),
@@ -1729,6 +1747,7 @@ Static Public Sub _print(Optional ShortForm As Boolean = False)
   Endif
 
   If Not ShortForm Then
+    Print "\nSymbol table listing ============================================================================================"
     Print "Symbol Table list contains "; SymbolTable.length; " Entries"
     If SymbolTable.length > 0 Then
       Print "Symbol Table Entries follow:"
