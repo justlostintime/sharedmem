@@ -669,7 +669,7 @@ End
 
 '' This Method is used to close and free Shared Memory\
 '' This method has two forms
-'' > SharedMem.End()  which simply releses the shared memory resets all\
+'' > SharedMem.End()  which simply releases the shared memory resets all\
 '' > > Tables etc.
 '' > SharedMem.end("Filename") This stores the full state of the shared\
 '' > > memory block to the file. All states and information are preserved.\

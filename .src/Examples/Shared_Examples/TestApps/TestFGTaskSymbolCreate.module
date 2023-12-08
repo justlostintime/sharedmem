@@ -8,66 +8,67 @@ Public Sub main()
   Dim MyTask As TestBGTaskSymbolCreate
   Dim mytime As Float
   Dim i As Integer = 0
-  
+
   mytime = Timer
   myTime += 60.00
-  
-  
+
+
   Print "Begin  FG and BG Symbol creation =================================================================================="
   Print " This will run for "; myTime; "seconds  from "; Now
- 
-  
- While Timer < mytime
-  SharedMem.begin(128000)
-  Inc i
-  If i Mod 1000 = 0 Then 
-      Print ".";
-       Flush
-  Endif
-  'Print "\nForground Begin", Application.Id
-  
-  MyTask = New TestBGTaskSymbolCreate
-  
-  Wait ' let background task start
-  
-  For j As Integer = 1 To Exchanges
-    
-     SharedMem["Str" & Str(j)] = "Hello" & Str(j)
-     SharedMem["Sync" & Str(j)] = 1
-     
-     
-     If Not waitfor("ForegroundSync" & Str(j)) Then 
-       Print "Timed out waiting for BackGround to respond", j
-       Break
-     Endif
-     
-  Next
-  
-  SharedMem.End()
-  
-Wend
 
-Print "\nCompleted loops", i, Now, "\nAt " & Str(i / mytime) & " Cycles per second"
-Print "Allocated 128k of Shared mem then exchange data and symbol table "; i; " times"
-Print "Created  " & Str(TestFGTaskSymbolCreate.Exchanges * 2 * i) & " Symbols total fg and bg task"
-Print "End  FG and BG Symbol creation ========================================================================="
+
+  While Timer < mytime
+    SharedMem.begin(128000)
+    Inc i
+    If i Mod 1000 = 0 Then
+      Print ".";
+      Flush
+    Endif
+    'Print "\nForground Begin", Application.Id
+
+    MyTask = New TestBGTaskSymbolCreate
+
+    Wait ' let background task start
+
+    For j As Integer = 1 To Exchanges
+
+      SharedMem["Str" & Str(j)] = "Hello" & Str(j)
+      SharedMem["Sync" & Str(j)] = 1
+
+
+      If Not waitfor("ForegroundSync" & Str(j)) Then
+        Print "Timed out waiting for BackGround to respond", j
+        Break
+      Endif
+
+    Next
+
+    SharedMem.End()
+
+  Wend
+
+  Print "\nCompleted loops", i, Now, "\nAt " & Str(i / mytime) & " Cycles per second"
+  Print "Allocated 128k of Shared mem then exchange data and symbol table "; i; " times"
+  Print "Created  " & Str(TestFGTaskSymbolCreate.Exchanges * 2 * i) & " Symbols total fg and bg task"
+  Print "End  FG and BG Symbol creation ========================================================================="
+
 End
 
 
 Public Sub waitfor(Item As String) As Boolean
-  
+
   For i As Integer = 0 To 500000
     If SharedMem.Exist(item) Then Return True
     'Wait 0.03
   Next
-  
+
   Return False
-  
+
 End
 
 Public Sub TheTask_read(data As String)
-  
-Print "Read", data
-  
-  
+
+  Print "Read", data
+
+
 End
