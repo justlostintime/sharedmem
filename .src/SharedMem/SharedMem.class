@@ -142,7 +142,6 @@ Static Public ArrayLenOffset As Integer = DataOffset + 2
 '' > This type of pointer may also be refrenced via protected interface SharedMem["xx"]
 Public Enum ShmTypeStd, ShmTypeAry, ShmTypeBuf, ShmTypeElement
 
-
 Extern mmap(MapPoint As Pointer, MapLength As Integer, prot As Integer, flags As Integer, fd As Integer, offset As Integer) As Pointer In "libc:6"
 Extern munmap(MapPoint As Pointer, MapLength As Integer) As Integer In "libc:6"
 Extern shm_open(name As String, oflag As Integer, mode As Integer) As Integer In "librt:1"
@@ -160,7 +159,6 @@ Extern rClose(Handle As Integer) As Integer In "libc:6" Exec "close"
 Extern strerror(err As Integer) As Pointer In "libc:6"
 'Extern printf(format As Pointer, ...) As Integer In "libc:6"
 
-
 Extern getpid() As Integer In "libc:6"
 
 Extern sem_init(mutex As Pointer, shared As Integer, Value As Integer) As Integer In "libpthread:0"
@@ -171,7 +169,6 @@ Extern sem_getvalue(mutex As Pointer, Ivalue As Pointer) As Integer In "libpthre
 Extern sem_trywait(mutex As Pointer) As Integer In "libpthread:0"
 Extern sem_destroy(mutex As Pointer) As Integer In "libpthread:0"
 Extern sched_yield() As Integer In "libpthread:0"
-
 
 Static Public Sub DoInit()
 
@@ -196,7 +193,6 @@ End
 
 Public Const MREMAP_MAYMOVE As Integer = 1
 Public Const MREMAP_FIXED As Integer = 2
-
 
 Static Private Sub AllocChunk() As Pointer
 
@@ -273,7 +269,6 @@ Static Public Sub NotifyWaiting() As String[]
   Dim results As New String[]
   Dim WaitCount As Integer
 
-
   For Each s As SharedMemSymbol In SymbolTable
     WaitCount = s.getWaitCount()
     If WaitCount > 0 Then
@@ -284,7 +279,6 @@ Static Public Sub NotifyWaiting() As String[]
   Return results
 
 End
-
 
 '' This Method must be called before any Shared memory Variable is created\
 '' It May be called in two ways
@@ -363,7 +357,6 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
     UserMem.RootAddress = MemoryStorage                                                                 ' All internal address are now offsets to addresses
     UserMem.MemoryLength = BlockSize + 4096                                                             ' The length of the memory created
     UserMem.MemoryBlockSize = BlockSize                                                                     ' The size of memory block to add when out of memory
-
 
     If IsNull(UserMem[MemoryAddress, gb.pointer]) Then                                             ' memory is initialized to zero, so if empty we are primary
       UserMem[FreeListEnd] = NullPointer
@@ -516,7 +509,6 @@ Static Public Sub BeginNamed(Optional MemName As String = User.Name & "gsh", Mem
   'DumpMem(MemoryAddress, 300, "dump" & Application.name)
   Return Iret
 
-
 End
 
 Static Private ProtectedVariables As String[] = ["notifylist"]
@@ -617,7 +609,6 @@ Static Public Sub Sync(Optional Symbol As String = ".", filename As String = "."
       Endif
     Endif
 
-
     Try wFile = Open LastMemorySync For Write Create
     If Error Then Return False
 
@@ -665,7 +656,6 @@ Static Public Sub Restore(Optional Symbol As String = "", filename As String = "
   Return True
 
 End
-
 
 '' This Method is used to close and free Shared Memory\
 '' This method has two forms
@@ -820,7 +810,6 @@ Static Public Sub Element(RootVar As Variant, symbol As String, index As Integer
 
 End
 
-
 Static Private Sub PointerAlloc(symbol As String, MyObject As Object, Rootaddr As Pointer, datadr As Pointer, ilen As Integer, rdType As Integer) As SharedMemSymbol
 
   While sem_trywait(UserMem.AddrReal(memMutex))
@@ -934,7 +923,6 @@ RetryAfterAlloc:
 
     usermem[NextFree] = usermem[nextfree] + MemSize
 
-
     usermem[p] = CPointer(0)                              ' no next block .. for now
     usermem[p + LenOffset] = memSize                      ' write the length of the block, yes its all very trusting lol
     Return p
@@ -945,7 +933,6 @@ RetryAfterAlloc:
     Goto RetryAfterAlloc
 
   Endif
-
 
   Return Null
 Catch
@@ -1041,13 +1028,11 @@ Catch
 
 End
 
-
 ''returns a list of blocks in the freed memory list
 Static Public Sub ListFreeBlocks() As Pointer[]
 
   Dim lPointers As Pointer[] = New Pointer[]
   Dim mPointer As Pointer = Null
-
 
   mPointer = UserMem[FreeListStart]
 
@@ -1097,7 +1082,6 @@ Static Public Sub ListFreeBlockLen() As Integer[]
 
 End
 
-
 '' returns a block of the size requested from the free list if available
 Static Public Sub ShmFreeChk(DataSize As Integer) As Pointer
 
@@ -1133,7 +1117,6 @@ End
 
 '' add a symbol to the symbol table
 Static Public Sub Add(LSymbol As SharedMemSymbol)
-
 
   SymbolTable.Add(LSymbol, LSymbol.SymName)
 
@@ -1405,8 +1388,6 @@ Catch
 
 End
 
-
-
 '' Saved the collection to a special shared memory block\
 '' A flag is set to let other tasks know that the symbol table has been updated
 Static Private Sub SaveCollection()
@@ -1480,7 +1461,6 @@ Static Private Sub LoadCollection()
   SymbolTable.Clear()
 
   MFile = Memory ColMem.AddrReal(CollectionAddress) For Read
-
 
   For i As Integer = 1 To SymCount
 
@@ -1611,7 +1591,6 @@ Static Public Sub PhysicalAddress(OffsetAddress As Pointer) As Pointer
 
 End
 
-
 '' Returns the length of the data storage block of the array
 Static Public Sub _varLen(symbol As String) As Integer
 
@@ -1665,8 +1644,6 @@ Static Public Sub AsObject(symbol As String) As Variant
   Return MySym
 
 End
-
-
 
 ' Static Private MemoryStorage As Pointer = Null                 ' actual storage address
 ' Static Private MemoryAddress As Pointer = Null                 ' As Pointer = Null  ' array of memory mapped blocks
@@ -1835,7 +1812,6 @@ Static Public Sub _read(mFile As File, Optional iMerge As Boolean = False) As Bo
 
 End
 
-
 '' This return the total amount of space required to store the\
 '' symbol table to a file
 Static Public Sub _serialize() As Integer
@@ -1893,7 +1869,6 @@ Static Public Sub WriteVarTo(symbol As String, Optional FileName As Variant = ""
         Endif
     End Select
   Endif
-
 
   While sem_trywait(UserMem.AddrReal(MemMutex)) ' wait till we have control of memory
     Inc waittime
@@ -1984,7 +1959,6 @@ Static Public Sub ReadVarFrom(symbol As String, Optional fileName As Variant = "
         Endif
 
         Closefile = True
-
 
     End Select
   Endif
@@ -2151,7 +2125,6 @@ Static Public Sub Variables(Optional filter As String = "*") As String[]
 
 End
 
-
 '' This will set the default storage location for saved variables and Whole shared memory blocks
 Static Public Sub SetDefaultDirectory(LocationName As String)
 
@@ -2237,7 +2210,6 @@ Static Private Function Count_Read() As Long
 
 End
 
-
 '' This returns a snap shot of the current variable collection
 '' The actuall collect may change while this is in use
 '' Do not depend on this to represent the current variable values
@@ -2252,4 +2224,3 @@ Static Private Sub Vars_Read() As Collection
   Return c
 
 End
-

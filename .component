@@ -1,5 +1,4 @@
 [Component]
 Key=sharedmem
-Version=3.19.1
-State=1
+Version=3.19.2
 Authors=Westwood

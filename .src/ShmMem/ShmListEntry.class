@@ -1,6 +1,5 @@
 ' Gambas class file
 
-
 'Author Westwood JustLostintime
 'Released Under:
 '  GNU GENERAL Public LICENSE
@@ -44,7 +43,6 @@ Property Read Address As Pointer          '' The virtual address of the entry
 Property Read Type As Integer             '' The Type of this block
 Property Read RefCount As Long            '' The Number of refrences or used as a tag/priority field
 Property Debug As Boolean Use $bDebug
-
 
 Public Sub _new(VarStorage As Variant, Optional VirtAddress As Pointer = 0)
 

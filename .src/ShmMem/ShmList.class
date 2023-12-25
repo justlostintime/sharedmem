@@ -9,7 +9,6 @@ Export
 ''' Defines the Shm datatype - list
 ''' Lists are inherited by every other list based object
 
-
 Public Struct AllocHeader         '' Standard header
   Length As Long                          '' Length including header
   Address As Pointer                   '' The virtual address of this block, speed pointer conversion
@@ -65,14 +64,12 @@ Property Read AllLists As Variant[]               '' Returns a table of all acti
 Public SetHeadType As Integer = cShmList               '' The list header Class
 Public SetEntryType As Integer = cShmListEntry    '' The List Entry Class
 
-
 Static Public Sub _init()
 
   ShmVarStorage.DefineClass("ShmList", cShmlist)
   ShmVarStorage.DefineClass("ShmListEntry", cShmlistEntry)
 
 End
-
 
 Public Sub _new(VarStorage As Variant, Optional VirtAddress As Pointer = 0, GlobalValue As Boolean = False)
   '$bDebug = True
@@ -126,7 +123,6 @@ Public Sub EntryPtr(VirtAddress As Pointer) As DList
 
 End
 
-
 Public Sub NewEntry(Optional Value As Variant = Null) As DList
 
   Dim NewVar As Pointer
@@ -164,7 +160,6 @@ Public Sub NewEntry(Optional Value As Variant = Null) As DList
 
 End
 
-
 Public Sub add(Value As Variant)
 
   Dim NewElement As DList
@@ -201,7 +196,6 @@ Public Sub _Assign(VEntry As DPointer)
 
 End
 
-
 Public Sub {free}()                             '' Free the entire list
 
   Dim pList As DList[] = AsDListList()
@@ -232,7 +226,6 @@ Public Sub Clear()
 
 End
 
-
 Public Sub AsDlistList() As DList[]
 
   Dim pList As New DList[]
@@ -246,7 +239,6 @@ Public Sub AsDlistList() As DList[]
   Return plist
 
 End
-
 
 Private Sub FreeEntry(Entry As DList)
 
@@ -349,7 +341,6 @@ Public Sub insert(Index As Long, value As Variant, Optional priority As Integer 
 
 End
 
-
 Private Sub SeekRec(Index As Integer) As DList
 
   Dim Count As Integer
@@ -371,7 +362,6 @@ Private Sub SeekRec(Index As Integer) As DList
   Return Current
 
 End
-
 
 Public Sub remove(Optional Index As Long = -1) As Variant
 
@@ -525,7 +515,6 @@ Public Sub _next() As Variant
 
 End
 
-
 Private Function max_Read() As Long
 
   Return ListHead.Value - 1
@@ -537,7 +526,6 @@ Private Function count_Read() As Long
   Return ListHead.Value
 
 End
-
 
 Private Function value_Read() As Long
 

@@ -10,7 +10,6 @@ Export
 
 'Fast Unsafe
 
-
 '' Most properties are set by the creater of the buffer
 Property RootAddress As Pointer Use $RootAddress = 0                         ' Actual phisical address of the memory we are using
 Property RelativeAddress As Pointer Use $RelativeAddress = 0              ' address relative to the named shared segment
@@ -33,7 +32,6 @@ Extern rRead(handel As Integer, buf As Pointer, cnt As Integer) As Integer In "l
 
 Property SupportedDataTypes As Integer[] Use $SupportedDataTypes = [gb.byte, gb.short, gb.integer, gb.long, gb.string]
 InValidTypeMessage As String = "Invalid data type, must be Byte, Short,Integer,Long,Pointer,byte Requested : &1 Assuming Byte"
-
 
 '' The only creation input to this is the actual shared memory segment used
 '' The rest are assigned after the creation of this buffer
@@ -160,7 +158,6 @@ Public Sub _Unknown(...) As Variant
 
 End
 
-
 '' This function reads an object definition from the provided
 '' open input stream, the first integer must be the length
 '' of the object
@@ -176,7 +173,6 @@ Public Sub _read(mFile As File)
   iLen = Me.Read(mFile)
 
 End
-
 
 Public Sub _write(mFile As File)
 
@@ -340,7 +336,6 @@ Public Sub Write(Optional mFile As Variant = "", Optional start As Integer = 0, 
 
 End
 
-
 Public Sub _get(index As Integer) As Variant
 
   If index > $Storagelength Or index < 0 Then
@@ -364,7 +359,6 @@ Public Sub _get(index As Integer) As Variant
   End Select
 
 End
-
 
 Public Sub _put(Data As Variant, index As Integer)
 
@@ -447,7 +441,6 @@ Public Sub FillMem(value As Integer, Optional index As Integer, length As Intege
 
 End
 
-
 Public Sub Duplicate(Symbol As String) As Buffer ' returns a pointer to the new storage area
 
   Dim myBuff As New Buffer($oShm)
@@ -468,7 +461,6 @@ Public Sub Duplicate(Symbol As String) As Buffer ' returns a pointer to the new 
   Return mybuff
 
 End
-
 
 Public Sub Compare(src As Pointer, length As Integer, Optional offset As Integer = 0) As Integer
 
@@ -519,7 +511,6 @@ Private Sub VerifyCompare(src As Variant, length As Integer, offset As Integer) 
 
 End
 
-
 Public Sub Equal(src As Variant, Optional length As Integer = 0, offset As Integer = 0) As Boolean
 
   Return If(VerifyCompare(src, length, offset) = 0, True, False)
@@ -548,13 +539,11 @@ Public Sub _VarLen() As Integer
 
 End
 
-
 Public Sub Len() As Integer
 
   Return $StorageLength
 
 End
-
 
 Public Sub _VarPtr() As Pointer
 
