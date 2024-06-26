@@ -1,11 +1,9 @@
 [TestSuites]
-Count=2
+Count=1
 TestWith=1
+Default="T1NotifyTest.aTest,TbLoadAndSave.aSaveLoadSharedMemBlock;bSaveAndLoadVariables;cClearMerge,TcInterProcessDataExchange.aInterProcessCommunications,TdSubScripts.aSubScripts,TeStringMemoryManagement.aStringGetsbigger"
 
 [TestSuites/1]
-Name="NewShm"
-
-[TestSuites/2]
 Name="Test suite #1"
-Tests="T1NotifyTest.aTest,TaBeginEnd.aNoBeginSet;bBeginTwice;cBeginTwiceAgain;dBeginNamed,TbLoadAndSave.aSaveLoadSharedMemBlock;bSaveAndLoadVariables;cClearMerge,TcInterProcessDataExchange.aInterProcessCommunications,TdSubScripts.aSubScripts,TeStringMemoryManagement.aStringGetsbigger"
+Tests="TaBeginEnd.aNoBeginSet;bBeginTwice;cBeginTwiceAgain;dBeginNamed"
 

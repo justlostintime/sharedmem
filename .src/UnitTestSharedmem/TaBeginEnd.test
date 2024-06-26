@@ -58,7 +58,7 @@ End
 Public Sub dBeginNamed()
 
   With SharedMem
-    Try .BeginNamed()
+    Try .BeginNamed("testname")
     Assert.Noterror("Create shared Named memory default name")
     Dim a As String[] = ["a", "b", "c"]
     .a = a
@@ -71,7 +71,7 @@ Public Sub dBeginNamed()
       Assert.noterror("Verify End of named shared memory works")
     Endif
 
-    Try .BeginNamed()
+    Try .BeginNamed("testname")
     Assert.Noterror("Create shared Named memory default name again")
 
     Try .End(".")
