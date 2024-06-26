@@ -1,7 +1,5 @@
 ' Gambas test file
 
-
-
 Public Sub aNoBeginSet()
 
   Dim d As String
@@ -23,7 +21,6 @@ End
 
 Public Sub bBeginTwice()
 
-
   With SharedMem
     Try .Begin(123456)
     Assert.NotError("First Begin functions")
@@ -41,7 +38,6 @@ Public Sub bBeginTwice()
 End
 
 Public Sub cBeginTwiceAgain()
-
 
   With SharedMem
     Try .Begin(123456)

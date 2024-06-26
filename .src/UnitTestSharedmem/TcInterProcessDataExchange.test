@@ -54,7 +54,6 @@ Public Sub aInterProcessCommunications()
       SharedMem["TestString"] = "quit"
       SharedMem["SyncMessage"] = 1
 
-
       starttime = Timer
       While SharedMem["TestString"] <> "Ready"
         Wait
@@ -66,7 +65,6 @@ Public Sub aInterProcessCommunications()
       Dim pSyncMessage As Pointer = ._varptr("SyncMessage")
       Dim pTestString As Pointer = ._varptr("TestString")
       Dim pResult As Pointer = ._varptr("Result")
-
 
       starttime = Timer
       For i As Integer = 1 To NoMutexloopcount

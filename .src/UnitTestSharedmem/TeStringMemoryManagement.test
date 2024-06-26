@@ -28,7 +28,6 @@ Public Sub aStringGetsbigger()
     Assert.equals(MyString.LastWriteLength, .mystring.len + 1, "Verify that variable size shrinks")
     '._print()
 
-
     Dim testString As String = "......................................."
     Starttime = Timer
     For i As Integer = 0 To 100000

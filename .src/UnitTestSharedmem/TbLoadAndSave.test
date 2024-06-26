@@ -19,7 +19,6 @@ Public Sub aSaveLoadSharedMemBlock()
     Try SharedMem.End(".")  ' save to default file
     Assert.Noterror("Created Sharedmem image")
 
-
     Try SharedMem.begin()   ' load from default file
     Assert.Noterror("Loaded the Shared memory from a file")
     Assert.Equals(SharedMem["MyVar1"], 1, " Read back a variable value after load")
@@ -92,7 +91,6 @@ Public Sub aSaveLoadSharedMemBlock()
     Assert.NotEquals(StartingVarList, ChangedStartupVarList, "Test After adding var")
     Assert.Equals(ChangedStartupVarList & " , " & Right(MyMemoryVarList, -13), CombinedVarList, "Test Merge variables")
 
-
   End With
 
 End
@@ -134,7 +132,6 @@ Public Sub bSaveAndLoadVariables()
     .ReadVarFrom("TheString")
     Assert.Equals(BeforeLoad, .TheString, "Verify that Save and loading a singles Variable works")
 
-
     '' Work with objects
 
     .["TheObject"] = New SharedObjectExample
@@ -159,7 +156,6 @@ Public Sub bSaveAndLoadVariables()
     .free("TheString[]")
     .ReadVarFrom("TheString[]")
     Assert.Equals(.["TheString[]"][0], TheString[0], "Verify we can save Var/delete from database/Recreate from file")
-
 
     iString = .["TheString[]"]
     .TheString = "This is a test of the whole darn suite"
@@ -204,4 +200,3 @@ Public Sub cClearMerge()
   End With
 
 End
-

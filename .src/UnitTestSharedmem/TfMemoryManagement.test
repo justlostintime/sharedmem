@@ -35,7 +35,6 @@ Public Sub a_ALLOCFree()
 
       SharedMem.free("ThatString")
 
-
       'SharedMem._print()
 
       SharedMem.free("ThisString")
@@ -80,7 +79,6 @@ Public Sub b_lowLevelAllocAndFree()
     Dim yy As Pointer
     Dim aa As Pointer
     Dim cc As Pointer
-
 
     .begin(500000)
     'begin does some stuff to remove for this test See- SharedMemWaitQueue _Begin
@@ -146,4 +144,3 @@ Public Sub b_lowLevelAllocAndFree()
   'Print "End Test Alloc Free ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
 
 End
-
