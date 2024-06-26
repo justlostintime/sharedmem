@@ -49,8 +49,6 @@ Property Read Used As Long
 
 Property Read Available As Long
 
-
-
 Public Sub _new(MemBlock As ShmMemBlock, Optional CreateManagement As Boolean = True)
 
   Storage = MemBlock
@@ -115,10 +113,7 @@ Public Sub RealDataAddress(VirtAddress As Pointer) As Pointer
 
   Return p
 
-
 End
-
-
 
 Private Sub InitFreeList()
 
@@ -314,7 +309,6 @@ Private Sub BestFit(DataLen As Long) As AllocHeader
 
 End
 
-
 Public Sub {Alloc}(dataLen As Long) As Pointer                       '' returns a virtual memory address
 
   Dim MyBlock As Pointer
@@ -407,8 +401,6 @@ Public Sub _PrintFreeList()
   Print Subst("                  Total  : &1, Blocks : &2", Format(total, "#########0"), blocks)
 
 End
-
-
 
 Public Sub _PrintBlocks(Optional vVarStorage As ShmVarStorage = Null)
 

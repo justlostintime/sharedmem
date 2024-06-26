@@ -66,7 +66,6 @@ Public Sub main()
   MyElong = SharedMem.Element(MyBuff, "MyBuff.Long", 1, gb.Long)
   SharedMem.Element("TheBuff2", "MyInt", 15, gb.integer)
 
-
   'SharedMem.DumpMem(MyStore(), MyStore._VarLen(), "/home/brian/Desktop/dump1")
   'SharedMem.DumpMem(MyBuff2(), MyBuff2._VarLen(), "/home/brian/Desktop/dump2")
   'MyBuff._print()

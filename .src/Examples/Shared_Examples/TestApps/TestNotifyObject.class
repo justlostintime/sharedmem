@@ -3,13 +3,11 @@
 Private Ocount As Integer = Object.Class(Me).count
 Private sName As String = Object.Class(Me).Name & Format(Ocount, "000")
 
-
 Public Sub _new()
 
   SharedMem.NotifyChange("WaitTest", Me, -1)
 
 End
-
 
 Public Sub WaitTest_changed(Newvalue As Variant, symname As String)
 

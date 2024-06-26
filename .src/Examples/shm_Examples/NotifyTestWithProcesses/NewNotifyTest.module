@@ -7,25 +7,30 @@ Public Sub main()
 
   Vars = New ShmMem(1128000, "mydata", 800, 0.01, True)
   With vars
-    !dog = 8
-    !Cow = 6
-    !Done = 0
-    Dim Mtask As New NotifyBGTask
-    Dim Btask As New NotifyBGTask
-    !count = 100
-    .Notify("cow", Me)
-    While !count > 0
-      !Dog = 4
-      !Cow = 7
+    !dog = 0
+    !Cow = 0
+    !Done = False
+
+    Dim Mtask As New NotifyBGTask As "thetask"
+    Wait
+    Dim Btask As New NotifyBGTask As "theTask2"
+    Wait
+
+    !count = 0
+    .Notify("Dog", Me)
+
+    While !count < 100
+      !Dog = !count
+      !Cow = !count
       Wait 0.03
-      !Cow = 8
-      Wait
+
       !Cow = "hello"
-      Wait
-      Dec !count
+      Wait 0.05
+
+      Inc !count
     Wend
 
-    !Cow = 100
+    !Done = True
 
   End With
 
@@ -37,7 +42,6 @@ Public Sub main()
 
 End
 
-
 Public Sub dog_changed(varname As String, value As Variant, TimedOut As Boolean)
 
   Print Application.id, "FG";; VarName;; "=";; Value
@@ -46,7 +50,7 @@ End
 
 Public Sub Cow_changed(varname As String, value As Variant, TimedOut As Boolean)
 
-  'Print Application.id, "FG";; VarName;; "=";; Value
+  Print Application.id, "FG";; VarName;; "=";; Value
 
 End
 
@@ -61,5 +65,3 @@ Public Sub TheTask2_read(value As String)
   Print value
 
 End
-
-

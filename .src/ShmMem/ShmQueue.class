@@ -156,7 +156,6 @@ Public Sub _next() As Variant
     Endif
   Endif
 
-
   Return Super.VarMem[ListItem.value]
 
 Catch
@@ -164,7 +163,3 @@ Catch
   Print Hex(listitem)
 
 End
-
-
-
-

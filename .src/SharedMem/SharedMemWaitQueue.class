@@ -9,11 +9,11 @@ Export
 ' Fast Unsafe
 
 Private WaitQueue As Variant[] = New Variant[]        ' we will queue wait requests here
-Private InitSignal As Integer = 0                     ' force the init on first call of wait
-Private PidList As Mem                                ' pointer to shared memory
-Private Const pidlistlen As Integer = 500             ' Number of entries in the list
-Public Const ChangeSignal As Integer = 16             ' Sigsys = 31, SigUSr2 = 12, sig16 is unused too
-Public $oShm As Variant = Null                        ' The SharedMemory object
+Private InitSignal As Integer = 0                                        ' force the init on first call of wait
+Private PidList As Mem                                                         ' pointer to shared memory
+Private Const pidlistlen As Integer = 500                        ' Number of entries in the list
+Public Const ChangeSignal As Integer = 16                    ' Sigsys = 31, SigUSr2 = 12, sig16 is unused too
+Public $oShm As Variant = Null                                           ' The SharedMemory object
 
 Public Struct WaitHeader
   pid As Integer
@@ -30,7 +30,8 @@ Extern sKill(sigpid As Integer, Sig As Integer) As Integer In "libc:6" Exec "kil
 Extern getpid() As Integer In "libc:6"
 Extern sched_yield() As Integer In "libpthread:0"
 
-'' return a printable list of objects waiting for a notification of value change
+'' Return a printable list of objects waiting for a notification
+'' of value change for a specific symbol name. For all PIDs
 Public Sub GetWhoWaiting(sym As String) As String
 
   Dim result As String = " "
@@ -49,7 +50,8 @@ Public Sub GetWhoWaiting(sym As String) As String
 
 End
 
-' return a printable list of objects waiting for a notification of value change
+'' return a printable list of all objects and symbols  waiting for a notification of value change
+'' for all PIDs
 Public Sub NotifyList() As String[]
 
   Dim result As New String[]
@@ -62,129 +64,12 @@ Public Sub NotifyList() As String[]
 
 End
 
-''NotifyChange(Symbol As String, NotifyObject As Object, Optional iTimeOut As Long = 0, FunctionName As String = "") As Boolean
+'' NotifyChange(Symbol As String, NotifyObject As Object, Optional iTimeOut As Long = 0, FunctionName As String = "") As Boolean
 '' timeout can be  = 0 = wait forever until first occurance          call _change
 ''                 < 0 = notify me everytime a location changes      call _change
 ''                 > 0 wait for timeout and                          call _nochange
 '' call function names can be overridden by providing function name
 '' waiting for a timeout is very slow and you must execute a wait in your bg task to dispatch the timeout
-Public Sub NotifyCancel(Symbol As String, NotifyObject As Object)
-
-  Dim MyWait As WaitHeader
-  Dim i As Integer = 0
-
-  For Each mywait In WaitQueue
-    If (mywait.CallBack = NotifyObject Or NotifyObject = Null) And If mywait.sym.SymName = symbol Then
-      WaitQueue.Remove(i)
-      MyWait.sym._ClearWait()
-      Break
-    Endif
-    Inc i
-  Next
-
-End
-
-Public Sub _new(Optional vshm As Variant)
-  'Print "init wait queue"
-
-  WaitQueue = New Variant[]
-  SetSignal()
-  $oShm = vshm
-
-End
-
-Public Sub reset()
-
-  WaitQueue = New Variant[]
-
-End
-
-Private Sub findpid(pid As Integer) As Integer
-
-  For i As Integer = 0 To pidlistlen
-    If PidList[i * SizeOf(gb.integer), gb.integer, True] = pid Then Return i
-  Next
-  Return -1
-
-End
-
-Private Sub addpid(pid As Integer)
-
-  If findpid(pid) >= 0 Then Return
-  Dim i As Integer = findpid(0)
-  If i >= 0 Then
-    PidList[i * SizeOf(gb.integer), gb.integer, True] = pid
-    Return
-  Endif
-  Error.Raise("Out of pid slots")
-
-End
-
-Private Sub removepid(pid As Integer)
-
-  Dim i As Integer = findpid(pid)
-
-  If i >= 0 Then PidList[i * SizeOf(gb.integer), gb.integer, True] = 0
-
-End
-
-
-Public Sub _begin() '' we will allocate a fixed table of pids to be used for notification
-
-  With sharedmem
-
-    Dim memoryloc As Pointer
-    Dim memlen As Integer = PidListLen * SizeOf(gb.integer) + SizeOf(gb.integer) + .AllocHeaderLen
-
-    If Not .Exist("notifylist") Then
-      memoryloc = .ShmAlloc(memlen)
-      .["notifylist"] = memoryloc
-      PidList = New Mem(.UserMem.AddrData(memoryloc) + .AllocHeaderLen, False, memlen - .AllocHeaderLen)
-    Else
-      If IsNull(PidList) Then PidList = New Mem(.UserMem.AddrData(.["notifylist"]) + .AllocHeaderLen, False, memlen - .AllocHeaderLen)
-    Endif
-
-  End With
-
-End
-
-
-'' Remove the Application from the list of applications waiting for a notification
-Public Sub Dofree()
-
-  removepid(Application.id)
-
-End
-
-Private Sub SetSignal()
-
-  InitSignal = getpid()
-  signal(ChangeSignal, _signal)
-
-End
-
-'' Dispatch the signal to each application waiting for a change in the variable
-Public Sub dispatch()
-
-  Dim result As Integer
-
-  For i As Integer = 0 To pidlistlen
-    Dim CurrentPid As Integer = PidList[i * SizeOf(gb.integer), gb.integer, True]
-    If CurrentPid > 0 Then
-      'Error "Signaling PID="; CurrentPid
-      result = sKill(CurrentPid, ChangeSignal)
-      'Try Signal.send(CurrentPid, ChangeSignal)
-      'If Error Then ' remove any old pids from the list
-      If result <> 0 Then
-        'Error "Error sending signal:"; System.Error
-        PidList[i * SizeOf(gb.integer), gb.integer, True] = 0
-      Endif
-      sched_yield()
-    Endif
-  Next
-
-End
-
 '' Place an entry into the list of applications waiting to be notified of a change in a variable
 Public Sub NotifyChange(Symbol As String, NotifyObject As Variant, Optional iTimeOut As Long = 0, FunctionName As String = "") As Boolean
 
@@ -243,8 +128,142 @@ Catch
 
 End
 
+'' Notify cancel
+'' Cancel a wait for a specific symbol value change, for the current pid
+Public Sub NotifyCancel(Symbol As String, NotifyObject As Object)
 
-Public Sub _signal(Sig As Integer) '' signal handler for waiting applications
+  Dim MyWait As WaitHeader
+  Dim i As Integer = 0
+
+  For Each mywait In WaitQueue
+    If (mywait.CallBack = NotifyObject Or NotifyObject = Null) And If mywait.sym.SymName = symbol Then
+      WaitQueue.Remove(i)
+      MyWait.sym._ClearWait()
+      Break
+    Endif
+    Inc i
+  Next
+
+End
+
+'' Initialize the local wait queue and optionally set the
+'' shared memory segment to which it refers
+Public Sub _new(Optional vshm As Variant)
+  'Print "init wait queue"
+
+  WaitQueue = New Variant[]
+  SetSignal()
+  $oShm = vshm
+
+End
+
+'' clear the local wait queue
+Public Sub reset()
+
+  WaitQueue = New Variant[]
+
+End
+
+'' Check if a specific PID is in the PID wait queue
+Private Sub findpid(pid As Integer) As Integer
+
+  For i As Integer = 0 To pidlistlen
+    If PidList[i * SizeOf(gb.integer), gb.integer, True] = pid Then Return i
+  Next
+  Return -1
+
+End
+
+'' Add a new pid to the pid task list waiting
+'' for notifications
+Private Sub addpid(pid As Integer)
+
+  If findpid(pid) >= 0 Then Return
+  Dim i As Integer = findpid(0)
+  If i >= 0 Then
+    PidList[i * SizeOf(gb.integer), gb.integer, True] = pid
+    Return
+  Endif
+  Error.Raise("Out of pid slots")
+
+End
+
+'' Removes the PID from the list of tasks waiting for
+'' notifications
+Private Sub removepid(pid As Integer)
+
+  Dim i As Integer = findpid(pid)
+
+  If i >= 0 Then PidList[i * SizeOf(gb.integer), gb.integer, True] = 0
+
+End
+
+'' Actuall allocate the shared memory list common to all tasks
+'' waiting for notifications
+Public Sub _begin() '' we will allocate a fixed table of pids to be used for notification
+
+  With sharedmem
+
+    Dim memoryloc As Pointer
+    Dim memlen As Integer = PidListLen * SizeOf(gb.integer) + SizeOf(gb.integer) + .AllocHeaderLen
+
+    If Not .Exist("notifylist") Then
+      memoryloc = .ShmAlloc(memlen)
+      .["notifylist"] = memoryloc
+      PidList = New Mem(.UserMem.AddrData(memoryloc) + .AllocHeaderLen, False, memlen - .AllocHeaderLen)
+    Else
+      If IsNull(PidList) Then PidList = New Mem(.UserMem.AddrData(.["notifylist"]) + .AllocHeaderLen, False, memlen - .AllocHeaderLen)
+    Endif
+
+  End With
+
+End
+
+'' Remove the Application from the list of applications waiting for a notification
+Public Sub Dofree()
+
+  removepid(Application.id)
+
+End
+
+'' Initialize the signal handler for notifications
+'' this is called once by each Task/Application waiting for
+'' notofications
+Private Sub SetSignal()
+
+  InitSignal = getpid()
+  signal(ChangeSignal, _signal)
+
+End
+
+'' Dispatch the signal to each application waiting for a change in the variable
+Public Sub dispatch()
+
+  Dim result As Integer
+
+  For i As Integer = 0 To pidlistlen
+    Dim CurrentPid As Integer = PidList[i * SizeOf(gb.integer), gb.integer, True]
+    If CurrentPid > 0 Then
+      'Error "Signaling PID="; CurrentPid
+      result = sKill(CurrentPid, ChangeSignal)
+      'Try Signal.send(CurrentPid, ChangeSignal)
+      'If Error Then ' remove any old pids from the list
+      If result <> 0 Then
+        'Error "Error sending signal:"; System.Error
+        PidList[i * SizeOf(gb.integer), gb.integer, True] = 0
+      Endif
+      sched_yield()
+    Endif
+  Next
+
+End
+
+'' Called when this PID is waiting for notifications of
+'' the value of a symbol changing.  It Verifies it is the change signal
+'' then call the application tasks notification entry point for this symbol
+'' there can be individual entry points for each symbol, or all the same
+'' entry point.
+Public Sub _signal(Sig As Integer)  '' signal handler for waiting applications
 
   Dim MyWait As WaitHeader
   Dim Counter As Integer = 0

@@ -8,7 +8,6 @@ Public Sub main()
     .["$a"] = 100
     .["$b"] = "hello world"
 
-
     For Each s As String In SharedMem
       Print s
       Dim a As SharedMemSymbol = SharedMem.SymbolTable[s]
@@ -27,4 +26,3 @@ Public Sub main()
   End With
 
 End
-

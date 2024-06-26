@@ -40,7 +40,6 @@ Static Public DataTypes As String[] = ["Binary", "Boolean", "Byte", "Short", "In
   "LongDate", "Pointer", "Variant", "Function", "Class", "NULL", "Object", "Not Array", "Type 19", "Type 20"
 "type 21", "type 22", "type 23", "type 24", "type 25"]
 
-
 '' Remove the memory by force
 Static Public Sub ForceDelete(SharedName As String)
 
@@ -48,7 +47,6 @@ Static Public Sub ForceDelete(SharedName As String)
   Try shmMemBlock.ForceDelete(SharedName & "_Symbols")
 
 End
-
 
 '' Allocate the memory
 Public Sub _new(Optional VarMemLength As Long = VarMemDefault, MemName As String = "", MaxSymbols As Integer = MaxSymbolsDefault, LockTimeOut As Float = TimeOutDefault, Cleanup As Boolean = False)
@@ -101,7 +99,6 @@ Public Sub _unknown(...) As Variant
   _put(Param[0], Param.name)
 
 End
-
 
 Public Sub _get(SymName As String, ...) As Variant
 
@@ -156,7 +153,6 @@ End
 
 Public Sub End(Optional FileName As String = "\t\t")
 
-
   If FileName = "\t\t" Then Return
   If FileName = "." Then FileName = $SyncMemFile
   SaveImage(filename)
@@ -168,7 +164,6 @@ Public Sub {copy}(SymbolName As String, NewName As String)
   vars.Copy(SymbolName, NewName)
 
 End
-
 
 Public Sub Rename(SymbolName As String, NewName As String, Optional force As Boolean = False)
 
@@ -191,8 +186,6 @@ Public Sub Merge(Optional FileName As String = ".") As Boolean
   LoadImage(filename, False)
 
 End
-
-
 
 Public Sub SetPath(filePath As String, Optional defaultBaseName As String = "", defaultExtension As String = "") As String
 
@@ -238,7 +231,6 @@ Public Sub SaveVar(VarName As String, Optional filename As String = "")
 
 End
 
-
 Public Sub LoadImage(Optional FileName As String = Application.name & ".image", cleanload As Boolean = True)
 
   Dim infileName As String = SetPath(FileName)
@@ -268,7 +260,6 @@ Public Sub LoadVar(FileName As String, Optional SymName As String = "")
   Close infile
 
 End
-
 
 Public Sub {VarPtr}(SymName As String) As Variant
 
@@ -317,13 +308,11 @@ Public Sub PrintAllInfo()
 
 End
 
-
 Public Sub PrintTree()
 
   Print MyVarMem.TextTree()
 
 End
-
 
 Public Sub WaitFor(SymName As String, Optional Timeout As Float = 0) As Boolean
 
@@ -380,7 +369,6 @@ Public Sub Exist(SymName As String) As Boolean
 
 End
 
-
 Private Function Count_Read() As Integer
 
   Return Vars.count
@@ -405,14 +393,12 @@ Private Function Key_Read() As String
 
 End
 
-
 '' Returns the amount of used space in the memory block
 Private Function Used_Read() As Long
 
   Return VarMnge.Used
 
 End
-
 
 '' Returns the actual Physical address after traslating the Virtual pointer
 Public Sub RealAddress(VirtAddress As Pointer) As Pointer
@@ -430,7 +416,6 @@ Public Sub {alloc}(Length As Pointer) As Pointer
   Return TheMem
 
 End
-
 
 Private Function Available_Read() As Long
 
@@ -474,12 +459,8 @@ End
 
 Private Function SyncVarFile_Read() As String
 
-
-
 End
 
 Private Sub SyncVarFile_Write(Value As String)
-
-
 
 End

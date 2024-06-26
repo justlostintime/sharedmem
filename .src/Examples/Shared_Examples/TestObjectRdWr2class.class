@@ -16,5 +16,3 @@ Public Sub callme()
   Print "x="; x
 
 End
-
-' Gambas class file

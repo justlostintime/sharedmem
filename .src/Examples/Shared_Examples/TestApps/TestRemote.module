@@ -1,23 +1,24 @@
 ' Gambas module file
 
 Public Sub main()
-With sharedmem
- donow()
- Return 
- 
-Dim a As New ServiceTask
-a.HostName = "jan.westwoodsvcs.com"
-a.BufferName = "buffer"
-a.Password = "missillaunch"
-a.port = 2727
 
-a.Wait()
+  With sharedmem
+    donow()
+    Return
 
-End With
+    Dim a As New ServiceTask
+    a.HostName = "jan.westwoodsvcs.com"
+    a.BufferName = "buffer"
+    a.Password = "missillaunch"
+    a.port = 2727
+
+    a.Wait()
+
+  End With
 Catch
   Print Error.text;; Error.where
-End
 
+End
 
 Public BufferName As String = "buffer"
 Public HostName As String = "localhost"
@@ -26,36 +27,37 @@ Public Password As String = "missillaunch"
 Public shmName As String = User.name & "gsh"
 Public BlockSize As Integer = 4512000
 
-
 Public Sub donow()
-With sharedmem
-  
-.BeginNamed(shmName, BlockSize)
-If Not .Exist(Buffername) Then .[buffername] = ""
 
-Dim RemoteData As New SharedRemote(Hostname, password, port) As "inter"
-'RemoteData.ExecuteCommand("gsh")
-'RemoteData.OpenShell(BufferName)
-RemoteData.ShellLink(BufferName)
+  With sharedmem
 
-.End()
+    .BeginNamed(shmName)
+    If Not .Exist(Buffername) Then .[buffername] = ""
 
-End With
+    Dim RemoteData As New SharedRemote(Hostname, password, port) As "inter"
+    'RemoteData.ExecuteCommand("gsh")
+    'RemoteData.OpenShell(BufferName)
+    RemoteData.ShellLink(BufferName)
 
-Catch 
+    .End()
+
+  End With
+
+Catch
   Print "Service task error ";; Error.text;; error.where
   sharedmem.End()
   Error.Propagate()
+
 End
 
 Public Sub inter_errdata(data As Byte[], len As Integer)
-  
+
   Print "Error Len="; len;; data.ToString(0, len)
-  
+
 End
 
 Public Sub inter_indata(buffer As Pointer, len As Integer)
-  
+
   Print "in Data Recieved data Len="; len
   ' For i As Integer = 0 To len - 1
   '   Print Buffer[i]; "|"; Chr(Buffer[i]);;
@@ -63,25 +65,23 @@ Public Sub inter_indata(buffer As Pointer, len As Integer)
   ' Print
   Dim mSymbol As SharedMemSymbol
   Dim mfile As File
-  
-  With sharedmem
-    
-  mfile = Memory Buffer
-  mSymbol = New SharedMemSymbol
-  mSymbol._read(mFile, True)
-  Close mfile
 
-  If .Exist(mSymbol.symname) Then .free(mSymbol.symname)
-  .add(mSymbol)
-  
+  With sharedmem
+
+    mfile = Memory Buffer
+    mSymbol = New SharedMemSymbol
+    mSymbol._read(mFile, True)
+    Close mfile
+
+    If .Exist(mSymbol.symname) Then .free(mSymbol.symname)
+    .add(mSymbol)
+
   End With
-  
+
 End
 
 Public Sub inter_kill(data As Integer)
-  
-  Print "Session ended result = "; data
-  
-  
-End
 
+  Print "Session ended result = "; data
+
+End

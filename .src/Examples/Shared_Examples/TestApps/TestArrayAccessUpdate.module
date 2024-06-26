@@ -1,7 +1,5 @@
 ' Gambas module file
 
-
-
 Public Sub Main()
 
   System.IgnoreOverflow = True
@@ -51,7 +49,6 @@ Public Sub Main()
 
     .["a", 2] = "456789"
     printit(.a)
-
 
   End With
 

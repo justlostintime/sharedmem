@@ -23,7 +23,6 @@ Public ObjectName As String = ""
 Public ElementCount As Integer = -1 ' not an array
 Public ElementType As Integer = 17
 
-
 Public RootAddress As Pointer = Null   ' pointer to where the storage starts
 Public DataAddress As Pointer = Null   ' Pointer to where the data is actually stored
 
@@ -47,7 +46,6 @@ Property Value As Variant
 Property Read LastWriteTime As Float
 Property Read Length As Integer
 
-
 Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "libc:6"
 ' Extern rWrite(handle As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "write"
 ' Extern rRead(handel As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "read"
@@ -58,7 +56,6 @@ Public Sub _new(Optional vshm As Variant = Null)
   $oShm = vshm
 
 End
-
 
 '' Write the variable def  to the and format information to an output file
 '' Optionally write the variables value as well
@@ -147,7 +144,6 @@ Catch
 
 End
 
-
 Public Sub updateobjectinfo(data As Variant)
 
   If symtype = gb.object Then
@@ -201,7 +197,6 @@ Catch
 
 End
 
-
 Public Sub _wait() As Integer
 
   SetLastWrite()
@@ -215,7 +210,6 @@ Public Sub _waiting() As Boolean
   Return False
 
 End
-
 
 Public Sub GetWaitCount() As Integer
 
@@ -333,7 +327,6 @@ Catch
 
 End
 
-
 Public Sub Serialize(data As Variant)
 
   datalength = mem._SizeOf(data)
@@ -343,8 +336,6 @@ Catch
   Stop
 
 End
-
-
 
 Public Sub ShmRead() As Variant
 
@@ -380,9 +371,7 @@ Public Sub ShmReadSub(...) As Variant
     Error.Raise("Unsupported array type in " & SymName)
   Endif
 
-
 End
-
 
 Public Sub ShmWrite(mdata As Variant) As Integer
 
@@ -479,8 +468,6 @@ Public Sub ShmElementAddress(index As Integer) As Pointer
 
 End
 
-
-
 Public Sub ShmCopy(mempointer As Pointer, memlen As Integer)
 
   DataLength = memlen - SharedMem.AllocHeaderLen
@@ -537,8 +524,6 @@ Public Sub _put(value As Variant, index As Integer)
 
 End
 
-
-
 Public Sub memSize() As Integer
 
   Return storageLength
@@ -564,7 +549,6 @@ Public Sub DataOffsetPtr() As Pointer
 
 End
 
-
 ''Returns the real address of the variable header, ie containing the
 '' basic information And pointer To storage For strings, And objects
 Public Sub AddressPtr() As Pointer
@@ -580,7 +564,6 @@ Public Sub DataPtr() As Pointer
   Return SharedMem.UserMem.AddrData(DataAddress, SymType)
 
 End
-
 
 '' Dumps the variables value to an output file
 Public Sub DumpMem()

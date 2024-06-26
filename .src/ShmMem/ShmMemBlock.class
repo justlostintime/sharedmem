@@ -23,7 +23,6 @@ Extern strerror(err As Integer) As Pointer In "libc:6"
 'Extern rRead(handel As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "read"
 Extern rClose(Handle As Integer) As Integer In "libc:6" Exec "close"
 
-
 Extern sem_init(mutex As Pointer, shared As Integer, Value As Integer) As Integer In "libpthread:0"
 Extern sem_wait(mutex As Pointer) As Integer In "libpthread:0"
 Extern sem_post(mutex As Pointer) As Integer In "libpthread:0"
@@ -80,7 +79,6 @@ Private MyAppId As Long = 0                             '' The app used if we sp
 Property Read length As Long                            '' Length of user space
 Property Read address As Pointer                        '' address of user space
 
-
 Public Sub _print()
 
   Print "Memory Address : "; Hex(MemoryAddress, 9)
@@ -102,7 +100,6 @@ Static Public Sub ForceDelete(SharedName As String)
   Try shm_unlink(SharedName)
 
 End
-
 
 Public Sub _new(Optional SharedLength As Long = DefaultLength, SharedName As String = "", WaitTimeout As Float = 2.1, cleanup As Boolean = False)
 
@@ -259,7 +256,6 @@ Public Sub Exclusive()
 
 End
 
-
 Public Sub ExclusiveTimeout()
 
   If InLock Then
@@ -328,7 +324,6 @@ Catch
 
 End
 
-
 Private Function length_Read() As Long
 
   Return DataLength
@@ -340,5 +335,3 @@ Private Function address_Read() As Pointer
   Return DataAddress
 
 End
-
-

@@ -47,7 +47,6 @@ Private NotifyQueue As ShmQueue
 Private NotifyVars As Collection
 Private MyAppId As Long = 0
 
-
 '' Create a new notify queue for this symbol table
 '' This is called by the Symbol table to create the notify queue
 Public Sub _New(VariableMemory As ShmVarStorage)
@@ -105,7 +104,6 @@ Public Sub Notify(SymEntry As Symbol, CallBack As Object, CallFunc As String, Op
   VarInfo = New ShmNotifyEntry(SymEntry, CallBack, CallFunc, VarMem, Timeout) As "VarInfo"
   NotifyVars.Add(VarInfo, SymEntry.Name.tostring())
 
-
 End
 
 Public Sub VarInfo_VarTimedOut(VarInfo As ShmNotifyEntry)
@@ -119,7 +117,6 @@ Public Sub VarInfo_VarChanged(VarInfo As ShmNotifyEntry)
   VarInfo.Dispatch(True)
 
 End
-
 
 Public Sub NotifyStop(SymEntry As Symbol)
 
@@ -194,8 +191,3 @@ Public Sub SignalEach(Sym As Symbol)
   Next
 
 End
-
-
-
-
-

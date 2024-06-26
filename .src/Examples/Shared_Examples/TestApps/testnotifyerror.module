@@ -2,7 +2,7 @@
 
 Public Sub Main()
 
-  SharedMem.BeginNamed("briangsh", 4512000)
+  SharedMem.BeginNamed("randomgsh", 4512000)
   With Sharedmem
 
     .free("a")
@@ -12,7 +12,6 @@ Public Sub Main()
 
     .NotifyChange("a", Me, -1)
     .a = 6
-
 
     .NotifyChange("b", Me, -1, "b_flopped")
     .b = 7

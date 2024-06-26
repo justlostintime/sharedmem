@@ -78,7 +78,6 @@ Public Sub NewVal()
 
 End
 
-
 Public Sub Dispatch(Failed As Boolean)
 
   VarMemory.Lock()
@@ -89,6 +88,3 @@ Public Sub Dispatch(Failed As Boolean)
   Object.Call(NotifyObject, NotifyFunc, ParmList)
 
 End
-
-
-

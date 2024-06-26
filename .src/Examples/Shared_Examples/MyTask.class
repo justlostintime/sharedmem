@@ -31,8 +31,6 @@ Public Sub main()
 
   'Sleep 1
 
-
-
   While SharedMem["counter"] < 1000
 
     'Print "Background >>  task says  g changed to ", SharedMem["g"], " Counter = ", SharedMem["counter"]

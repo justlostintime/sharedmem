@@ -143,4 +143,3 @@ Sub PrintVariables(thearray As Variant)
   Print "-----------------------------------"
 
 End
-

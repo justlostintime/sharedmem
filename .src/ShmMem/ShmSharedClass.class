@@ -3,12 +3,13 @@
 ''' This Class is a template to use when creating classes that will be stored ito the memory database
 ''' Using this is relatively slow
 
-Property Value As Variant Use $Value = 0
-Property Index As Integer Use $Index = 100
+Property Value As Variant Use $Value = 0                                     '' example class element
+Property Index As Integer Use $Index = 100                                 '' Example class element
 
-Property ShmSymName As String Use $SymName = ""
-Property ShmIF As ShmSymbolTable Use $ShmIF = Null
+Property ShmSymName As String Use $SymName = ""            '' Required class element
+Property ShmIF As ShmSymbolTable Use $ShmIF = Null          '' Required class element
 
+'' Update the object store with changed information for this object
 Public Sub _commit()
 
   $ShmIF[$SymName] = Me
@@ -19,24 +20,31 @@ End
 
 Public Sub _write(OutStream As Stream)
 
-  Write #outstream, $Value As Variant
-  Write #outStream, $Index As Integer
+  Write #outstream, $Value As Variant                                     '' example element is stored into the memory database
+  Write #outStream, $Index As Integer                                     '' example element is stored into the memory database
 
 End
 
 '' Read back All data for the object from the database
 Public Sub _read(InStream As Stream)
 
-  $Value = Read #InStream As Variant
-  $Index = Read #InStream As Integer
+  $Value = Read #InStream As Variant                                      '' Example element is read from the memory database
+  $Index = Read #InStream As Integer                                       '' Exampe element is read from the memory database
 
 End
 
-
 '' Modify this to do something useful, it right now does something almost silly
+'' Compare the contents of one object to this object, this should implement
+'' a > < or = protocol for the objects.
+'' Return 0  if they are equal
+'' Return 1 if This object is  greater than the OtherObject
+'' Return -1 if This object is less than the OtherObject
+'' Return -2 if it is an invalid comparison
+
 Public Sub _compare(OtherObject As Variant) As Integer
 
   If TypeOf(OtherObject) <> gb.object Then
+    'if not the same object type then  the other object must contain values with same symbol names
 
     If TypeOf(OtherObject) = gb.integer Then
       If $Index = OtherObject Then Return 0
@@ -61,8 +69,11 @@ Public Sub _compare(OtherObject As Variant) As Integer
 
   Endif
 
-End
+Catch
+  ' gets here if it is an invalid comparison
+  Return -2
 
+End
 
 Private Function Value_Read() As Variant
 
@@ -73,7 +84,7 @@ End
 Private Sub Value_Write(vValue As Variant)
 
   $Value = vValue
-  Me._commit()
+  Me._commit()                        ' sync memory database with new value
 
 End
 
@@ -86,6 +97,6 @@ End
 Private Sub Index_Write(Value As Integer)
 
   $Index = Value
-  Me._commit()
+  Me._commit()            ' sync memory database with new value
 
 End

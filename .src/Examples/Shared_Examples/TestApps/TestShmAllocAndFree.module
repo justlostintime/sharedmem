@@ -1,6 +1,5 @@
 ' Gambas module file
 
-
 Public Sub main()
 
   Dim pp As Pointer
@@ -74,4 +73,3 @@ Public Sub main()
   Print "End Test Alloc Free ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
 
 End
-

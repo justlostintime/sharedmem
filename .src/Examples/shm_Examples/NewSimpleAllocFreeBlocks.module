@@ -1,7 +1,5 @@
 ' Gambas module file
 
-
-
 Public Sub main()
 
   System.IgnoreOverflow = True
@@ -38,5 +36,3 @@ Public Sub main()
   mymem._Print()
 
 End
-
-

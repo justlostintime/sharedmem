@@ -19,7 +19,7 @@
 Export
 
 'Fast Unsafe
-Static Property Read Version As String Use $Version = "3.19.1.5"
+Static Property Read Version As String Use $Version = "3.19.2.6"
 Static Public MemSigConst As Integer = 3191
 
 '' Notify every time value changes
@@ -52,7 +52,8 @@ Static Private Mutex As Pointer = Null                                          
 Static Private CollectionAddress As Pointer = Null                              ' pointer to where we will store the collection in shared memory
 Static Private CollectionChangedIndicator As Pointer = Null            ' pointer to changed indicator
 Static Private CollectionEntries As Pointer = Null                                 ' points to the number of entries in the symbol table
-Static Public CollectMemLen As Integer = 1512000                              ' the length of space reserved for storing the collection of items
+Static Public CollectMemLen As Integer = 1512000                              ' the default  length of space reserved for storing the collection of items
+Static Public SymbolTableDefaultLength As Integer = 4512000      ' 4mb the default length of the actual memory storage area
 Static Private CollectionLastUpdate As Float = 0.0                              ' the time the last addition of item to collection happened
 
 '' Collection of the Symbols defined in the Shared Memory Area
@@ -309,12 +310,16 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
     If File.Dir(BlockSize) = "" Then
       blocksize = DefaultSaveLocation & blocksize
     Endif
-    rFile = Open blocksize For Read
+    Try rFile = Open blocksize For Read
     If Not IsNull(rFile) Then
       _read(rFile)
       Close rFile
       LastMemorySync = blocksize
       Return True
+    Else
+      LastMemorySync = blocksize
+      Blocksize = SymbolTableDefaultLength                                                                  ' set to the default amount of memory
+      Error "Shared memory Warning :"; LastMemorySync;; "Not Found, using  Default to memory length of ";; SymbolTableDefaultLength
     Endif
   Endif
 
@@ -1352,9 +1357,10 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
 
   Endif
 
-  If memcmp(usermem.AddrReal(px.ShmWait + 1), zPointer, SizeOf(gb.long)) ' if waiting
+  If memcmp(usermem.AddrReal(px.ShmWait + 1), zPointer, SizeOf(gb.long))   ' if waiting
 
     If px.ShmLastWriteTime = Null Then
+      sem_post(UserMem.AddrReal(MemMutex))
       Error.Raise("Last write time is null" & px.SymName)
     Endif
 
@@ -1413,7 +1419,8 @@ Static Private Sub SaveCollection()
     Inc TotalEntries
     TotalLength += ISym.Length
     If TotalLength > Colmem.MemoryLength Then
-      Error.Raise("SharedMem out of Symbol index space :" & Str(TotalEntries))
+      sem_post(ColMem.AddrReal(Mutex))
+      Error.Raise("SharedMem out of Symbol index space :" & Str(TotalEntries) & ", Adding Symbol :" & ISym.SymName)
     Endif
 
     ISym._write(MFile)
@@ -1535,7 +1542,7 @@ Static Public Sub used() As Integer
 
 End
 
-'' Return true if the names variable exsists
+'' Return true if the named variable exsists
 Static Public Sub Exist(Symbol As String) As Boolean
 
   CollectionChanged()
@@ -1617,7 +1624,7 @@ Static Public Sub Len(Symbol As String) As Integer
 
 End
 
-'' Returns a Sombol table entry SharedMemSymbol
+'' Returns a Symbol table entry SharedMemSymbol
 Static Public Sub _Symbol(symbol As String) As SharedMemSymbol
 
   Return SymbolTable[symbol]
@@ -2004,6 +2011,8 @@ Static Public Sub ReadVarFrom(symbol As String, Optional fileName As Variant = "
 
     ' Print "_put has mutex wlt "; getpid()
     If mSymbol.ShmLastWriteTime = Null Then
+      sem_post(UserMem.AddrReal(MemMutex))
+      sched_yield()
       Error.Raise("last write time pointer is nill" & mSymbol.SymName)
     Endif
 
@@ -2047,6 +2056,7 @@ Static Public Sub write(wFile As File, symbol As String, Optional ilength As Int
   mSymbol = SymbolTable[symbol]
 
   If IsNull(mSymbol) Then
+    sem_post(UserMem.AddrReal(MemMutex))
     Error.Raise("Symbol not found '" & symbol & "'")
     Return 0
   Endif
@@ -2079,6 +2089,7 @@ Static Public Sub read(rFile As File, symbol As String, Optional ilength As Inte
   mSymbol = SymbolTable[symbol]
 
   If IsNull(mSymbol) Then
+    sem_post(UserMem.AddrReal(MemMutex))
     Error.Raise("Symbol not found '" & symbol & "'")
     Return 0
   Endif
@@ -2211,7 +2222,7 @@ Static Private Function Count_Read() As Long
 End
 
 '' This returns a snap shot of the current variable collection
-'' The actuall collect may change while this is in use
+'' The actuall collection may change while this is in use
 '' Do not depend on this to represent the current variable values
 Static Private Sub Vars_Read() As Collection
 

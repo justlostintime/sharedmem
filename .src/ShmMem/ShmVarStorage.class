@@ -142,8 +142,6 @@ Const FreeBlock As Integer = -1
 Static Public UserClasses As New Collection(gb.ignoreCase)
 Static Public UserClassByName As New Collection(gb.ignorecase)
 
-
-
 Static Public DataTypes As String[] = ["*Free", "*Binary", "*Boolean", "*Byte", "*Short", "*Integer", "*Long", "*Single", "*Float", "*Date", "*String",
   "", "*Pointer", "*Variant", "*Function", "*Class", "NULL", "*Object", "NotArray",
   "StringData", "ObjectData", "", "", "", ""]
@@ -162,8 +160,6 @@ Static Public Sub DefineClass(ClassName As String, ClassIndex As Integer)
 
 End
 
-
-
 Static Public Sub GetTextType(Type As Integer) As String
 
   If Type > ObjData Then
@@ -172,7 +168,6 @@ Static Public Sub GetTextType(Type As Integer) As String
   Return Left(DataTypes[Type + 1] & Space(10), 10)
 
 End
-
 
 '' Creating this pool of variable storage for a specific memory block
 Public Sub _new(mem As ShmManage)
@@ -187,7 +182,6 @@ Public Sub _free()
   varmem = Null
 
 End
-
 
 Private Sub AllocSimpleVar() As Pointer
 
@@ -215,7 +209,6 @@ Public Sub AllocVirt(Length As Long) As Pointer
   Return Me.Alloc(Length) + SizeOf(AllocHeader)
 
 End
-
 
 '' set the value of a variable, create a new one if VirtAddress is zero
 Public Sub set(value As Variant, Optional VirtAddress As Pointer = 0) As Pointer
@@ -494,7 +487,6 @@ Public Sub FreeVirt(Virtaddress As Pointer)
 
 End
 
-
 Public Sub RealAddress(VirtAddress As Pointer) As Pointer
 
   Return varmem.RealAddress(VirtAddress)
@@ -506,7 +498,6 @@ Public Sub RealDataAddress(VirtAddress As Pointer) As Pointer
   Return varmem.RealDataAddress(VirtAddress)
 
 End
-
 
 Public Sub {Lock}()
 
@@ -602,7 +593,6 @@ Public Sub _next() As Variant
   Return Getpointer(aPtr.type, aPtr.address)
 
 End
-
 
 Private AlreadyUsed As Collection
 

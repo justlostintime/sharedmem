@@ -13,7 +13,6 @@ Public Value As Elevation
 
 Property Read text As String
 
-
 Public Sub _new()
 
   value = New Elevation

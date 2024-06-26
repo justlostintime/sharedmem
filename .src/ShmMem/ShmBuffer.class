@@ -14,7 +14,7 @@ MySharedMem As ShmMem
 InsideVar As Boolean = False
 
 Static Public cShmBuffer As Integer = 28                  '' The Constant identifying this class name must not be a valid datatype integer
-Static Public cShmBufferEntry As Integer = 29             '' The entry in a Buffer Element index object type
+Static Public cShmBufferEntry As Integer = 29         '' The entry in a Buffer Element index object type
 
 Property Read Data As Pointer Use $Data                   '' Return the real address data portion of the Buffer
 Property Read Length As Long Use $Length                  '' The Length of the Data Portion of the buffer
@@ -25,7 +25,6 @@ Property Read Bounds As Long[]                            '' return an array con
 
 Public SetHeadType As Integer = cShmBuffer                '' The Buffer  header Class
 Public SetEntryType As Integer = cShmBufferEntry          '' The Buffer Entry Class
-
 
 Static Public Sub _init()
 
@@ -93,7 +92,6 @@ Public Sub _free()
 
 End
 
-
 Sub GetOffset(Dims As Variant) As Pointer       '' calculate the offset based upon array structure
 
   Dim i As Long = 0
@@ -111,7 +109,6 @@ Sub GetOffset(Dims As Variant) As Pointer       '' calculate the offset based up
   Return location
 
 End
-
 
 Public Sub _property(...) As Boolean
 
@@ -141,7 +138,6 @@ Public Sub {Define}(Element As String, ElementLength As Integer, ...)  '' define
 
 End
 
-
 Public Sub _put(Value As Variant, ...)                        '' Indexes are always in the form of bytes/field elements if more that one dimension
 
   If param.count = 0 Then
@@ -155,8 +151,6 @@ Public Sub _put(Value As Variant, ...)                        '' Indexes are alw
 End
 
 Public Sub _get(...) As Variant
-
-
 
 End
 

@@ -2,7 +2,6 @@
 
 Public Const Exchanges As Integer = 5
 
-
 Public Sub main()
 
   Dim MyTask As TestBGTaskSymbolCreate
@@ -12,10 +11,8 @@ Public Sub main()
   mytime = Timer
   myTime += 60.00
 
-
   Print "Begin  FG and BG Symbol creation =================================================================================="
   Print " This will run for "; myTime; "seconds  from "; Now
-
 
   While Timer < mytime
     SharedMem.begin(128000)
@@ -35,7 +32,6 @@ Public Sub main()
       SharedMem["Str" & Str(j)] = "Hello" & Str(j)
       SharedMem["Sync" & Str(j)] = 1
 
-
       If Not waitfor("ForegroundSync" & Str(j)) Then
         Print "Timed out waiting for BackGround to respond", j
         Break
@@ -54,7 +50,6 @@ Public Sub main()
 
 End
 
-
 Public Sub waitfor(Item As String) As Boolean
 
   For i As Integer = 0 To 500000
@@ -69,6 +64,5 @@ End
 Public Sub TheTask_read(data As String)
 
   Print "Read", data
-
 
 End

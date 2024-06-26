@@ -1,22 +1,35 @@
 ' Gambas class file
 
 Inherits Task
-isRunning As Boolean = True
+Private isRunning As Boolean = True
+Private LogFileName As String
+Private LogFile As File
 
 Public Sub main() As String
 
+  LogFileName = User.home &/ "Desktop/LogBG_" & Application.id
+  LogFile = Open LogFileName For Write Create
+
   With NewNotifyTest.vars
     Print Application.id, "BG Begins,";;
-    .Notify("cow", Me)
-    Print "Notify Set"
+    .Notify("Cow", Me)
+    .Notify("Done", Me)
+
+    Print #LogFile, "Notify Set for Cow and Done"
+
     While isRunning
       Wait Next
     Wend
-    Wait 0.03
-    .NotifyStop("cow")
-  End With
 
-  Return "Done"
+    Wait 0.03
+    .NotifyStop("Cow")
+    .Notify.Stop("Done")
+
+  End With
+  Print #logfile, "Done BG ID=" & Application.id
+  Close #LogFile
+  Print "Done BG ID=" & Application.id
+  Return 0
 
 Catch
   Print Application.id, "BG Error =";; Error.text, Error.where
@@ -25,9 +38,12 @@ End
 
 Public Sub cow_changed(VarName As String, VarValue As Variant, TimedOut As Boolean)
 
-  With NewNotifyTest.vars
-    'Print Application.id, "BG Cow Changed ", VarName, "=", VarValue, "Count =", !Count
-    If VarValue == 100 Then isRunning = False
-  End With
+  Print #LogFile, Application.id, "BG Cow Changed ", VarName, "=", VarValue
+
+End
+
+Public Sub done_changed(VarName As String, VarValue As Variant, TimedOut As Boolean)
+
+  If VarValue = True Then isRunning = False
 
 End

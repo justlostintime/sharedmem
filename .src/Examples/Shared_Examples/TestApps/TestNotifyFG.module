@@ -21,7 +21,6 @@ Public Const BGCycles As Integer = 200
 Extern waitpid(pid As Integer, state As Pointer, flags As Integer) As Integer In "libc:6"
 Extern getpid() As Integer In "libc:6"
 
-
 Public Sub main()
 
   Dim MyTask As TestNotifyBG

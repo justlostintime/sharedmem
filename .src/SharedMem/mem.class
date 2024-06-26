@@ -41,7 +41,6 @@ Public Sub _new(Optional BaseAddress As Pointer = 0, UsingRealMemoryAddress As B
 
 End
 
-
 '' return the actual storage required for any data type
 '' objects must have a _write public function
 Static Public Sub _SizeOf(data As Variant) As Integer
@@ -234,7 +233,6 @@ Public Sub _get(MemPointer As Pointer, Optional rdType As Integer = -1, notype A
 
   On rdType Goto DoBinary, DoBoolean, DoByte, DoShort, DoInteger, DoLong, DoSingle, DoFloat, DoDate, DoString, DoLongDate, DoPointer, DoVariant, DoFunction, DoClass, DoNull, DoObject
 
-
 DoPointer:
 
   Return Pointer@(BasePtr)
@@ -396,4 +394,3 @@ Public Sub DumpAllMem()
   DumpMem($RootAddress, $MemoryLength)
 
 End
-

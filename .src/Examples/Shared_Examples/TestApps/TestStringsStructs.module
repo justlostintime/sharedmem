@@ -8,7 +8,6 @@ Public Struct MyStruct
   bong As Integer[]
 End Struct
 
-
 Public Sub main()
 
   Print "Sharedmem Version";; Sharedmem.Version
@@ -31,15 +30,12 @@ Public Sub Execute()
     Dim pOne As Pointer
     Print "Begin TestStringStructs >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
 
-
-
     .["TheStrings"] = ["asdasdasdasdasdd", "asdasdasasdasdasasdasdasd", "qweqweqweqwewewwwqwe"]
     aStruct.int = "Test String"
     aStruct.str = &hffffffff
     aStruct.bong = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
     SharedMem["struct"] = aStruct
-
 
     For Each i As String In .["TheStrings"]
       Print i
@@ -61,7 +57,6 @@ Public Sub Execute()
     Print " MyObject as pointer = "; pPointer
     Free(pPointer)
 
-
     .["string1"] = "axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
     Print .["string1"], .RealAddress("string1"), String@(.RealAddress("string1"))
 
@@ -74,7 +69,6 @@ Public Sub Execute()
     'Print "Shared mem struct =";.["struct"]; " a ="; Object.Address(a)
     ._print()
 
-
     Print "End   TestStringStructs >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
 
   End With
@@ -83,4 +77,3 @@ Catch
   Print Error.Text, Error.Where
 
 End
-
