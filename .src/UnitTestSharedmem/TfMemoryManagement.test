@@ -78,7 +78,7 @@ Public Sub b_lowLevelAllocAndFree()
     Dim xx As Pointer
     Dim yy As Pointer
     Dim aa As Pointer
-    Dim cc As Pointer
+    '    Dim cc As Pointer
 
     .begin(500000)
     'begin does some stuff to remove for this test See- SharedMemWaitQueue _Begin

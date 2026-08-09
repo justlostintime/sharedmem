@@ -100,7 +100,7 @@ End
 Public Sub bSaveAndLoadVariables()
 
   Dim iString As String[]
-  Dim b As Variant
+  '  Dim b As Variant
   Dim a As New SharedObjectExample
   Dim c As SharedObjectExample
   Dim TheString As String[]

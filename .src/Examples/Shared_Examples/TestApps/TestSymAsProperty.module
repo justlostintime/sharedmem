@@ -15,7 +15,7 @@ Public Sub main()
   SharedMem.ThisInt = [84, 96, 43, 89, 34, 89]
   SharedMem.ThisInt[2] += 2
   AClass.TheAry[2] += 100
-  Print "Compare class Array to _unknown Arry -> "; AClass.TheAry[2], SharedMem.ThisInt[2]
+  Print "Compare class Array to _unknown Arry -> "; AClass.TheAry[2], SharedMem.ThisInt[2], smo
   Inc SharedMem.Counter
   SharedMem.x = 1
   SharedMem.x += 3945

@@ -8,12 +8,12 @@
 Export
 ' Fast Unsafe
 
-Private WaitQueue As Variant[] = New Variant[]        ' we will queue wait requests here
-Private InitSignal As Integer = 0                                        ' force the init on first call of wait
-Private PidList As Mem                                                         ' pointer to shared memory
-Private Const pidlistlen As Integer = 500                        ' Number of entries in the list
-Public Const ChangeSignal As Integer = 16                    ' Sigsys = 31, SigUSr2 = 12, sig16 is unused too
-Public $oShm As Variant = Null                                           ' The SharedMemory object
+Private WaitQueue As Variant[] = New Variant[]                ' we will queue wait requests here
+Private InitSignal As Integer = 0                             ' force the init on first call of wait
+Private PidList As Mem                                        ' pointer to shared memory
+Private Const pidlistlen As Integer = 500                     ' Number of entries in the list
+Public Const ChangeSignal As Integer = 16                     ' Sigsys = 31, SigUSr2 = 12, sig16 is unused too
+Public $oShm As Variant = Null                                ' The SharedMemory object
 
 Public Struct WaitHeader
   pid As Integer
@@ -63,6 +63,23 @@ Public Sub NotifyList() As String[]
   Return result
 
 End
+
+'' Cancel Notify New
+Public Sub NotifyNewCancel(NotifyObject As Variant)
+
+  NotifyCancel("#newvar", NotifyObject)
+
+End
+
+
+'' Notify when a variable changes value
+Public Sub NotifyNew(NotifyObject As Variant, Optional FunctionName As String = "") As Boolean
+
+  If Not SharedMem.Exist("#newvar") Then SharedMem["#newvar"] = CPointer(0)
+  Return NotifyChange("#newvar", NotifyObject, 0, FunctionName)
+
+End
+
 
 '' NotifyChange(Symbol As String, NotifyObject As Object, Optional iTimeOut As Long = 0, FunctionName As String = "") As Boolean
 '' timeout can be  = 0 = wait forever until first occurance          call _change
@@ -198,7 +215,7 @@ Private Sub removepid(pid As Integer)
 
 End
 
-'' Actuall allocate the shared memory list common to all tasks
+'' Actually allocate the shared memory list common to all tasks
 '' waiting for notifications
 Public Sub _begin() '' we will allocate a fixed table of pids to be used for notification
 
@@ -228,7 +245,7 @@ End
 
 '' Initialize the signal handler for notifications
 '' this is called once by each Task/Application waiting for
-'' notofications
+'' notifications
 Private Sub SetSignal()
 
   InitSignal = getpid()

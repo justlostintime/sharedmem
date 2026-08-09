@@ -1,13 +1,13 @@
 # Gambas Project File 3.0
 Title=Shared Memory object - SHMV2.1 and SHaredMem V1.2 both interfaces
 Startup=TestSetArrayValues
-Version=3.19.3
-Component=gb.image
+Version=3.19.5
 Component=gb.debug
 Component=gb.eval
-Component=gb.eval.highlight
+Component=gb.image
 Component=gb.pcre
 Component=gb.signal
+Component=gb.eval.highlight
 StartupEnvironment=GB_PCODE_VERSION=3.18
 Description="SharedMem is a library to enable shared memory between tasks and threads within a single machine  with real time change notification, un-named shared memory and named shared memory.\n\nVersion 3.19.3 Drops ShmMem as it has moved to a seperate repository justlostintime/shmmem.\n\nVersion 3.19.1, added rename and speed refinements\n\nVersion 2 improves on speed 50% increase and variable lock/unlock reliability\n\nProject contains both versions\nVersion              SharedMem release 3.18.3          production quality\nVersion              ShmMem      release 3.18.3          Beta quality"
 Authors="Westwood"
@@ -28,7 +28,7 @@ RuntimeVersion="3.17"
 Packager=1
 Systems=archlinux,autotools,debian,fedora,mageia,slackware,suse,ubuntu
 SameDependencies=1
-Groups=archlinux:"libdevel"
+Groups=archlinux:"libs"
 Groups=debian:"libs"
 Groups=fedora:"Development/Libraries"
 Groups=mageia:"Development/Tools"

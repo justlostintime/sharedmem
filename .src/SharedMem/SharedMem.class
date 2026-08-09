@@ -34,7 +34,7 @@ Static Private WaitQueue As SharedMemWaitQueue                          ' we wil
 
 Static Private MemoryStorage As Pointer = Null                                  ' actual storage address
 Static Private MemoryRoot As Pointer = Null                                        ' then link address of this block
-Static Private MemoryOffset As Long = 0                                               ' adjustment for all memory operations
+'Static Private MemoryOffset As Long = 0                                               ' adjustment for all memory operations
 Static Public MemoryAddress As Pointer = Null                                    ' As Pointer = Null  ' array of memory mapped blocks
 Static Private MemoryLength As Pointer = Null                                     ' As Integer = 0     ' total length of memory we allocate
 Static Private MemoryInUse As Pointer = Null                                       ' track how many applications are accessing this memory block
@@ -240,6 +240,23 @@ Static Public Sub NotifyCancel(Symbol As String, NotifyObject As Object)
   WaitQueue.NotifyCancel(Symbol, NotifyObject)
 
 End
+
+'' This Method is used to cancel the notification sent when new symbols are created\
+'' NofifyObject id the Object which is waiting for a notification
+Static Public Sub NotifyNewCancel(NotifyObject As Object)
+
+  WaitQueue.NotifyNewCancel(NotifyObject)
+
+End
+
+'' This method requests a notification when a variable is created
+Static Public Sub NotifyNew(NotifyObject As Object, Optional FunctionName As String = "") As Boolean
+
+  Return WaitQueue.NotifyNew(NotifyObject, FunctionName)
+
+End
+
+
 '' This Method requests a notification when the content of a shared memory Symbol/Variable changes\
 '' Notification can be requested by any task started from the primary task, any onject or number of objects in any task\
 '' may request to be notifies when a Shared Memory variable chnages value\
@@ -342,7 +359,7 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
     MemSignature = MemMutex + (SizeOf(gb.long) * 8) + 8                                          ' 4 byte integer Signature of the memory database being used
     MemoryAddress = MemSignature + SizeOf(gb.integer) + 1                                    ' pointer to the start of the memory
 
-    SharedMemoryControlHeader = MemoryAddress + SizeOf(gb.pointer) + 1          ' Total length of the segment header yes I know hard coded
+    SharedMemoryControlHeader = MemoryAddress + SizeOf(gb.pointer) + 1                              ' Total length of the segment header yes I know hard coded
 
     'BlockSize += 4096  ' SharedMemoryControlHeader             add 4096 for basic header           ' add the length of the header, management area
 
@@ -651,7 +668,7 @@ Static Public Sub Restore(Optional Symbol As String = "", filename As String = "
       Endif
     Endif
 
-    If Not File.exist(LastMemorySync) Then Return False
+    If Not Exist(LastMemorySync) Then Return False
 
     end()
     begin(LastMemorySync)

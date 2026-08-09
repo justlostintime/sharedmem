@@ -45,12 +45,13 @@ End
 Public Sub Service_errdata(buffer As Byte[], len As Integer)
 
   With sharedmem
-    .[Errbuff] = Buffer.toString
+    .[Errbuff] = Buffer.toString()
+    If .[errbuff].len > len Then Error("Wrong length")
   End With
 
 End
 
-Public Sub Service_indata(buffer As Byte[], len As Integer)
+Public Sub Service_indata(buffer As Byte[], Optional len As Integer = 0)
 
   Dim mSymbol As SharedMemSymbol
   Dim mfile As File
@@ -61,7 +62,10 @@ Public Sub Service_indata(buffer As Byte[], len As Integer)
     mSymbol._read(mFile, True)
     Close mfile
 
-    If .Exist(mSymbol.symname) Then .free(mSymbol.symname)
+    If .Exist(mSymbol.symname) Then
+      .free(mSymbol.symname)
+      Error("Invalid length " & len)
+    Endif
     .add(mSymbol)
 
   End With

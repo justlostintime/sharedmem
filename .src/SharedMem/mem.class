@@ -229,7 +229,7 @@ Public Sub _get(MemPointer As Pointer, Optional rdType As Integer = -1, notype A
   If AbsIndexed Then Mempointer = BasePtr
 
   'DataTypes = ["*Binary", "*Boolean", "*Byte", "*Short", "*Integer", "*Long", "*Single", "*Float", "*Date", "*String",
-  '                                       "*LongDate", "*Pointer", "*Variant", "*Function", "*Class", "NULL", "*Object", "Not Array", "", "", "", "", "", ""]
+  '            "*LongDate", "*Pointer", "*Variant", "*Function", "*Class", "NULL", "*Object", "Not Array", "", "", "", "", "", ""]
 
   On rdType Goto DoBinary, DoBoolean, DoByte, DoShort, DoInteger, DoLong, DoSingle, DoFloat, DoDate, DoString, DoLongDate, DoPointer, DoVariant, DoFunction, DoClass, DoNull, DoObject
 
