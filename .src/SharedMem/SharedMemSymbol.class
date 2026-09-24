@@ -190,8 +190,6 @@ Public Sub SetSymbol(Sname As String, data As Variant, Optional extrastorage As 
 
   Endif
 
-  If SharedMem.Exist["#newvar"] Then SharedMem["#newvar"] += 1
-
   Return True
 
 Catch

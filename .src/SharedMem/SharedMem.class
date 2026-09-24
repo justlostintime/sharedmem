@@ -435,6 +435,7 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
 
   InSession = True
   WaitQueue._begin()
+  SharedMem["#newvar"] = CPointer(0)
   Return True
 
 End

@@ -1,0 +1,27 @@
+' Gambas module file
+
+' Gambas class file
+
+Public Sub main()
+
+  With SharedMem
+    .Begin()
+    .NotifyNew(Me)
+    Wait 0.01
+    .a = 100
+    .b = 100
+    Wait 5
+  End With
+
+End
+
+Public Sub newvar_created(value As Variant, Name As String)
+
+  With sharedmem
+    Print Name;; value
+  End With
+
+End
+
+
+

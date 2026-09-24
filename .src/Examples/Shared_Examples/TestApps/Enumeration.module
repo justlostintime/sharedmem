@@ -6,10 +6,13 @@ Public Sub main()
   With SharedMem
     .["$a"] = 100
     .["$b"] = "hello world"
-  End With
 
-  For Each s As String In SharedMem
-    Print s
-  Next
+
+    For Each s As String In SharedMem
+      Print s
+    Next
+    Print !$a, !$b
+  End With
+  SharedMem.End()
 
 End

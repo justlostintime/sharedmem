@@ -1,13 +1,13 @@
-TestSetArrayValues
-Shared Memory object - SHMV2.1 and SHaredMem V1.2 both interfaces
+TestNotifyNew
+Shared Memory object -sharedmem
 #sharedmem
 
-3.19.5
+3.22.3
 
 gb.debug
 gb.eval
 gb.image
 gb.pcre
 gb.signal
-gb.eval.highlight
+gb.highlight
 

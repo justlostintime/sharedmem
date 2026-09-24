@@ -73,9 +73,8 @@ End
 
 
 '' Notify when a variable changes value
-Public Sub NotifyNew(NotifyObject As Variant, Optional FunctionName As String = "") As Boolean
+Public Sub NotifyNew(NotifyObject As Variant, Optional FunctionName As String = "OnNew") As Boolean
 
-  If Not SharedMem.Exist("#newvar") Then SharedMem["#newvar"] = CPointer(0)
   Return NotifyChange("#newvar", NotifyObject, 0, FunctionName)
 
 End
@@ -98,7 +97,13 @@ Public Sub NotifyChange(Symbol As String, NotifyObject As Variant, Optional iTim
     Return False
   Endif
 
-  If FuncName = "" Then FuncName = Symbol & "_changed"
+  Dim fName As String
+  If symbol = "#newvar" And If FuncName = "" Then
+    FuncName = "newvar_created"
+  Else
+    If FuncName = "" Then FuncName = Symbol & "_changed"
+  Endif
+
   Dim mClass As Class = Null
 
   Dim cClass As Class
@@ -254,7 +259,7 @@ Private Sub SetSignal()
 End
 
 '' Dispatch the signal to each application waiting for a change in the variable
-Public Sub dispatch()
+Public Sub dispatch(Optional newVariable As Boolean = False)
 
   Dim result As Integer
 

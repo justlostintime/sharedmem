@@ -1,7 +1,5 @@
 ' Gambas test file
 
-' Gambas module file
-
 Const LoopCount As Integer = 1000
 Private starttime As Float
 
