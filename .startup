@@ -1,8 +1,8 @@
-TestNotifyNew
+BothTestAccessSpeed
 Shared Memory object -sharedmem
 #sharedmem
 
-3.22.3
+3.22.4
 
 gb.debug
 gb.eval

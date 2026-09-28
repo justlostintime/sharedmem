@@ -1,5 +1,7 @@
 ' Gambas module file
 
+'Fast Unsafe
+
 Public Sub Main()
 
   System.IgnoreOverflow = True
@@ -11,20 +13,20 @@ Public Sub Main()
 
     .a = [1, 2, 3, 4, 5, 6, 7]
     .b = ["sss", "dddd", "ggggg", "lllll"]
-    printit(.b)
+    printit(.b, "B =")
     .c = ["a": 1, "b": 2, "c": 3, "d": 4]
 
-    printit(.c)
+    printit(.c, "C =")
     .["a", 5] = 99
     b = .a
     b.add(9)
     .a = b
-    printit(.a)
+    printit(.a, "A after setting =")
     ob = .AsObject("b")
     .["b", 2] = "changed"
     ob[3] = "More Change"
-    Print ob[3]
-    printit(.b)
+    Print "OB=";; ob[3]
+    printit(.b, "B=")
 
     b = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3,
       4, 5, 6, 7, 8, 9, 0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9,
@@ -39,24 +41,24 @@ Public Sub Main()
       4, 5, 6, 7, 8, 9, 0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9,
       4, 5, 6, 7, 8, 9, 0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9,
       4, 5, 6, 7, 8, 9, 0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9,
-      0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0]
+      0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8,
+      8, 8, 9, 9, 9, 0, 0, 0]
     .a = b
-    Print "b ";
-    printit(b)
+    printit(b, "Local Var b =")
 
-    Print "a ";
-    printit(.a)
+    printit(.a, "A =")
 
-    .["a", 2] = "456789"
-    printit(.a)
+    .["a", 2] = 45
+    .["a", 6] = 99
+    printit(.a, "A =")
 
   End With
 
 End
 
-Public Sub printit(x As Variant)
+Public Sub printit(x As Variant, title As String)
 
-  Print " Values { "
+  Print title;; "Values { "
   For Each i As Variant In x
     Print i,
   Next

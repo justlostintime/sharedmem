@@ -1,5 +1,7 @@
 ' Gambas module file
 
+Fast Unsafe
+
 Public Sub main()
 
   Dim AClass As TestSymAsPropClass = New TestSymAsPropClass

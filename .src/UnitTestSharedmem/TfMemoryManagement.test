@@ -1,10 +1,10 @@
 ' Gambas test file
 
 Const LoopCount As Integer = 1000
-Private starttime As Float
+
 
 Public Sub a_ALLOCFree()
-
+Dim starttime As Float
   With sharedmem
 
     .Begin(128000)

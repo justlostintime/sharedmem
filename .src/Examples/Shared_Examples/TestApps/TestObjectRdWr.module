@@ -1,5 +1,7 @@
 ' Gambas module file
 
+Fast Unsafe
+
 Public Sub main()
 
   With sharedmem

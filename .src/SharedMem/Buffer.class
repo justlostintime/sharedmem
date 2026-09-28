@@ -336,7 +336,7 @@ Public Sub Write(Optional mFile As Variant = "", Optional start As Integer = 0, 
 
 End
 
-Public Sub _get(index As Integer) As Variant
+Fast Unsafe Public Sub _get(index As Integer) As Variant
 
   If index > $Storagelength Or index < 0 Then
     Error.Raise("Index outside of buffer")

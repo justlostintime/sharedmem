@@ -1,5 +1,6 @@
 ' Gambas module file
 
+Fast Unsafe
 Public xxxx As String = "sasdfdsfsdfsdfsdfsdfsdfsdfsdfsdfsdfsdfsdfsdfsdfsdfsdsdd"
 
 Public Struct MyStruct

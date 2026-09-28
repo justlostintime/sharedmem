@@ -1,6 +1,9 @@
 ' Gambas module file
 
+Fast Unsafe
+
 Public Sub main()
+  ' not working causes crash
 
   Dim i As Integer
 

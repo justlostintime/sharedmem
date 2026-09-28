@@ -18,8 +18,8 @@
 
 Export
 
-'Fast Unsafe
-Static Property Read Version As String Use $Version = "3.19.2.6"
+Fast Unsafe
+Static Property Read Version As String Use $Version = Application.Version
 Static Public MemSigConst As Integer = 3191
 
 '' Notify every time value changes
@@ -960,7 +960,7 @@ RetryAfterAlloc:
   Return Null
 Catch
   Print "ShmAllcoc error:", Error.text, Error.where
-  Stop
+  ' Stop
 
 End
 
@@ -2205,9 +2205,9 @@ End
 Static Private nextlist As New String[]
 
 '' This returns a sorted  enumerated list of current variable names
-'' it is a snap shot of the variables at the time the started
+'' it is a snap shot of the variables at the time they started.
 '' user should verify the names exsist before accessing them
-Static Public Sub _next() As Variant
+Static Public Sub _next() As String
 
   If Enum.Index = Null Then
     nextlist.Clear()
@@ -2240,7 +2240,7 @@ Static Private Function Count_Read() As Long
 End
 
 '' This returns a snap shot of the current variable collection
-'' The actuall collection may change while this is in use
+'' The actual collection may change while this is in use
 '' Do not depend on this to represent the current variable values
 Static Private Sub Vars_Read() As Collection
 

@@ -1,6 +1,7 @@
 ' Gambas module file
 
-' Gambas class file
+'Fast Unsafe
+' notify New Is Not working
 
 Public Sub main()
 
@@ -11,6 +12,7 @@ Public Sub main()
     .a = 100
     .b = 100
     Wait 5
+    .End()
   End With
 
 End
@@ -18,7 +20,7 @@ End
 Public Sub newvar_created(value As Variant, Name As String)
 
   With sharedmem
-    Print Name;; value
+    Print "new variable  created:";; Name;; value
   End With
 
 End

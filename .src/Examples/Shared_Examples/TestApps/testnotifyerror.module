@@ -1,5 +1,7 @@
 ' Gambas module file
 
+Fast Unsafe
+
 Public Sub Main()
 
   SharedMem.BeginNamed("randomgsh", 4512000)
@@ -34,12 +36,12 @@ End
 
 Public Sub a_changed(data As Variant, symname As String)
 
-  Print "a=";; data;; symname
+  Print "changed a=";; data;; symname
 
 End
 
 Public Sub b_flopped(data As Variant, symname As String)
 
-  Print "b=";; data;; symname
+  Print "flopped b=";; data;; symname
 
 End

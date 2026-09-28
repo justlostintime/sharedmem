@@ -6,7 +6,7 @@
 '  Version 3, 29 June 2007
 '  See project license file.
 Export
-' Fast Unsafe
+'Fast Unsafe
 
 Private WaitQueue As Variant[] = New Variant[]                ' we will queue wait requests here
 Private InitSignal As Integer = 0                             ' force the init on first call of wait
@@ -97,7 +97,7 @@ Public Sub NotifyChange(Symbol As String, NotifyObject As Variant, Optional iTim
     Return False
   Endif
 
-  Dim fName As String
+  'Dim fName As String
   If symbol = "#newvar" And If FuncName = "" Then
     FuncName = "newvar_created"
   Else
@@ -187,7 +187,7 @@ Public Sub reset()
 End
 
 '' Check if a specific PID is in the PID wait queue
-Private Sub findpid(pid As Integer) As Integer
+Fast Unsafe Private Sub findpid(pid As Integer) As Integer
 
   For i As Integer = 0 To pidlistlen
     If PidList[i * SizeOf(gb.integer), gb.integer, True] = pid Then Return i
@@ -198,7 +198,7 @@ End
 
 '' Add a new pid to the pid task list waiting
 '' for notifications
-Private Sub addpid(pid As Integer)
+Fast Unsafe Private Sub addpid(pid As Integer)
 
   If findpid(pid) >= 0 Then Return
   Dim i As Integer = findpid(0)
@@ -212,7 +212,7 @@ End
 
 '' Removes the PID from the list of tasks waiting for
 '' notifications
-Private Sub removepid(pid As Integer)
+Fast Unsafe Private Sub removepid(pid As Integer)
 
   Dim i As Integer = findpid(pid)
 
@@ -259,7 +259,7 @@ Private Sub SetSignal()
 End
 
 '' Dispatch the signal to each application waiting for a change in the variable
-Public Sub dispatch(Optional newVariable As Boolean = False)
+Fast Unsafe Public Sub dispatch(Optional newVariable As Boolean = False)
 
   Dim result As Integer
 
@@ -285,7 +285,7 @@ End
 '' then call the application tasks notification entry point for this symbol
 '' there can be individual entry points for each symbol, or all the same
 '' entry point.
-Public Sub _signal(Sig As Integer)  '' signal handler for waiting applications
+Fast Unsafe Public Sub _signal(Sig As Integer)  '' signal handler for waiting applications
 
   Dim MyWait As WaitHeader
   Dim Counter As Integer = 0

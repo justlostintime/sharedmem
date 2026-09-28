@@ -1,18 +1,33 @@
 ' Gambas module file
 
+'Fast Unsafe
+
 Public Sub main()
 
+  Print "Begin Test program"
   SharedMem.Begin(2000000)
+  Print "Shared memory allocated"
   With SharedMem
     .["$a"] = 100
+    Print "Assigned $a"
     .["$b"] = "hello world"
-
-
-    For Each s As String In SharedMem
-      Print s
+    Print "Assigned $b"
+    Dim x As Collection = .vars  ' vars property returns a snapshot collection of the content of shared memory, it is not a collection itsself
+    Print "Print From snapshot"
+    For Each s As Variant In x
+      Print x.key; "="; s
     Next
+    Print " print directly"
+    For Each p As String In Sharedmem
+
+      Print "Item"
+      Print .key;; "=";; .[p]
+    Next
+
     Print !$a, !$b
   End With
+  Print "Completed test"
   SharedMem.End()
+  Print "Completed program"
 
 End

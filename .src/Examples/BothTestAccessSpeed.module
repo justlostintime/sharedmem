@@ -21,7 +21,7 @@ Public Sub main()
       !integer = CInteger(0)
       '._print()
       '**************************************************************************************************************************
-      Print "Start"
+      Print "Start testing change var from integer to string and back to integer 1000000 times"
       tstart = Timer
       For i As Integer = 0 To LoopCount
         !integer = i
@@ -73,7 +73,7 @@ Public Sub main()
 
 End
 
-Sub PrintVariables(thearray As Variant)
+Sub PrintVariables(thearray As Collection)
 
   Print "\nSymbol Table \n"
   For Each v As Variant In thearray

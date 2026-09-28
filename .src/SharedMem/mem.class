@@ -6,7 +6,7 @@
 '  Version 3, 29 June 2007
 '  See project license file.
 Export
-'Fast Unsafe
+Fast Unsafe
 'Extern memset(dest As Pointer, Val As Integer, len As Integer) As Pointer In "libc:6"
 Extern strncpy(dest As Pointer, src As String, len As Integer) As Pointer In "libc:6" ' defined as string to force gambas to copy len 0 and return string type
 'Extern strcpy(dest As Pointer, src As Pointer) As String In "libc:6"
@@ -101,7 +101,7 @@ End
 ''  rdType - override the datatype of the passed in variant
 ''  notype - the memory location does not contain a memory variable type definition
 ''  if fast value is 2 4 8 then the storage is there and created already
-Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False, RealPointers As Boolean = $RealPointers, AbsIndexed As Boolean = False)
+Fast Unsafe Public Sub _put(Data As Variant, MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False, RealPointers As Boolean = $RealPointers, AbsIndexed As Boolean = False)
 
   Dim mfile As File
 
@@ -212,7 +212,7 @@ End
 '' Mempointer - the location to get the data from
 '' rdType - the type of data to be read, this is an over ride for the stored data type or used when no datatype stored
 '' notype - the storgae location first has no data type specified
-Public Sub _get(MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False, RealPointers As Boolean = $RealPointers, AbsIndexed As Boolean = False) As Variant
+Fast Unsafe Public Sub _get(MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False, RealPointers As Boolean = $RealPointers, AbsIndexed As Boolean = False) As Variant
 
   Dim cvVariant As Variant
   Dim mFile As File

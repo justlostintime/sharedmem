@@ -1,0 +1,12 @@
+' Gambas module file
+
+Fast Unsafe
+
+Public Sub main()
+
+  SharedMem.Begin()
+  SharedMem["a"] = 100
+  SharedMem.End()
+  Print "complete"
+
+End
