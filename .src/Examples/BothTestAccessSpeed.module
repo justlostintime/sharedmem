@@ -1,7 +1,7 @@
 ' Gambas module file
 
 Fast Unsafe
-Public Const LoopCount As Integer = 100000
+Public Const LoopCount As Integer = 10
 TestSharedMem As Boolean = True           ' test the old format shared memory
 
 Public Sub main()
@@ -10,6 +10,7 @@ Public Sub main()
   Dim tStop As Float
   Dim j As Integer
   Dim sj As String
+  Dim i As Integer
 
   If TestSharedMem Then
     With sharedmem
@@ -23,12 +24,14 @@ Public Sub main()
       '**************************************************************************************************************************
       Print "Start testing change var from integer to string and back to integer 1000000 times"
       tstart = Timer
-      For i As Integer = 0 To LoopCount
+      For i = 0 To loopcount
         !integer = i
-        !integer = "this is a long string"
+        Print !integer
+        ' !integer = "this is a long string"
+        Print !integer
       Next
       tstop = Timer
-      Print "i = "; !integer
+      Print "i = "; SharedMem["integer"]
       Print "Int->str->int Write test ", tstop - tstart, " loops(" & Str(LoopCount) & ") = "; !integer
       '._print()
 
@@ -41,21 +44,21 @@ Public Sub main()
       Print "String write test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
       '**************************************************************************************************************************
       tstart = Timer
-      For i As Integer = 0 To loopcount
+      For i = 0 To loopcount
         sj = !ThisString
       Next
       tstop = Timer
       Print "String Read test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
       '**************************************************************************************************************************
       tstart = Timer
-      For i As Integer = 0 To loopcount
+      For i = 0 To loopcount
         !ThisNumber = i
       Next
       tstop = Timer
       Print "Integer write test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
       '**************************************************************************************************************************
       tstart = Timer
-      For i As Integer = 0 To loopcount
+      For i = 0 To loopcount
         j = !ThisNumber
       Next
       tstop = Timer
@@ -70,6 +73,7 @@ Public Sub main()
 
     End With
   Endif
+  Quit 0
 
 End
 

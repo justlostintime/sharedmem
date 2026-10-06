@@ -29,5 +29,6 @@ Public Sub main()
   Print "Completed test"
   SharedMem.End()
   Print "Completed program"
+  Quit 0
 
 End

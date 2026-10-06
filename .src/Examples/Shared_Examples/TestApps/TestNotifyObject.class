@@ -21,9 +21,3 @@ Public Sub _free()
   SharedMem.NotifyCancel("WaitTest", Me)
 
 End
-
-Static Public Sub Main()
-
-
-
-End

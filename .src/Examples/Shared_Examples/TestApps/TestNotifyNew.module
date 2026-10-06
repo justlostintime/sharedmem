@@ -10,8 +10,13 @@ Public Sub main()
     .NotifyNew(Me)
     Wait 0.01
     .a = 100
+    .NotifyChange("a", Me)
+    Wait 1
     .b = 100
-    Wait 5
+    .NotifyChange("b", Me)
+    Wait 2
+    .a = 200
+    .b = 300
     .End()
   End With
 
@@ -22,6 +27,18 @@ Public Sub newvar_created(value As Variant, Name As String)
   With sharedmem
     Print "new variable  created:";; Name;; value
   End With
+
+End
+
+Public Sub a_changed(value As Variant, name As String)
+
+  Print name;; value
+
+End
+
+Public Sub b_changed(value As Variant, name As String)
+
+  Print name;; value
 
 End
 

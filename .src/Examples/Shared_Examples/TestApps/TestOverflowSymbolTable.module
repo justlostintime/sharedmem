@@ -1,6 +1,7 @@
 ' Gambas module file
 
-Fast Unsafe
+'Fast Unsafe
+'This is broken do not run
 
 Public Sub main()
   ' not working causes crash
@@ -14,5 +15,7 @@ Public Sub main()
     Next
     .End()
   End With
+  Print "Completed"
+  Quit 0
 
 End

@@ -212,7 +212,7 @@ End
 '' Mempointer - the location to get the data from
 '' rdType - the type of data to be read, this is an over ride for the stored data type or used when no datatype stored
 '' notype - the storgae location first has no data type specified
-Fast Unsafe Public Sub _get(MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False, RealPointers As Boolean = $RealPointers, AbsIndexed As Boolean = False) As Variant
+Public Sub _get(MemPointer As Pointer, Optional rdType As Integer = -1, notype As Boolean = False, RealPointers As Boolean = $RealPointers, AbsIndexed As Boolean = False) As Variant
 
   Dim cvVariant As Variant
   Dim mFile As File

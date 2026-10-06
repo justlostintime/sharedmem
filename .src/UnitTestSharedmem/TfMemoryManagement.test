@@ -4,7 +4,9 @@ Const LoopCount As Integer = 1000
 
 
 Public Sub a_ALLOCFree()
-Dim starttime As Float
+
+  Dim starttime As Float
+
   With sharedmem
 
     .Begin(128000)

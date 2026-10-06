@@ -2,7 +2,7 @@ BothTestAccessSpeed
 Shared Memory object -sharedmem
 #sharedmem
 
-3.22.4
+3.23.1
 
 gb.debug
 gb.eval

@@ -72,10 +72,10 @@ Public Sub NotifyNewCancel(NotifyObject As Variant)
 End
 
 
-'' Notify when a variable changes value
+'' Notify when a variable changes value or is created
 Public Sub NotifyNew(NotifyObject As Variant, Optional FunctionName As String = "OnNew") As Boolean
 
-  Return NotifyChange("#newvar", NotifyObject, 0, FunctionName)
+  Return NotifyChange("#newvar", NotifyObject, -1, FunctionName)
 
 End
 
@@ -100,8 +100,8 @@ Public Sub NotifyChange(Symbol As String, NotifyObject As Variant, Optional iTim
   'Dim fName As String
   If symbol = "#newvar" And If FuncName = "" Then
     FuncName = "newvar_created"
-  Else
-    If FuncName = "" Then FuncName = Symbol & "_changed"
+  Else If FuncName = "" Then
+    FuncName = Symbol & "_changed"
   Endif
 
   Dim mClass As Class = Null
@@ -171,6 +171,7 @@ End
 '' Initialize the local wait queue and optionally set the
 '' shared memory segment to which it refers
 Public Sub _new(Optional vshm As Variant)
+
   'Print "init wait queue"
 
   WaitQueue = New Variant[]
@@ -323,7 +324,7 @@ Fast Unsafe Public Sub _signal(Sig As Integer)  '' signal handler for waiting ap
 
     Object.Call(MyWait.CallBack, MyWait.Method, [vReturn, MyWait.sym.SymName])
 
-    If MyWait.timeout >= 0 Then
+    If MyWait.timeout >= 0 Then    ' this is a one shot for the notification
 
       MyWait.sym._ClearWait()
       WaitQueue.Remove(Counter)    ' this sets it for delete

@@ -7,11 +7,10 @@ Public Sub main()
     Return
 
     Dim a As New ServiceTask
-    a.HostName = "jan.westwoodsvcs.com"
+    a.HostName = "mission.westwoodsvcs.com"
     a.BufferName = "buffer"
     a.Password = "missillaunch"
     a.port = 2727
-
     a.Wait()
 
   End With

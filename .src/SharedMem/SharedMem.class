@@ -96,15 +96,15 @@ Static Property Read Vars As Collection
 Static Property key As String Use $key
 
 '' This data type is not used, it is here to describe the format of each variable block header
-Public Struct MemHeader                                                                             ' defines a model of the header but never used
-  NextBlock As Pointer                                                                                   ' 8
-  length As Long                                                                                                ' 8
-  ShmWait As Long                                                                                           ' 8 4 pointers 32
-  ShmL01 As Long                                                                                             ' 8 4 pointers 32
-  ShmL02 As Long                                                                                             ' 8 4 pointers 32
-  ShmLo3 As Long                                                                                             ' 8 4 pointers 32
-  LastWrite As Long                                                                                          ' 8
-End Struct                                                                                                           ' 28 but calc to 56
+Public Struct MemHeader        ' defines a model of the header but never used
+  NextBlock As Pointer         ' 8
+  length As Long               ' 8
+  ShmWait As Long              ' 8 4 pointers 32
+  ShmL01 As Long               ' 8 4 pointers 32
+  ShmL02 As Long               ' 8 4 pointers 32
+  ShmLo3 As Long               ' 8 4 pointers 32
+  LastWrite As Long            ' 8
+End Struct                     ' 28 but calc to 56
 
 ' Public Struct WaitHeader
 '     OldTime As Long
@@ -434,8 +434,8 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
   Endif
 
   InSession = True
-  WaitQueue._begin()
   SharedMem["#newvar"] = CPointer(0)
+  WaitQueue._begin()
   Return True
 
 End
@@ -1312,8 +1312,9 @@ End
 '' x = SharedMem["MyVar"] or x = SharedMem["MyVar",6] <- index into an array type value
 Static Public Sub _put(data As Variant, index As Variant, ...)
 
-  Dim px As SharedMemSymbol
+  Dim px, oldpx As SharedMemSymbol
   Dim waitcount As Integer = 0
+  Dim IsNew As Boolean = False
 
   If Not InSession Then
     Error.raise("Sharedmem Access Assign value before BEGIN()")
@@ -1372,7 +1373,11 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
     px = New SharedMemSymbol(Me)
     px.SetSymbol(index, data)
     SaveCollection()              ' update the shared area so other tasks know items add/deleted etc
-
+    ' now notify if new variable added
+    oldpx = px
+    px = SymbolTable["#newvar"]
+    If px = Null Then px = oldpx
+    isNew = True
   Endif
 
   If memcmp(usermem.AddrReal(px.ShmWait + 1), zPointer, SizeOf(gb.long))   ' if waiting
@@ -1387,7 +1392,7 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
     sem_post(UserMem.AddrReal(MemMutex))
 
     sched_yield()
-    Try WaitQueue.dispatch()
+    Try WaitQueue.dispatch(isnew)
 
     If Error Then Error.Raise("Dispatch error on variable change event creation " & Error.text & ":" & Error.where)
     sched_yield()
@@ -2042,7 +2047,7 @@ Static Public Sub ReadVarFrom(symbol As String, Optional fileName As Variant = "
       Error.Raise("_put: release mutex fail wlt pid = " & Str(getpid()))
     Endif
 
-    WaitQueue.dispatch()
+    Try WaitQueue.dispatch()
 
     sched_yield()
 
