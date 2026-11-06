@@ -190,6 +190,7 @@ Extern pthread_mutex_consistent(mutex As Pointer) As Integer In "libc:6"
 ' A shared flock on the named segment file by every process using it, the kernel drops it when a process dies
 Extern flock(fd As Integer, operation As Integer) As Integer In "libc:6"
 Extern chdir(sPath As String) As Integer In "libc:6"
+Extern cRename(sOld As String, sNew As String) As Integer In "libc:6" Exec "rename"
 Extern fstat(fd As Integer, buf As Pointer) As Integer In "libc:6"
 
 Static Private Const EBUSY As Integer = 16
@@ -843,11 +844,45 @@ End
 '' Sync the content of memory with the last loaded file or write to default file storage
 '' this will update the file with the memory content or create and write the default file
 '' with no parameters syncs all of memory, with symbol, syncs the variable to disk
+'' The image file to write or read: FileName when one is given, "." the default Application.mem,
+'' "" the last file used. The file used is remembered in LastMemorySync
+Static Private Sub ImageFile(FileName As String) As String
+
+  If FileName = "." Then
+    LastMemorySync = DefaultSaveLocation & Application.Name & ".mem"
+  Else If FileName <> "" Then
+    If File.Dir(FileName) = "" Then FileName = DefaultSaveLocation & FileName
+    LastMemorySync = FileName
+  Else If LastMemorySync = "" Or LastMemorySync = "." Then   ' none used yet, or ClearMem/End reset it
+    LastMemorySync = DefaultSaveLocation & Application.Name & ".mem"
+  Endif
+  Return LastMemorySync
+
+End
+
+'' Write all the variables to sFile, the caller holds the lock. It writes sFile.tmp.pid and renames it over
+'' sFile: two processes saving the image at the same time, or one reading it, never see a half written file
+Static Private Sub WriteImage(sFile As String) As Boolean
+
+  Dim sTmp As String = sFile & ".tmp." & CStr(getpid())
+  Dim wFile As File
+
+  Try wFile = Open sTmp For Write Create
+  If Error Then Return False
+  _write(wFile)
+  Close wFile
+  If cRename(sTmp, sFile) <> 0 Then
+    Try Kill sTmp
+    Return False
+  Endif
+  Return True
+
+End
+
 Static Public Sub Sync(Optional Symbol As String = ".", filename As String = ".") As Boolean
 
   Symbol = PrivateName(Symbol)
 
-  Dim wFile As File
   Dim bLocked As Boolean
 
   If MemoryStorage = Null Then Return False
@@ -857,28 +892,9 @@ Static Public Sub Sync(Optional Symbol As String = ".", filename As String = "."
   Else
     bLocked = LockMem("Sync")
     If Not bLocked Then Error.Raise(LockError)
-
-    If LastMemorySync = "." Or filename = "." Then
-      If filename <> "" And filename <> "." Then
-        If File.Dir(filename) = "" Then filename = DefaultSaveLocation & filename
-        LastMemorySync = filename
-      Else
-        LastMemorySync = DefaultSaveLocation & Application.Name & ".mem"
-      Endif
-    Endif
-
-    Try wFile = Open LastMemorySync For Write Create
-    If Error Then
-      bLocked = UnlockMem()                                ' it returned holding the lock
-      Return False
-    Endif
-
-    If Not IsNull(wFile) Then
-      _write(wFile)
-      Close wFile
-    Endif
-
+    Dim bWritten As Boolean = WriteImage(ImageFile(filename))
     bLocked = UnlockMem()
+    Return bWritten
   Endif
 
   Return True
@@ -904,19 +920,11 @@ Static Public Sub Restore(Optional Symbol As String = "", filename As String = "
     ReadVarFrom(symbol, filename, True)
   Else
 
-    If LastMemorySync = "." Or filename = "." Then
-      If filename <> "" And filename <> "." Then
-        If File.Dir(filename) = "" Then filename = DefaultSaveLocation & filename
-        LastMemorySync = filename
-      Else
-        LastMemorySync = DefaultSaveLocation & Application.Name & ".mem"
-      Endif
-    Endif
-
-    If Not Exist(LastMemorySync) Then Return False
+    Dim sImage As String = ImageFile(filename)
+    If Not Exist(sImage) Then Return False
 
     end()
-    begin(LastMemorySync)
+    begin(sImage)
 
   Endif
 
@@ -934,7 +942,6 @@ End
 '' > format: user.home & "/var/" & Application.name & ".mem"
 Static Public Sub End(Optional FileName As String = "\t\t") ' free all the blocks
 
-  Dim wFile As File
 
   If Not InSession Then
     Error.Raise("Sharedmem begin-end Block already released")
@@ -950,17 +957,11 @@ Static Public Sub End(Optional FileName As String = "\t\t") ' free all the block
   InitSemaphors = True                                              ' the locks stay, other processes may still use them
 
   If FileName <> "\t\t" Then
-    If filename = "." Then
-      filename = DefaultSaveLocation & Application.Name & ".mem"
+    If LockMem("End") Then                                ' no process changes the variables while they are written
+      If Not WriteImage(ImageFile(FileName)) Then Print #File.Err, "SharedMem.End: unable to write "; ImageFile(FileName)
+      UnlockMem()
     Else
-      If File.Dir(filename) = "" Then
-        filename = DefaultSaveLocation & filename
-      Endif
-    Endif
-    wFile = Open FileName For Write Create
-    If Not IsNull(wFile) Then
-      _write(wFile)
-      Close wFile
+      Print #File.Err, "SharedMem.End: image not written, "; LockError
     Endif
   Endif
 
