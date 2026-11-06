@@ -261,8 +261,13 @@ End
 Static Private Sub LockAt(pMutex As Pointer, sWhat As String) As Integer
 
   Dim iRet As Integer
+  Dim iSpin As Integer
 
   iRet = pthread_mutex_trylock(pMutex)
+  While iRet = EBUSY And iSpin < 100                        ' a holder keeps it a few microseconds: retrying first is faster
+    Inc iSpin                                               ' than sleeping, 4 processes ran 36% (integers) to 50% (strings) faster
+    iRet = pthread_mutex_trylock(pMutex)
+  Wend
   If iRet = EBUSY Then
     clock_gettime(CLOCK_REALTIME, aDeadline.Data)
     aDeadline[0] += CLong(LockWaitSeconds)
@@ -635,7 +640,13 @@ End
 '' Why Begin returned False
 Static Public BeginError As String = ""
 
-Static Public Sub BeginNamed(Optional MemName As String = User.Name & "gsh", MemSize As Integer = 4512000, forceCleanup As Boolean = False) As Boolean
+'' True when the last BeginNamed created the segment, False when it opened one other processes use
+Static Public CreatedSegment As Boolean = False
+
+'' ImageFile: when this process creates the segment it merges this image before any other process can open
+'' it. Merging after BeginNamed raced: a process starting while the last user was ending saw the old segment
+'' file, skipped the image, then got a new empty segment; another could save a half loaded image
+Static Public Sub BeginNamed(Optional MemName As String = User.Name & "gsh", MemSize As Integer = 4512000, forceCleanup As Boolean = False, ImageFile As String = "") As Boolean
 
   Dim firstuse As Boolean
   Dim aInfo As Long[]
@@ -747,8 +758,10 @@ Static Public Sub BeginNamed(Optional MemName As String = User.Name & "gsh", Mem
     NamedMemCollectionHandle = -1
     Error.Raise(sErr)
   Endif
+  CreatedSegment = firstuse
   If firstuse Then
     usermem[MemoryInUse] = 1
+    If ImageFile <> "" Then Merge(ImageFile)                ' others wait in flock(LOCK_SH) until it is loaded
     flock(NamedMemHandle, LOCK_SH)                          ' ready, let the others in
   Endif
   Return Iret
@@ -892,6 +905,7 @@ Static Public Sub Sync(Optional Symbol As String = ".", filename As String = "."
   Else
     bLocked = LockMem("Sync")
     If Not bLocked Then Error.Raise(LockError)
+    CollectionChanged()                                    ' the variables other processes made since this one last looked
     Dim bWritten As Boolean = WriteImage(ImageFile(filename))
     bLocked = UnlockMem()
     Return bWritten
@@ -958,6 +972,7 @@ Static Public Sub End(Optional FileName As String = "\t\t") ' free all the block
 
   If FileName <> "\t\t" Then
     If LockMem("End") Then                                ' no process changes the variables while they are written
+      CollectionChanged()                                  ' the variables other processes made since this one last looked
       If Not WriteImage(ImageFile(FileName)) Then Print #File.Err, "SharedMem.End: unable to write "; ImageFile(FileName)
       UnlockMem()
     Else
@@ -1628,6 +1643,7 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
 
   If Not IsNull(px) Then
 
+    Dim sTableInfo As String = px.TableInfo()               ' what other processes read from the symbol table
     If px.symtype = gb.object And If Param.count = 0 Then
       px.updateobjectinfo(data)
     Endif
@@ -1641,8 +1657,12 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
       Object.Call(px, "ShmWriteSub", params)
       'px.ShmWriteSub(data, subscript)
     Else
-      px.ShmWrite(data)
-      If px.symtype = gb.string Or px.symtype = gb.object Then
+      If px.ShmWrite(data) < 0 Then Error.Raise(px.LastStoreError)   ' raised here: _put catches it and passes it to the caller
+      ' Save the table only when the write changed what other processes read from it: a new storage block,
+      ' the object class or array size. A value that fits its storage is only in the shared memory, the
+      ' other processes read it from there, they keep their table: saving it made them all reload it, 0.5 ms
+      ' for the save and 8 ms for each reload with 300 variables
+      If (px.symtype = gb.string Or px.symtype = gb.object) And If px.TableInfo() <> sTableInfo Then
         SaveCollection()
       Endif
     Endif
@@ -1950,13 +1970,33 @@ Static Private Sub TreeNames(Tag As String) As String[]
 
   Dim aNames As New String[]
 
-  If SharedMem.Exist(RegistryPrefix & Tag) Then aNames = Split(SharedMem[RegistryPrefix & Tag], ",", "", True)
+  Dim vRecord As Variant = QuietGet(RegistryPrefix & Tag)
+
+  If Not IsNull(vRecord) Then aNames = Split(vRecord, ",", "", True)
   If Tag = PrivateTag Then
     For Each sName As String In LocalNames()
       If Not aNames.Exist(sName, gb.IgnoreCase) Then aNames.Add(sName)
     Next
   Endif
   Return aNames
+
+End
+
+'' The value of a record, Null when it does not exist. Under the lock: another root gsh may free the
+'' record of a dead tree at the same time, an Exist then get printed "Symbol not found"
+Static Private Sub QuietGet(sKey As String) As Variant
+
+  Dim px As SharedMemSymbol
+  Dim vValue As Variant = Null
+  Dim bLocked As Boolean
+
+  bLocked = LockMem("get")
+  If Not bLocked Then Return Null
+  CollectionChanged()
+  px = SymbolTable[sKey]
+  If Not IsNull(px) Then vValue = px.ShmRead()
+  bLocked = UnlockMem()
+  Return vValue
 
 End
 
@@ -2003,7 +2043,8 @@ Static Private Sub AllTrees() As Collection
     If SymbolTable.Key Begins RegistryPrefix Then aKeys.Add(SymbolTable.Key)
   Next
   For Each sKey As String In aKeys
-    If SharedMem.Exist(sKey) Then cTrees[Mid(sKey, Len(RegistryPrefix) + 1)] = "," & LCase(SharedMem[sKey]) & ","
+    Dim vRec As Variant = QuietGet(sKey)
+    If Not IsNull(vRec) Then cTrees[Mid(sKey, Len(RegistryPrefix) + 1)] = "," & LCase(vRec) & ","
   Next
   Return cTrees
 
@@ -2141,6 +2182,7 @@ Static Public Sub _varLen(symbol As String) As Integer
     If MyEntry.SpecialType > ShmTypeAry Then
       mySym = MyEntry.SpecialObject._varLen()
     Else
+      MyEntry.RefreshLength()                              ' another process may have changed the value
       MySym = MyEntry.dataLength
     Endif
   Endif

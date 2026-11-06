@@ -36,7 +36,8 @@ Public dataLength As Integer = 0          ' Length of the data portion of the bl
 
 Public LastWriteLength As Integer = 0     ' Length of the last data written to the memory
 
-Public Const StringBufferExtra As Integer = 1024      ' extra memory used when string is allocated so we dont have to reallocate to often
+Public Const StringBufferExtra As Integer = 1024      ' string and object storage is allocated in blocks of this size, a value that
+                                                      ' grows or shrinks inside its block is written in place, no new block, no table save
 
 Public ZeroPointer As Pointer = Null
 Public ZeroRef As Pointer = VarPtr(Zeropointer)
@@ -63,6 +64,7 @@ End
 '' Optionally write the variables value as well
 Public Sub _write(mFile As File, Optional WithData As Boolean = False)
 
+  If WithData Then RefreshLength()                         ' the value may have been changed by another process
   Write #Mfile, SymName As String
   Write #Mfile, SymType As Integer
   Write #Mfile, SpecialType As Integer
@@ -188,7 +190,7 @@ Public Sub SetSymbol(Sname As String, data As Variant, Optional extrastorage As 
 
     SharedMem.Add(Me)
 
-    ShmWrite(data)
+    WriteOrRaise(data)
 
   Endif
 
@@ -249,15 +251,56 @@ Public Sub SetLastWrite() As Float
 
 End
 
+'' Read DataLength from the shared memory. A string or object written by another process is not copied
+'' into this process: the symbol table is saved only when the storage or the object information changes,
+'' so DataLength here may be the length of an older value
+Public Sub RefreshLength()
+
+  Dim pData As Pointer
+  Dim hMem As File
+  Dim oValue As Object
+
+  If IsNull(RootAddress) Or If SpecialType > SharedMem.ShmTypeAry Then Return   ' buffers and elements keep a fixed length
+  Select Case SymType
+    Case gb.String
+      pData = SharedMem.UserMem.AddrData(DataAddress, gb.String)
+      DataLength = Len(String@(pData)) + 2                ' as _SizeOf: type byte, the text, the terminating zero
+    Case gb.Object
+      pData = SharedMem.UserMem.AddrData(DataAddress, gb.Object)
+      hMem = Memory pData For Read
+      oValue = Read #hMem As Object
+      DataLength = Seek(hMem) + 1                           ' as _SizeOf: type byte and the serialized object
+      Close hMem
+  End Select
+
+End
+
+'' The fields other processes need from the symbol table, to see if a write changed them
+Fast Public Sub TableInfo() As String
+
+  Return CStr(RootAddress) & "|" & CStr(DataAddress) & "|" & CStr(StorageLength) & "|" & CStr(SpecialType) & "|" & ClassName & "|" & ObjectName & "|" & CStr(ElementCount) & "|" & CStr(ElementType)
+
+End
+
+'' Interpreted on purpose: _SizeOf and AllocStorage raise (shared memory full, unsupported data type), the
+'' errors are caught here and returned as False with LastStoreError, so they never cross compiled code
 Public Sub SetStorage(data As Variant, Optional ExtraLen As Integer = 0) As Boolean
 
-  DataLength = SharedMem.Usermem._SizeOf(data)
-  Return AllocStorage(extraLen + DataLength)
+  Dim bOk As Boolean
 
-Catch
-  'Error.Raise("SetStorage set error", Error.text, Error.where)
-  Error.Propagate()
-  Stop
+  LastStoreError = ""
+  Try DataLength = SharedMem.Usermem._SizeOf(data)
+  If Error Then
+    LastStoreError = Error.Text
+    Return False
+  Endif
+  Try bOk = AllocStorage(extraLen + DataLength)
+  If Error Then
+    LastStoreError = Error.Text
+    Return False
+  Endif
+  If Not bOk Then LastStoreError = "ShmWrite : Unable to allocate required storage"
+  Return bOk
 
 End
 
@@ -268,6 +311,13 @@ Private Sub NewBlock(iLength As Integer) As Pointer
 
   If p = 0 Then Error.Raise(SharedMem.LastAllocError)
   Return p
+
+End
+
+'' Storage length for a string or object: the next multiple of StringBufferExtra
+Private Sub RoundToBlock(iLength As Integer) As Integer
+
+  Return ((iLength + StringBufferExtra - 1) \ StringBufferExtra) * StringBufferExtra
 
 End
 
@@ -285,9 +335,7 @@ Public Sub AllocStorage(iLength As Integer) As Boolean
       StorageLength = NewStorageLength
 
       If symtype = gb.string Or symtype = gb.object Then
-        If gb.string Then
-          StorageLength += StringBufferExtra
-        Endif
+        StorageLength = RoundToBlock(NewStorageLength)
         SharedMem.ShmFree(SharedMem.UserMem[DataAddress + 1, gb.pointer, True])
         newStorage = NewBlock(storageLength + 1)
         SharedMem.UserMem[DataAddress + 1, gb.pointer, True] = newstorage
@@ -307,6 +355,7 @@ Public Sub AllocStorage(iLength As Integer) As Boolean
   Else
     StorageLength = NewStorageLength
     If symtype = gb.string Or symtype = gb.object Then
+      StorageLength = RoundToBlock(NewStorageLength)
       RootAddress = NewBlock(SizeOf(gb.pointer) + 1 + SharedMem.AllocHeaderLen)
       DataAddress = RootAddress + SharedMem.AllocHeaderLen
       newStorage = NewBlock(storageLength + 1)
@@ -349,12 +398,10 @@ Catch
 
 End
 
-Public Sub ShmRead() As Variant
+'' Compiled: Mem._get catches its own errors, nothing is raised from here
+Fast Public Sub ShmRead() As Variant
 
   Return SharedMem.UserMem[DataAddress, SymType]
-
-Catch
-  Error.Propagate()
 
 End
 
@@ -385,34 +432,38 @@ Public Sub ShmReadSub(...) As Variant
 
 End
 
-Public Sub ShmWrite(mdata As Variant) As Integer
+'' Compiled, it raises nothing: -1 when the value can not be stored, LastStoreError says why. The JIT crashed
+'' when an error raised in compiled code was caught in another compiled function (SharedMem._put).
+'' The caller raises LastStoreError itself, see WriteOrRaise
+Fast Public Sub ShmWrite(mdata As Variant) As Integer
 
-  If TypeOf(mdata) <> SymType   ' this is done to prevent the need to save and reload table while other task may be using this variable
-    Error.Raise("ShmWrite: Can not change memory storage type after creation when Notify requested from " & SharedMem.DataTypes[SymType] & " to " & SharedMem.DataTypes[TypeOf(mdata)])
-    Return 0
+  If TypeOf(mdata) <> SymType Then                          ' this is done to prevent the need to save and reload table while other task may be using this variable
+    LastStoreError = "ShmWrite: Can not change memory storage type after creation when Notify requested from " & SharedMem.DataTypes[SymType] & " to " & SharedMem.DataTypes[TypeOf(mdata)]
+    Return -1
   Endif
 
   If IsNull(RootAddress) Or SymType = gb.object Or symtype = gb.string Then
-
-    If Not SetStorage(mdata) Then
-      Error.Raise("ShmWrite : Unable to allocate required storage")
-      Return 0
-    Endif
-
-    'Print " Set storage done and about to store the data "
+    If Not SetStorage(mdata) Then Return -1                ' SetStorage set LastStoreError
     SharedMem.UserMem[DataAddress] = mdata
-    'Print " Set done"
     LastWriteLength = SharedMem.UserMem.LastWriteLength
-
   Else
     SharedMem.UserMem[DataAddress, symtype] = mdata
   Endif
 
   Return LastWriteLength
-  'Print "ShmWrite done"
 
-Catch
-  Error.Propagate()
+End
+
+'' Why the last ShmWrite returned -1
+Public LastStoreError As String = ""
+
+'' Interpreted: write and raise the error here, an error raised in interpreted code may be caught in compiled code
+Public Sub WriteOrRaise(mdata As Variant) As Integer
+
+  Dim iRet As Integer = ShmWrite(mdata)
+
+  If iRet < 0 Then Error.Raise(LastStoreError)
+  Return iRet
 
 End
 
@@ -428,7 +479,7 @@ Public Sub ShmWriteSub(data As Variant, ...)
           Case gb.String, gb.Object
             Dim MyValue As Variant = ShmRead()
             MyValue[Param[0]] = data
-            ShmWrite(MyValue)
+            WriteOrRaise(MyValue)
             ElementCount = MyValue.Count
             Return
         End Select
@@ -443,7 +494,7 @@ Public Sub ShmWriteSub(data As Variant, ...)
   Else If specialtype = 0 Then
     Dim MyObjectSingle As Variant = ShmRead()
     MyObjectSingle[Param[0]] = data
-    ShmWrite(MyObjectSingle)
+    WriteOrRaise(MyObjectSingle)
     ElementCount = MyObjectSingle.Count
   Else
     Error.Raise("Unsupported array type in " & SymName)
@@ -512,7 +563,7 @@ End
 Public Sub _call(Optional value As Variant) As Variant
 
   If Param.count > 0 Then
-    ShmWrite(value)
+    WriteOrRaise(value)
     Return value
   Else
     Return ShmRead()
@@ -608,7 +659,7 @@ End
 
 Private Sub Value_Write(vValue As Variant)
 
-  ShmWrite(vValue)
+  WriteOrRaise(vValue)
 
 End
 
