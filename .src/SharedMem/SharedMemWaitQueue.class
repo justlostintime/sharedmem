@@ -15,6 +15,20 @@ Private Const pidlistlen As Integer = 500                     ' Number of entrie
 Public Const ChangeSignal As Integer = 16                     ' Sigsys = 31, SigUSr2 = 12, sig16 is unused too
 Public $oShm As Variant = Null                                ' The SharedMemory object
 
+' A change is announced by writing one byte into the notify pipe of each waiting process,
+' /dev/shm/sharedmem-notify-<pid>. The process watches its pipe, so the File_Read event calls the notify
+' functions as soon as the event loop runs: in any Wait, or when the program returns to the loop.
+' A process of an older version has no pipe and gets the change signal instead.
+' The change signal is blocked, it never interrupts the program: a signal handler ran Gambas code at any
+' point of the program and crashed it (segfaults, JIT stack mismatch). A signal from an older version stays
+' pending until CheckSignal takes it with sigtimedwait.
+Private Const NotifyPipePrefix As String = "/dev/shm/sharedmem-notify-"
+Private hNotify As File = Null                                ' our notify pipe, open while we wait for changes
+Private Const SIG_BLOCK As Integer = 0
+Private SigSet As New Byte[128]                               ' sigset_t holding ChangeSignal
+Private ZeroTime As New Long[2]                               ' timespec 0, sigtimedwait only looks
+Private bDelivering As Boolean = False                        ' a notify function that uses SharedMem does not deliver again
+
 Public Struct WaitHeader
   pid As Integer
   OldTime As Float
@@ -25,7 +39,10 @@ Public Struct WaitHeader
   Method As String
 End Struct
 
-Extern signal(sig As Integer, sighandler As Pointer) As Pointer In "libc:6"
+Extern sigemptyset(sigset As Pointer) As Integer In "libc:6"
+Extern sigaddset(sigset As Pointer, sig As Integer) As Integer In "libc:6"
+Extern sigprocmask(how As Integer, sigset As Pointer, oldset As Pointer) As Integer In "libc:6"
+Extern sigtimedwait(sigset As Pointer, info As Pointer, timeout As Pointer) As Integer In "libc:6"
 Extern sKill(sigpid As Integer, Sig As Integer) As Integer In "libc:6" Exec "kill"
 Extern getpid() As Integer In "libc:6"
 Extern sched_yield() As Integer In "libpthread:0"
@@ -138,6 +155,7 @@ Public Sub NotifyChange(Symbol As String, NotifyObject As Variant, Optional iTim
   MyWait.sym.setLastWrite()
   MyWait.OldTime = Now + Timer 'MyWait.sym.getLastWrite()
 
+  OpenNotifyPipe()
   If findpid(MyWait.pid) < 0 Then
     addpid(MyWait.pid)
   Endif
@@ -246,6 +264,69 @@ End
 Public Sub Dofree()
 
   removepid(Application.id)
+  CloseNotifyPipe()
+
+End
+
+'' Open our notify pipe, read and write so it never reports end of file when a writer closes it
+Private Sub OpenNotifyPipe()
+
+  If hNotify <> Null Then Return
+  For Each sName As String In Dir("/dev/shm", "sharedmem-notify-*")   ' pipes left by processes that crashed
+    If Not Exist("/proc/" & Mid(sName, Len("sharedmem-notify-") + 1)) Then Try Kill "/dev/shm" &/ sName
+  Next
+  hNotify = Open Pipe NotifyPipePrefix & CStr(getpid()) For Read Write Watch
+
+End
+
+Private Sub CloseNotifyPipe()
+
+  If hNotify = Null Then Return
+  Try Close hNotify
+  hNotify = Null
+  Try Kill NotifyPipePrefix & CStr(getpid())
+
+End
+
+'' A change came in: the event loop calls this as soon as a byte is in our notify pipe
+Public Sub File_Read()
+
+  DrainNotifyPipe()
+  If bDelivering Then Return
+  bDelivering = True
+  Deliver()
+  bDelivering = False
+
+End
+
+Private Sub DrainNotifyPipe()
+
+  Dim sData As String
+
+  If hNotify = Null Then Return
+  While Lof(hNotify) > 0
+    Try sData = Read #hNotify, -256
+    If Error Then Break
+  Wend
+
+End
+
+'' Tell process Pid that a variable changed. False when the process is gone
+Private Sub NotifyPid(Pid As Integer) As Boolean
+
+  Dim sPipe As String = NotifyPipePrefix & CStr(Pid)
+  Dim hPipe As File
+
+  If Not Exist("/proc/" & CStr(Pid)) Then                   ' the process ended without End
+    Try Kill sPipe
+    Return False
+  Endif
+  If Not Exist(sPipe) Then Return sKill(Pid, ChangeSignal) = 0    ' an older version, no pipe. Open Pipe would make one
+  Try hPipe = Open Pipe sPipe For Write                     ' never blocks
+  If Error Then Return True
+  If Lof(hPipe) = 0 Then Try Write #hPipe, "x", 1          ' a byte already waiting is enough, the pipe never fills
+  Try Close hPipe
+  Return True
 
 End
 
@@ -255,23 +336,20 @@ End
 Private Sub SetSignal()
 
   InitSignal = getpid()
-  signal(ChangeSignal, _signal)
+  sigemptyset(SigSet.Data)
+  sigaddset(SigSet.Data, ChangeSignal)
+  sigprocmask(SIG_BLOCK, SigSet.Data, Null)                ' children inherit the blocked signal, they never get it unless they wait
 
 End
 
 '' Dispatch the signal to each application waiting for a change in the variable
 Fast Unsafe Public Sub dispatch(Optional newVariable As SharedMemSymbol = Null)
 
-  Dim result As Integer
-
   For i As Integer = 0 To pidlistlen
     Dim CurrentPid As Integer = PidList[i * SizeOf(gb.integer), gb.integer, True]
     If CurrentPid > 0 Then
       'Error "Signaling PID="; CurrentPid
-      result = sKill(CurrentPid, ChangeSignal)
-      'Try Signal.send(CurrentPid, ChangeSignal)
-      'If Error Then ' remove any old pids from the list
-      If result <> 0 Then
+      If Not NotifyPid(CurrentPid) Then                     ' remove pids of processes that are gone
         'Error "Error sending signal:"; System.Error
         PidList[i * SizeOf(gb.integer), gb.integer, True] = 0
       Endif
@@ -284,18 +362,45 @@ Catch
 
 End
 
-'' Called when this PID is waiting for notifications of
-'' the value of a symbol changing.  It Verifies it is the change signal
-'' then call the application tasks notification entry point for this symbol
-'' there can be individual entry points for each symbol, or all the same
-'' entry point.
-Fast Unsafe Public Sub _signal(Sig As Integer)  '' signal handler for waiting applications
+'' True when this process waits for a notification
+Public Sub HasWaits() As Boolean
+
+  Return WaitQueue.Count > 0
+
+End
+
+'' Call the notify functions when a change signal came in. SharedMem calls it at the start of _get, _put and
+'' Exist, SharedMem.CheckNotify calls it for a program that waits without using SharedMem
+Public Sub CheckSignal()
+
+  If bDelivering Or If WaitQueue.Count = 0 Then Return
+  If hNotify <> Null And If Lof(hNotify) > 0 Then          ' the event loop did not run yet, a busy program
+    DrainNotifyPipe()
+  Else If sigtimedwait(SigSet.Data, Null, ZeroTime.Data) <> ChangeSignal Then   ' a signal from an older version
+    Return
+  Endif
+  bDelivering = True
+  Deliver()
+  bDelivering = False
+
+End
+
+'' Kept for programs that called it, does the same as CheckSignal
+Public Sub _signal(Sig As Integer)
+
+  If Sig = ChangeSignal Then CheckSignal()
+
+End
+
+'' Call the notify functions of this process whose variable changed. There can be individual
+'' entry points for each symbol, or all the same entry point.
+'' Not Fast: an error of a notify function is caught here, the JIT crashed on errors caught across JIT functions
+Private Sub Deliver()
 
   Dim MyWait As WaitHeader
   Dim Counter As Integer = 0
   Dim vReturn As Variant
 
-  If Sig <> ChangeSignal Then Return
   'Error "recieved signal! pid="; application.id
 
   If WaitQueue.count = 0 Then Return
@@ -325,7 +430,8 @@ Fast Unsafe Public Sub _signal(Sig As Integer)  '' signal handler for waiting ap
 
     vReturn = MyWait.sym.ShmRead()
 
-    Object.Call(MyWait.CallBack, MyWait.Method, [vReturn, SharedMem.PlainName(MyWait.sym.SymName)])   ' path, not this tree's path@tag
+    Try Object.Call(MyWait.CallBack, MyWait.Method, [vReturn, SharedMem.PlainName(MyWait.sym.SymName)])   ' path, not this tree's path@tag
+    If Error Then Print #File.Err, "SharedMem notify "; MyWait.Method; " error: "; Error.Text
 
     If MyWait.timeout >= 0 Then    ' this is a one shot for the notification
 
@@ -339,7 +445,6 @@ Fast Unsafe Public Sub _signal(Sig As Integer)  '' signal handler for waiting ap
   'If WaitQueue.Length = 0 Then Signal(ChangeSignal, zValue)
 
 Catch
-  Error.Raise("SharedMem Changed _Signal pid = " & Str(getpid()) & Error.text & " " & Error.where)
-  Stop
+  Print #File.Err, "SharedMem notify error pid = "; getpid(); " "; Error.Text; " "; Error.Where
 
 End

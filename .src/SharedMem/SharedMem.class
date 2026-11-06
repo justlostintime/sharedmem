@@ -401,6 +401,14 @@ End
 '' This Method is used to cancel the notification sent when memory changes\
 '' Symbol is the name in the Symbol table\
 '' NofifyObject id the Object which is waiting for a notification
+'' Call the notify functions of changes that came in. SharedMem does it at the start of every read, write
+'' and Exist, a program that waits for changes without using SharedMem calls this, from a Timer for example
+Static Public Sub CheckNotify()
+
+  WaitQueue.CheckSignal()
+
+End
+
 Static Public Sub NotifyCancel(Symbol As String, NotifyObject As Object)
 
   Symbol = PrivateName(Symbol)
@@ -614,6 +622,7 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
   Endif
 
   InSession = True
+  RegistrySaved = False                                     ' a new segment has no record of this tree yet
   SharedMem["#newvar"] = CPointer(0)
   WaitQueue._begin()
   Return True
@@ -936,7 +945,6 @@ Static Public Sub End(Optional FileName As String = "\t\t") ' free all the block
 
   'Dim testa As Integer = usermem[MemoryInUse]
 
-  Signal(SharedMemWaitQueue.ChangeSignal, NullPointer)
   WaitQueue = New SharedMemWaitQueue(Me)
 
   InitSemaphors = True                                              ' the locks stay, other processes may still use them
@@ -1467,6 +1475,7 @@ End
 '' The Data Type of the variable is defined by the first use of the variable
 Static Public Sub _get(index As String, ...) As Variant
 
+  If WaitQueue.HasWaits() Then WaitQueue.CheckSignal()     ' notify functions run here, not in a signal handler
   If EnvNames.Count > 0 And If EnvNames.Exist(index) Then Return Env[EnvNames[index]]   ' pwd is Env["PWD"] of this process
   index = PrivateName(index)
 
@@ -1568,6 +1577,7 @@ End
 '' x = SharedMem["MyVar"] or x = SharedMem["MyVar",6] <- index into an array type value
 Static Public Sub _put(data As Variant, index As Variant, ...)
 
+  If WaitQueue.HasWaits() Then WaitQueue.CheckSignal()     ' notify functions run here, not in a signal handler
   If TypeOf(index) = gb.String Then
     If EnvNames.Count > 0 And If EnvNames.Exist(index) Then
       Dim sValue As String = CStr(data)
@@ -1581,6 +1591,7 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
       Return
     Endif
     index = PrivateName(index)
+    If Not RegistrySaved And If PrivateTag <> "" And If index Ends "@" & PrivateTag Then SaveRegistry()   ' a child in another segment: record the tree there, so its copies get freed
   Endif
 
   Dim px As SharedMemSymbol = Null
@@ -1949,9 +1960,12 @@ Static Private Sub TreeNames(Tag As String) As String[]
 End
 
 '' Record this tree's private names in #private@tag
+Static Private RegistrySaved As Boolean = False
+
 Static Private Sub SaveRegistry()
 
   If PrivateTag = "" Or If Not InSession Then Return
+  RegistrySaved = True
   SharedMem[RegistryPrefix & PrivateTag] = TreeNames(PrivateTag).Join(",")
 
 End
@@ -2052,6 +2066,7 @@ End
 
 Static Public Sub Exist(Symbol As String) As Boolean
 
+  If WaitQueue.HasWaits() Then WaitQueue.CheckSignal()     ' notify functions run here, not in a signal handler
   If EnvNames.Count > 0 And If EnvNames.Exist(Symbol) Then Return True
   Symbol = PrivateName(Symbol)
 

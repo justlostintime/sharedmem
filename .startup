@@ -2,7 +2,7 @@ TestObjectRdWr
 Shared Memory object -sharedmem
 #sharedmem
 
-3.24.8
+3.24.9
 
 gb.debug
 gb.eval
