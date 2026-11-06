@@ -260,7 +260,7 @@ Private Sub SetSignal()
 End
 
 '' Dispatch the signal to each application waiting for a change in the variable
-Fast Unsafe Public Sub dispatch(Optional newVariable As Boolean = False)
+Fast Unsafe Public Sub dispatch(Optional newVariable As SharedMemSymbol = Null)
 
   Dim result As Integer
 
@@ -278,6 +278,9 @@ Fast Unsafe Public Sub dispatch(Optional newVariable As Boolean = False)
       sched_yield()
     Endif
   Next
+Catch
+  Error "Error Dispatching for :";; newVariable.ObjectName
+  Error.Propagate()
 
 End
 
@@ -322,7 +325,7 @@ Fast Unsafe Public Sub _signal(Sig As Integer)  '' signal handler for waiting ap
 
     vReturn = MyWait.sym.ShmRead()
 
-    Object.Call(MyWait.CallBack, MyWait.Method, [vReturn, MyWait.sym.SymName])
+    Object.Call(MyWait.CallBack, MyWait.Method, [vReturn, SharedMem.PlainName(MyWait.sym.SymName)])   ' path, not this tree's path@tag
 
     If MyWait.timeout >= 0 Then    ' this is a one shot for the notification
 

@@ -5,11 +5,11 @@ Fast Unsafe
 Public Sub main()
 
   Dim MyBuff As New Buffer
-  Dim MyVar As Variant = "this"
+  '  Dim MyVar As Variant = "this"
   Dim MyString As String = ""
-  Dim MyInt As Integer = 0
+  '  Dim MyInt As Integer = 0
   Dim MyLong As Long = 0
-  Dim MyPnt As Pointer = Null
+  '  Dim MyPnt As Pointer = Null
   Dim MyElement, MyELong As Element
   Dim NewStyleCopy As Buffer
 

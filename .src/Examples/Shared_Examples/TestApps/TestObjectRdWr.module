@@ -1,6 +1,6 @@
 ' Gambas module file
 
-Fast Unsafe
+'Fast Unsafe
 
 Public Sub main()
 
@@ -11,19 +11,30 @@ Public Sub main()
     c = New TestObjectrdWrClass
     Dim e As Variant
 
-    Dim mfile As File
+    '    Dim mfile As File
     Dim symbols As String[] = Object.Class(c).Symbols
     For Each sym As String In symbols
+      Print sym;;
       Try Print Object.GetProperty(c, sym)
+      If Error Then Print "()"
     Next
 
     .$c = 2
-    .$c = New TestObjectrdWrClass
+    .Save("$c")
+    .Restore("$c")
+    Print "after save and restore"
     Print .$c
+
+    .$c = New TestObjectrdWrClass
+    Print "Print new class ";; .$c
     .$c.callme()
+
+    Print "new variable from local variable"
+    ' d.setx(300)
     .d = d
     .d.callme()
 
+    Print "Save to local var and then create new one"
     e = .$c
     .$c = New TestObjectrdWr2Class
     .$c.callme()

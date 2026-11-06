@@ -37,7 +37,7 @@ Public Sub main()
 
       '**************************************************************************************************************************
       tstart = Timer
-      For i As Integer = 0 To loopcount
+      For i = 0 To loopcount
         !ThisString = "This is a little message to be saved"
       Next
       tstop = Timer

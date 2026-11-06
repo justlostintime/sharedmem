@@ -20,7 +20,7 @@ Export
 
 Fast Unsafe
 Static Property Read Version As String Use $Version = Application.Version
-Static Public MemSigConst As Integer = 3191
+Static Public MemSigConst As Integer = 3192                     ' 3192: robust pthread mutexes in the collection segment, 3191 used semaphores
 
 '' Notify every time value changes
 Public Const Repeat As Integer = -1
@@ -49,9 +49,13 @@ Static Private FreeListEnd As Pointer = Null                                    
 
 Static Private CollectionStorage As Pointer = Null                              ' root of collection in shared memory
 Static Private Mutex As Pointer = Null                                                     ' Mutex for locking memory for update
+Static Private MemLock As Pointer = Null                                                   ' offset in ColMem of the variable memory lock, it never moves when UserMem grows
 Static Private CollectionAddress As Pointer = Null                              ' pointer to where we will store the collection in shared memory
 Static Private CollectionChangedIndicator As Pointer = Null            ' pointer to changed indicator
 Static Private CollectionEntries As Pointer = Null                                 ' points to the number of entries in the symbol table
+Static Private CollectionActive As Pointer = Null                                  ' which of the two copies of the symbol table is current, 0 or 1
+Static Private CollectionAreaSlot As Pointer = Null                                ' the length of each copy, written by the creator
+Static Private CollectionAreaLen As Long = 0                                       ' A writer that dies leaves the other copy whole
 Static Public CollectMemLen As Integer = 1512000                              ' the default  length of space reserved for storing the collection of items
 Static Public SymbolTableDefaultLength As Integer = 4512000      ' 4mb the default length of the actual memory storage area
 Static Private CollectionLastUpdate As Float = 0.0                              ' the time the last addition of item to collection happened
@@ -171,6 +175,37 @@ Extern sem_trywait(mutex As Pointer) As Integer In "libpthread:0"
 Extern sem_destroy(mutex As Pointer) As Integer In "libpthread:0"
 Extern sched_yield() As Integer In "libpthread:0"
 
+' Robust process shared mutexes: when the holder dies the next locker gets EOWNERDEAD and takes it over
+Extern pthread_mutexattr_init(attr As Pointer) As Integer In "libc:6"
+Extern pthread_mutexattr_setpshared(attr As Pointer, pshared As Integer) As Integer In "libc:6"
+Extern pthread_mutexattr_setrobust(attr As Pointer, robust As Integer) As Integer In "libc:6"
+Extern pthread_mutexattr_settype(attr As Pointer, kind As Integer) As Integer In "libc:6"
+Extern pthread_mutexattr_destroy(attr As Pointer) As Integer In "libc:6"
+Extern pthread_mutex_init(mutex As Pointer, attr As Pointer) As Integer In "libc:6"
+Extern pthread_mutex_trylock(mutex As Pointer) As Integer In "libc:6"
+Extern pthread_mutex_timedlock(mutex As Pointer, abstime As Pointer) As Integer In "libc:6"
+Extern clock_gettime(clockid As Integer, tp As Pointer) As Integer In "libc:6"
+Extern pthread_mutex_unlock(mutex As Pointer) As Integer In "libc:6"
+Extern pthread_mutex_consistent(mutex As Pointer) As Integer In "libc:6"
+' A shared flock on the named segment file by every process using it, the kernel drops it when a process dies
+Extern flock(fd As Integer, operation As Integer) As Integer In "libc:6"
+Extern chdir(sPath As String) As Integer In "libc:6"
+Extern fstat(fd As Integer, buf As Pointer) As Integer In "libc:6"
+
+Static Private Const EBUSY As Integer = 16
+Static Private Const EOWNERDEAD As Integer = 130
+Static Private Const ETIMEDOUT As Integer = 110
+Static Private Const CLOCK_REALTIME As Integer = 0
+Static Private Const PTHREAD_PROCESS_SHARED As Integer = 1
+Static Private Const PTHREAD_MUTEX_ROBUST As Integer = 1
+Static Private Const PTHREAD_MUTEX_RECURSIVE As Integer = 1
+Static Private Const LOCK_SH As Integer = 1
+Static Private Const LOCK_EX As Integer = 2
+Static Private Const LOCK_NB As Integer = 4
+Static Private Const LOCK_UN As Integer = 8
+Static Private Const LockWaitSeconds As Float = 30.0          ' a live holder keeping a lock longer than this is an error. Not less:
+' 12 processes changing the table at once kept a waiter waiting over 3 s
+
 Static Public Sub DoInit()
 
   Wait
@@ -189,46 +224,177 @@ Static Public Sub _init()
   Endif
 
   WaitQueue = New SharedMemWaitQueue(Me)
+  LoadPrivateFromEnv()                                      ' a child of a process tree with private names uses them too
+  LoadEnvBackedFromEnv()
 
 End
 
 Public Const MREMAP_MAYMOVE As Integer = 1
 Public Const MREMAP_FIXED As Integer = 2
 
+'' Make a process shared, robust, recursive mutex at pMutex (40 bytes, 72 are reserved)
+Static Private Sub InitLock(pMutex As Pointer)
+
+  Dim pAttr As Pointer = Alloc(64)
+  Dim iRet As Integer
+
+  memset(pMutex, 0, 64)
+  pthread_mutexattr_init(pAttr)
+  pthread_mutexattr_setpshared(pAttr, PTHREAD_PROCESS_SHARED)
+  pthread_mutexattr_setrobust(pAttr, PTHREAD_MUTEX_ROBUST)
+  pthread_mutexattr_settype(pAttr, PTHREAD_MUTEX_RECURSIVE)     ' a notify signal handler may use SharedMem while this process holds it
+  iRet = pthread_mutex_init(pMutex, pAttr)
+  pthread_mutexattr_destroy(pAttr)
+  Free(pAttr)
+  If iRet <> 0 Then Error.Raise("SharedMem unable to create the lock, error " & Str(iRet))
+
+End
+
+'' Take a lock, waiting up to LockWaitSeconds for a live holder. It raises no error: the JIT crashed
+'' when an error raised here was caught by the caller (_jit_end_try), the caller raises LockError.
+'' Returns 0 when locked, 1 when locked after its holder died (the data it was changing may be half done),
+'' -1 when it could not lock, LockError says why.
+'' A busy lock is waited for in pthread_mutex_timedlock: the kernel queues the waiters and wakes one on
+'' each unlock. Polling with trylock let busy processes take the lock again and again between the polls,
+'' a waiter could then time out while every holder kept it only a moment.
+Static Private Sub LockAt(pMutex As Pointer, sWhat As String) As Integer
+
+  Dim iRet As Integer
+
+  iRet = pthread_mutex_trylock(pMutex)
+  If iRet = EBUSY Then
+    clock_gettime(CLOCK_REALTIME, aDeadline.Data)
+    aDeadline[0] += CLong(LockWaitSeconds)
+    Repeat
+      iRet = pthread_mutex_timedlock(pMutex, aDeadline.Data)
+    Until iRet <> 4                                           ' EINTR, a signal came in, keep waiting
+  Endif
+  Select iRet
+    Case 0
+      Return 0
+    Case EOWNERDEAD
+      pthread_mutex_consistent(pMutex)
+      Print #File.Err, "SharedMem: a process ended while it held the lock, recovered in "; sWhat
+      Return 1
+    Case ETIMEDOUT
+      LockError = "Race condition sharedmem." & sWhat & ", another process held the lock for " & Str(LockWaitSeconds) & " seconds"
+      Return -1
+    Case Else
+      LockError = "SharedMem lock error " & Str(iRet) & " in " & sWhat
+      Return -1
+  End Select
+
+End
+
+'' timespec for pthread_mutex_timedlock, tv_sec then tv_nsec
+Static Private aDeadline As New Long[2]
+
+'' Why the last LockMem or LockCol returned False
+Static Public LockError As String = ""
+
+'' Lock the variable memory: bLocked = LockMem("name") then If Not bLocked Then Error.Raise(LockError)
+Static Private Sub LockMem(sWhat As String) As Boolean
+
+  Dim iRet As Integer = LockAt(ColMem.AddrReal(MemLock), sWhat)
+
+  If iRet = 1 Then CollectionLastUpdate = -1                ' reload the symbol table, it may be half changed
+  Return iRet >= 0
+
+End
+
+'' Release the variable memory, returns False so a routine can write bLocked = UnlockMem()
+Static Private Sub UnlockMem() As Boolean
+
+  pthread_mutex_unlock(ColMem.AddrReal(MemLock))
+  Return False
+
+End
+
+Static Private Sub LockCol(sWhat As String) As Boolean
+
+  Return LockAt(ColMem.AddrReal(Mutex), sWhat) >= 0
+
+End
+
+Static Private Sub UnlockCol() As Boolean
+
+  pthread_mutex_unlock(ColMem.AddrReal(Mutex))
+  Return False
+
+End
+
+'' The length Begin maps for a block size: rounded up to a page, plus a page for the header
+Static Private Sub MappedLength(iBlockSize As Long) As Long
+
+  If iBlockSize % 4096 <> 0 Then iBlockSize = ((iBlockSize \ 4096) * 4096) + 4096
+  Return iBlockSize + 4096
+
+End
+
+'' st_size and st_nlink of an open file (x86_64 struct stat), aInfo[0] = size, aInfo[1] = links
+Static Private Sub FileInfo(fd As Integer) As Long[]
+
+  Dim pStat As Pointer = Alloc(256)
+  Dim aInfo As New Long[]
+
+  If fstat(fd, pStat) = 0 Then
+    aInfo.Add(Long@(pStat + 48))
+    aInfo.Add(Long@(pStat + 16))
+  Else
+    aInfo.Add(-1)
+    aInfo.Add(-1)
+  Endif
+  Free(pStat)
+  Return aInfo
+
+End
+
+'' True when no other process uses the named segment. Every user holds a shared flock on it,
+'' the kernel drops the flock of a process that died
+Static Private Sub SoleUser() As Boolean
+
+  Dim bSole As Boolean
+
+  If NamedMemHandle <= 0 Then Return usermem[MemoryInUse] <= 1     ' un named memory, only tasks of this program share it
+  bSole = flock(NamedMemHandle, LOCK_EX Or LOCK_NB) = 0
+  flock(NamedMemHandle, LOCK_SH)                                   ' back to a shared lock, a failed convert may have dropped it
+  Return bSole
+
+End
+
 Static Private Sub AllocChunk() As Pointer
 
   Dim p As Pointer
 
-  If usermem[MemoryInUse] > 1 Then
-    Error.Raise("Unable to allocate new memory Block, Can not move as other pid's ref to this shared memory")
+  ' A named segment does not grow: every process maps it, they would all have to remap it together.
+  ' Growing it here gave SIGBUS (the file was not extended) and later read through the old mapping.
+  If NamedMemHandle > 0 Then
+    Error.Raise("SharedMem is full, the named shared memory " & NamedMemName & " has " & Str(UserMem.MemoryLength) & " bytes, start it with a larger size")
   Endif
 
-  ' P = mremap(UserMem.RootAddress, UserMem.MemoryLength, (UserMem.MemoryLength + UserMem.MemoryBlockSize), MREMAP_MAYMOVE)
-  If InitSemaphors Then sem_destroy(usermem.AddrReal(MemMutex))
+  If Not SoleUser() Then
+    Error.Raise("SharedMem is full, unable to allocate a new memory block while other tasks use this shared memory")
+  Endif
   P = mremap(UserMem.RootAddress, UserMem.MemoryLength, (UserMem.MemoryLength + UserMem.MemoryBlockSize), MREMAP_MAYMOVE)
-  Print "Old Map ="; Hex(UserMem.RootAddress);; "New Map = ";; Hex(p)
   If p <> UserMem.RootAddress Then
     If p = -1 Then
       Error.Raise("Remap error new =" & Str(p) & " system error =" & Str(System.Error))
     Else
       UserMem.rootaddress = p
+      MemoryStorage = p                                       ' End unmaps this address
       UserMem[MemoryRoot] = p
       usermem.MemoryLength = (UserMem.MemoryLength + UserMem.MemoryBlockSize)
       usermem[MemoryLength] = usermem.MemoryLength
     Endif
   Else
     UserMem.MemoryLength = (UserMem.MemoryLength + UserMem.MemoryBlockSize)
+    usermem[MemoryLength] = usermem.MemoryLength              ' grown in place, the header must say so too
   Endif
   'UserMem[EndOfBlock] = UserMem[MemoryAddress] + UserMem[MemoryLength] - 1
-  Dim oldend As Long = UserMem[EndOfBlock]
-  UserMem[EndOfBlock] = UserMem[MemoryLength] - 1 - SharedMemoryControlHeader
-  Print "Old end Block :";; oldend;; "New end Block :";; UserMem[EndOfBlock]
-  If InitSemaphors Then sem_init(usermem.AddrReal(MemMutex), 1, 1)
-  _print()
+  UserMem[EndOfBlock] = UserMem[MemoryLength] - 1 - SharedMemoryControlHeader   ' it printed the map and every symbol here, into the program output
 
 Catch
-  Print Error.text, Error.where
-  Stop
+  Error.Propagate()                                         ' it printed and carried on, ShmAlloc then used a null block
 
 End
 
@@ -236,6 +402,8 @@ End
 '' Symbol is the name in the Symbol table\
 '' NofifyObject id the Object which is waiting for a notification
 Static Public Sub NotifyCancel(Symbol As String, NotifyObject As Object)
+
+  Symbol = PrivateName(Symbol)
 
   WaitQueue.NotifyCancel(Symbol, NotifyObject)
 
@@ -269,6 +437,8 @@ End
 '' > any value greater than zero, the object is notified any time before the timeout expires
 
 Static Public Sub NotifyChange(Symbol As String, NotifyObject As Object, Optional iTimeOut As Long = -1, FunctionName As String = "") As Boolean
+
+  Symbol = PrivateName(Symbol)
 
   Return WaitQueue.NotifyChange(Symbol, NotifyObject, iTimeOut, FunctionName)
 
@@ -391,12 +561,14 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
       UserMem[EndOfBlock] = UserMem[MemoryLength] - 1 - SharedMemoryControlHeader
       UserMem[MemSignature] = MemSigConst
     Else If UserMem[MemSignature] <> MemSigConst
-      Error.Raise("Abort:20: Memory Database Signature is invalid Expected:" & MemSigConst & " Got:" & UserMem[MemSignature])
+      BeginError = "Abort:20: Memory Database Signature is invalid Expected:" & MemSigConst & " Got:" & UserMem[MemSignature] & ", the shared memory was made by another version of sharedmem, end the programs using it or remove it (gsh -C)"
+      munmap(MemoryStorage, UserMem.MemoryLength)
+      MemoryStorage = Null
+      If NamedMemHandle = -1 Then Error.Raise(BeginError)   ' Begin called directly, BeginNamed raises it itself
+      Return False                                           ' an error caught by BeginNamed crashed the JIT
     End If
 
-    UserMem[MemoryInUse] = If(SetInUseZero, 1, UserMem[MemoryInUse] + 1)
-    'Dim testd As Integer = UserMem[MemoryInUse]
-    If InitSemaphors Then sem_init(usermem.AddrReal(MemMutex), 1, 1)
+    UserMem[MemoryInUse] = If(SetInUseZero, 1, UserMem[MemoryInUse] + 1)      ' only used for un named memory, named memory uses flock
 
   Endif
 
@@ -417,11 +589,19 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
     ColMem.RootAddress = CollectionStorage
     ColMem.MemoryLength = CollectMemLen
     Mutex = 0                                                                                                                         ' we will now use offsets CollectionStorage
-    CollectionChangedIndicator = Mutex + (SizeOf(gb.long) * 8) + 8                  ' Changed content by a task
+    MemLock = Mutex + (SizeOf(gb.long) * 8) + 8                                     ' the variable memory lock, 72 bytes like Mutex
+    CollectionChangedIndicator = MemLock + (SizeOf(gb.long) * 8) + 8                ' Changed content by a task
     CollectionEntries = CollectionChangedIndicator + SizeOf(gb.long) + 1       ' Number of entries in the index of database
-    CollectionAddress = CollectionEntries + SizeOf(gb.long) + 1                         ' The address of the collection
+    CollectionActive = CollectionEntries + SizeOf(gb.long) + 1                 ' the current copy of the symbol table
+    CollectionAreaSlot = CollectionActive + SizeOf(gb.long) + 1                ' the length of a copy
+    CollectionAddress = CollectionAreaSlot + SizeOf(gb.long) + 1 + 4           ' The address of the collection, two copies from here
 
-    If InitSemaphors Then sem_init(ColMem.AddrReal(Mutex), 1, 1)
+    If InitSemaphors Then                                                    ' the creator makes the locks, the others use them
+      InitLock(ColMem.AddrReal(Mutex))
+      InitLock(ColMem.AddrReal(MemLock))
+      ColMem[CollectionAreaSlot] = ((CLong(CollectMemLen) - CLong(CollectionAddress)) \ 2) And Not 7
+    Endif
+    CollectionAreaLen = ColMem[CollectionAreaSlot, gb.Long]
 
     SymbolTable.Clear()
 
@@ -442,14 +622,19 @@ End
 
 '' This function creates a named shared memory space see Begin above for details\
 '' If you want to load a symbol table from disk then use Merge after this call
+'' Why Begin returned False
+Static Public BeginError As String = ""
+
 Static Public Sub BeginNamed(Optional MemName As String = User.Name & "gsh", MemSize As Integer = 4512000, forceCleanup As Boolean = False) As Boolean
 
-  Dim firstuse As Boolean = False
+  Dim firstuse As Boolean
+  Dim aInfo As Long[]
+  Dim iTry As Integer = 0
+  Dim iMapSize As Long
 
   If InSession Then
     Error.Raise("Already in Begin-end session")
   Endif
-  '    If Not IsNull(MemoryStorage) Then Return True
 
   If Left(MemName) <> "/" Then
     MemName = "/" & MemName
@@ -460,60 +645,71 @@ Static Public Sub BeginNamed(Optional MemName As String = User.Name & "gsh", Mem
   If ForceCleanup Then         ' try to clean up any leftover stuff
     shm_unlink(MemName)
     shm_unlink(ColName)
-    firstuse = True
   Endif
-  ' Print "Begin named"
-  ' printf(VarPtr(MemName))
-  ' printf(VarPtr(ColName))
-  ' 'printf("\n\n\r" & Chr(0))
-  ' Print "\nend print names"
-  If Not Exist("/dev/shm/" &/ MemName) Then
-    FirstUse = True
-  Endif
-  NamedMemHandle = shm_open(MemName, O_CREAT Or O_RDWR Or O_EXCL, &O660) ' return an error if its already there
-  If NamedMemHandle = -1 Then
+
+  ' Every process using the segment holds a shared flock on the memory file. The creator holds it
+  ' exclusive until the segment is ready, the last user to end takes it exclusive and removes the files.
+  ' The kernel drops the flock of a process that dies, so a crash never leaves a wrong count behind.
+  Do
+    Inc iTry
+    If iTry > 2000 Then Error.Raise("Unable to open Named Shared Memory " & MemName & ", it is being created or removed by another process")
+    firstuse = False
+    iMapSize = MappedLength(MemSize)
+
+    NamedMemHandle = shm_open(MemName, O_CREAT Or O_RDWR Or O_EXCL, &O660)
+    If NamedMemHandle <> -1 Then
+      firstuse = True
+      InitSemaphors = True
+      flock(NamedMemHandle, LOCK_EX)                         ' others wait until it is set up
+      If ftruncate(NamedMemHandle, iMapSize) = -1 Then      ' the whole mapped length, a shorter file gives SIGBUS
+        rClose(NamedMemHandle)
+        shm_unlink(MemName)
+        Error.Raise("Unable to create the storage area for variables" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error)))
+      Endif
+      Break
+    Endif
+
     NamedMemHandle = shm_open(MemName, O_RDWR, &O660)
     If NamedMemHandle = -1 Then
+      If System.Error = 2 Then Continue                       ' removed by its last user just now, create it
       Error.Raise("Unable to open Named Shared Memory" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error)))
-      Return False
+    Endif
+    flock(NamedMemHandle, LOCK_SH)                           ' waits while it is created or being removed
+    aInfo = FileInfo(NamedMemHandle)
+    If aInfo[1] = 0 Then                                     ' removed while we waited, open the new one
+      rClose(NamedMemHandle)
+      Continue
+    Endif
+    If aInfo[0] <= 4096 Then                                 ' the creator has not sized it yet, or died before it did
+      If flock(NamedMemHandle, LOCK_EX Or LOCK_NB) = 0 And iTry > 200 Then
+        shm_unlink(MemName)                                  ' nobody uses it, a creator died: start again
+        shm_unlink(ColName)
+      Endif
+      rClose(NamedMemHandle)
+      Sleep 0.001
+      Continue
     Endif
     InitSemaphors = False
-    ' Endif
-    '
-    ' If NamedMemHandle = -1 Then
-    '         Error.Raise("Unable to open Named Shared Memory" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error)))
-    '         Return False
-  Else
-    If ftruncate(NamedMemHandle, MemSize + SharedMemoryControlHeader) = -1 Then
-      Error "Unable to create the storage area for variables" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error))
-      rClose(NamedMemCollectionHandle)
-      rClose(NamedMemHandle)
-      shm_unlink(MemName)
-      shm_unlink(ColName)
-      Error.Raise("Unable to create the storage area for variables" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error)))
-    Endif
-  Endif
+    iMapSize = aInfo[0]                                      ' map what the creator made, it may differ from MemSize
+    Break
+  Loop
 
   NamedMemCollectionHandle = shm_open(ColName, O_CREAT Or O_RDWR Or O_EXCL, &O660)
-
   If NamedMemCollectionHandle = -1 Then
     NamedMemCollectionHandle = shm_open(ColName, O_RDWR, &O660)
     If NamedMemCollectionHandle = -1 Then
       Print #File.err, "Unable to open Named Shared Collection" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error))
       rClose(NamedMemHandle)
-      shm_unlink(MemName)
+      If firstuse Then shm_unlink(MemName)
       Error.Raise("Unable to open Named Shared Collection" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error)))
-      'Return False
     Endif
-    ' Endif
-    '
-    '
-    ' If NamedMemCollectionHandle = -1 Then
-    '      Print #File.err, "Unable to open Named Shared Collection" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error))
-    '      rClose(NamedMemHandle)
-    '      shm_unlink(MemName)
-    '      Error.Raise("Unable to open Named Shared Collection" & MemName & " " & Str(System.error) & " " & String@(strerror(System.error)))
-    '      Return False
+    If firstuse Then                                                         ' left by a creator that died, start it empty
+      ftruncate(NamedMemCollectionHandle, 0)
+      ftruncate(NamedMemCollectionHandle, CollectMemLen)
+    Else
+      aInfo = FileInfo(NamedMemCollectionHandle)                            ' not FileInfo(...)[0], the JIT leaked the temporary array
+      If aInfo[0] > 4096 Then CollectMemLen = aInfo[0]                       ' map the collection as its creator made it
+    Endif
   Else
     If ftruncate(NamedMemCollectionHandle, CollectMemLen) = -1 Then
       Print #File.err, "Unable to create the storage area for collection" & ColName & " " & Str(System.error) & " " & String@(strerror(System.error))
@@ -526,10 +722,25 @@ Static Public Sub BeginNamed(Optional MemName As String = User.Name & "gsh", Mem
   Endif
 
   NamedMemName = MemName
-  ' Print "Do real mapping of allocated storage"
-  Dim Iret As Boolean = begin(MemSize)
-  If firstuse Then usermem[MemoryInUse] = 1
-  'DumpMem(MemoryAddress, 300, "dump" & Application.name)
+  Dim Iret As Boolean
+  BeginError = ""
+  Iret = begin(iMapSize - 4096)                             ' Begin maps its block size plus a header page
+  If Not Iret And If BeginError <> "" Then
+    Dim sErr As String = BeginError
+    If firstuse Then
+      shm_unlink(MemName)
+      shm_unlink(ColName)
+    Endif
+    rClose(NamedMemCollectionHandle)
+    rClose(NamedMemHandle)
+    NamedMemHandle = -1
+    NamedMemCollectionHandle = -1
+    Error.Raise(sErr)
+  Endif
+  If firstuse Then
+    usermem[MemoryInUse] = 1
+    flock(NamedMemHandle, LOCK_SH)                          ' ready, let the others in
+  Endif
   Return Iret
 
 End
@@ -542,10 +753,10 @@ Static Public Sub ClearMem()
 
   Dim s As Sharedmemsymbol
   Dim DeleteSet As New String[]
+  Dim bLocked As Boolean
 
-  While sem_trywait(UserMem.AddrReal(memMutex))
-    sched_yield()
-  Wend
+  bLocked = LockMem("ClearMem")
+  If Not bLocked Then Error.Raise(LockError)
 
   CollectionChanged()
 
@@ -570,7 +781,11 @@ Static Public Sub ClearMem()
   WaitQueue.reset()
   LastMemorySync = ""
 
-  sem_post(UserMem.AddrReal(memMutex))
+  bLocked = UnlockMem()
+
+Catch
+  If bLocked Then UnlockMem()
+  Error.Propagate()
 
 End
 '' Loads a file containing a memory image into memory
@@ -607,21 +822,32 @@ Catch
 
 End
 
+'' Alias for Sync easier to remember, default is not to write it all
+Static Public Sub Save(Optional Symbol As String = ".", filename As String = "") As Boolean
+
+  Symbol = PrivateName(Symbol)
+
+  Return Sync(symbol, filename)
+
+End
+
 '' Sync the content of memory with the last loaded file or write to default file storage
 '' this will update the file with the memory content or create and write the default file
 '' with no parameters syncs all of memory, with symbol, syncs the variable to disk
 Static Public Sub Sync(Optional Symbol As String = ".", filename As String = ".") As Boolean
 
+  Symbol = PrivateName(Symbol)
+
   Dim wFile As File
+  Dim bLocked As Boolean
 
   If MemoryStorage = Null Then Return False
 
   If Symbol <> "." Then
-    WriteVarTo(symbol, True)
+    WriteVarTo(symbol, filename)
   Else
-    While sem_trywait(UserMem.AddrReal(memMutex))
-      sched_yield()
-    Wend
+    bLocked = LockMem("Sync")
+    If Not bLocked Then Error.Raise(LockError)
 
     If LastMemorySync = "." Or filename = "." Then
       If filename <> "" And filename <> "." Then
@@ -633,17 +859,24 @@ Static Public Sub Sync(Optional Symbol As String = ".", filename As String = "."
     Endif
 
     Try wFile = Open LastMemorySync For Write Create
-    If Error Then Return False
+    If Error Then
+      bLocked = UnlockMem()                                ' it returned holding the lock
+      Return False
+    Endif
 
     If Not IsNull(wFile) Then
       _write(wFile)
       Close wFile
     Endif
 
-    sem_post(UserMem.AddrReal(MemMutex))
+    bLocked = UnlockMem()
   Endif
 
   Return True
+
+Catch
+  If bLocked Then UnlockMem()
+  Error.Propagate()
 
 End
 '' Restore the content of memory with the last saved file or read to default file storage
@@ -652,12 +885,14 @@ End
 '' . means all Memory
 
 Static Public Sub Restore(Optional Symbol As String = "", filename As String = "") As Boolean
+
+  Symbol = PrivateName(Symbol)
   'Dim wFile As File
 
   If MemoryStorage = Null Then Return False   ' can only restore if the we have memory
 
   If Symbol <> "" And symbol <> "." Then
-    ReadVarFrom(symbol, True)
+    ReadVarFrom(symbol, filename, True)
   Else
 
     If LastMemorySync = "." Or filename = "." Then
@@ -704,9 +939,7 @@ Static Public Sub End(Optional FileName As String = "\t\t") ' free all the block
   Signal(SharedMemWaitQueue.ChangeSignal, NullPointer)
   WaitQueue = New SharedMemWaitQueue(Me)
 
-  sem_destroy(UserMem.AddrReal(MemMutex))
-  sem_destroy(ColMem.AddrReal(Mutex))
-  InitSemaphors = True
+  InitSemaphors = True                                              ' the locks stay, other processes may still use them
 
   If FileName <> "\t\t" Then
     If filename = "." Then
@@ -723,8 +956,9 @@ Static Public Sub End(Optional FileName As String = "\t\t") ' free all the block
     Endif
   Endif
 
-  Dec UserMem[MemoryInUse]                                          ' free from our point of view
+  Dec UserMem[MemoryInUse]                                          ' free from our point of view, un named memory only
   Dim InUseFlag As Integer = UserMem[MemoryInUse]
+  If NamedMemHandle > 0 Then InUseFlag = If(flock(NamedMemHandle, LOCK_EX Or LOCK_NB) = 0, 0, 1)   ' last user when nobody else holds the flock
   Dim releaseLen As Integer = UserMem[MemoryLength]
   munmap(MemoryStorage, releaseLen)
   munmap(CollectionStorage, CollectMemLen)
@@ -737,25 +971,24 @@ Static Public Sub End(Optional FileName As String = "\t\t") ' free all the block
   LastMemorySync = ""
 
   If NamedMemHandle > 0 Then ' lets close the mem shared with me and unlink it
-    rClose(NamedMemHandle)
-    rClose(NamedMemCollectionHandle)
-    NamedMemHandle = -1
-    NamedMemCollectionHandle = -1
 
     Dim stemp As String = NamedMemName  ' fix after bug is fixed
 
-    If InUseFlag = 0 Then
+    If InUseFlag = 0 Then                                           ' unlink while holding the exclusive flock, a newcomer waits then sees it removed
       Dim ColName As String = NamedMemName & "Col"
-      If shm_unlink(sTemp) = -1 Then
+      If shm_unlink(sTemp) = -1 And If System.Error <> 2 Then     ' 2: already removed, gsh -C for example
         Error "Error close named  file:"; NamedMemName; " Errno="; System.Error, String@(strerror(System.Error))
-        Stop
       Endif
-      If shm_unlink(ColName) = -1 Then
+      If shm_unlink(ColName) = -1 And If System.Error <> 2 Then
         Error "Error close named Collection:"; ColName; " Errno="; System.Error, String@(strerror(System.Error))
-        Stop
       Endif
       NamedMemName = ""
     Endif
+
+    rClose(NamedMemHandle)                                          ' drops our flock
+    rClose(NamedMemCollectionHandle)
+    NamedMemHandle = -1
+    NamedMemCollectionHandle = -1
 
   Endif
   InSession = False
@@ -773,6 +1006,9 @@ End
 '' > > SharedMem\["TheNameWeGiveourPointer"\] = 20 ' Protected - Uses Semaphor lock during the data change.\
 '' > >
 Static Public Sub Element(RootVar As Variant, symbol As String, index As Integer, DataType As Integer, Optional ilen As Integer = -1) As Element
+
+  symbol = PrivateName(symbol)
+  If TypeOf(RootVar) = gb.String Then RootVar = PrivateName(RootVar)
 
   Dim MySymbol, RootSymbol As SharedMemSymbol
   Dim MyElement As Element
@@ -835,9 +1071,9 @@ End
 
 Static Private Sub PointerAlloc(symbol As String, MyObject As Object, Rootaddr As Pointer, datadr As Pointer, ilen As Integer, rdType As Integer) As SharedMemSymbol
 
-  While sem_trywait(UserMem.AddrReal(memMutex))
-    sched_yield()
-  Wend
+  Dim bLocked As Boolean = LockMem("PointerAlloc")
+
+  If Not bLocked Then Error.Raise(LockError)
 
   CollectionChanged()
 
@@ -866,13 +1102,17 @@ Static Private Sub PointerAlloc(symbol As String, MyObject As Object, Rootaddr A
 
     SaveCollection()
 
-    sem_post(UserMem.AddrReal(memMutex))
+    bLocked = UnlockMem()
 
   Else
 
     Error.Raise("Symbol already defined")
 
   Endif
+
+Catch
+  If bLocked Then UnlockMem()                            ' Symbol already defined left it locked
+  Error.Propagate()
 
 End
 
@@ -882,12 +1122,13 @@ End
 '' the object will have its own information manager for its content
 Static Public Sub NamedAlloc(Symbol As String, MemSize As Integer, MyObject As Variant) As Pointer
 
+  Symbol = PrivateName(Symbol)
+
   Dim MySymbol As SharedMemSymbol
   'Dim RootRef As Pointer
 
-  While sem_trywait(UserMem.AddrReal(memMutex))
-    sched_yield()
-  Wend
+  Dim bLocked As Boolean = LockMem("NamedAlloc")
+  If Not bLocked Then Error.Raise(LockError)
 
   CollectionChanged()
 
@@ -912,7 +1153,7 @@ Static Public Sub NamedAlloc(Symbol As String, MemSize As Integer, MyObject As V
     SymbolTable.Add(MySymbol, symbol)
     SaveCollection()
 
-    sem_post(UserMem.AddrReal(memMutex))
+    bLocked = UnlockMem()
 
     Return MySymbol.DataAddress + 1   ' do this to lock in the binary data type
 
@@ -920,10 +1161,29 @@ Static Public Sub NamedAlloc(Symbol As String, MemSize As Integer, MyObject As V
     Error.Raise("Symbol already defined")
   Endif
 
+Catch
+  If bLocked Then UnlockMem()                            ' Symbol already defined left it locked
+  Error.Propagate()
+
 End
 
 '' Allocate an unprotected block of memory
+'' Allocate an unprotected block of memory, raises an error when the memory is full
 Static Public Sub ShmAlloc(MemSize As Integer) As Pointer
+
+  Dim p As Pointer = ShmTryAlloc(MemSize)
+
+  If p = Null Then Error.Raise(LastAllocError)
+  Return p
+
+End
+
+'' The reason ShmTryAlloc returned Null
+Static Public LastAllocError As String = ""
+
+'' Allocate a block, Null when the memory is full. An error raised here and passed back through a
+'' call from SharedMemSymbol crashed the JIT (EXEC_push_unknown), the caller raises it instead
+Static Public Sub ShmTryAlloc(MemSize As Integer) As Pointer
 
   Dim p As Pointer
 
@@ -952,15 +1212,22 @@ RetryAfterAlloc:
 
   Else
 
-    AllocChunk()
+    If NamedMemHandle > 0 Then                              ' a named segment does not grow, say so without raising an error here
+      LastAllocError = "SharedMem is full, the named shared memory " & NamedMemName & " has " & Str(UserMem.MemoryLength) & " bytes, start it with a larger size"
+      Return Null
+    Endif
+    Try AllocChunk()
+    If Error Then
+      LastAllocError = Error.Text
+      Return Null
+    Endif
     Goto RetryAfterAlloc
 
   Endif
 
   Return Null
 Catch
-  Print "ShmAllcoc error:", Error.text, Error.where
-  ' Stop
+  Error.Propagate()                                         ' returning Null made the caller write at offset 0
 
 End
 
@@ -1153,17 +1420,15 @@ End
 
 Static Public Sub free(symbolKey As String, Optional bLock As Boolean = True) As Boolean       ' note here the symbols shared memory will be freed and the symbol table entry will be deleted true if deleted
 
+  If EnvNames.Count > 0 And If EnvNames.Exist(symbolKey) Then Return False   ' an env backed name has nothing stored to free
+  symbolKey = PrivateName(symbolKey)
+
   Dim Symbol As SharedMemSymbol = SymbolTable[symbolKey]
-  Dim waittime As Integer = 0
+  Dim bLocked As Boolean
 
   If bLock Then
-    While sem_trywait(UserMem.AddrReal(MemMutex)) ' wait till we have control of memory
-      Inc waittime
-      If waittime > WaitTimeout Then
-        Error.Raise("Race condition sharedmem.free")
-      Endif
-      sched_yield()
-    Wend
+    bLocked = LockMem("free")
+    If Not bLocked Then Error.Raise(LockError)
   Endif
 
   CollectionChanged()
@@ -1171,7 +1436,7 @@ Static Public Sub free(symbolKey As String, Optional bLock As Boolean = True) As
   Symbol = SymbolTable[symbolKey]
 
   If IsNull(Symbol) Then
-    If bLock Then sem_post(UserMem.AddrReal(MemMutex))
+    If bLocked Then bLocked = UnlockMem()
     Return False
   Endif
 
@@ -1186,16 +1451,12 @@ Static Public Sub free(symbolKey As String, Optional bLock As Boolean = True) As
 
   SaveCollection()
 
-  If bLock Then
-    sem_post(UserMem.AddrReal(MemMutex))
-  Endif
+  If bLocked Then bLocked = UnlockMem()
 
   Return True
 
 Catch
-  Dim iCount As Integer = 0
-  sem_getvalue(UserMem.AddrReal(MemMutex), VarPtr(iCount))
-  If iCount = 0 And bLock Then sem_post(UserMem.AddrReal(MemMutex))
+  If bLocked Then UnlockMem()
   Error.Propagate()
 
 End
@@ -1206,32 +1467,27 @@ End
 '' The Data Type of the variable is defined by the first use of the variable
 Static Public Sub _get(index As String, ...) As Variant
 
+  If EnvNames.Count > 0 And If EnvNames.Exist(index) Then Return Env[EnvNames[index]]   ' pwd is Env["PWD"] of this process
+  index = PrivateName(index)
+
   Dim px As SharedMemSymbol
   Dim rx As Variant
-  Dim waittime As Integer = 0
+  Dim bLocked As Boolean
 
   If Not InSession Then
     Error.raise("Sharedmem Access get value before BEGIN()")
   Endif
 
-  While sem_trywait(UserMem.AddrReal(MemMutex))
-    Inc waittime
-    If waittime > WaitTimeout Then
-      Error.Raise("Race condition sharedmem.get")
-      Return Null
-    Endif
-    sched_yield()
-  Wend
+  bLocked = LockMem("get")
+  If Not bLocked Then Error.Raise(LockError)
 
   CollectionChanged()
 
   px = SymbolTable[index]
 
   If IsNull(px) Then
+    bLocked = UnlockMem()                                  ' before the error, it was left locked
     Error.Raise("Symbol not found '" & index & "'")
-    sem_post(UserMem.AddrReal(MemMutex))
-    sched_yield()
-    Return Null
 
   Endif
 
@@ -1249,19 +1505,17 @@ Static Public Sub _get(index As String, ...) As Variant
     Endif
   Endif
 
-  sem_post(UserMem.AddrReal(MemMutex))
+  bLocked = UnlockMem()
 
   sched_yield()
 
   Return rx
 
 Catch
-  Dim iCount As Integer
   If Not InSession Then
     Error.Propagate()
   Endif
-  sem_getvalue(UserMem.AddrReal(MemMutex), VarPtr(iCount))
-  If iCount = 0 Then sem_post(UserMem.AddrReal(MemMutex))
+  If bLocked Then UnlockMem()
   sched_yield()
   Print #File.err, "Sharedmem._get error:";; Error.text
   Return Null
@@ -1271,7 +1525,10 @@ End
 '' Rename a variable from one name to another
 Static Public Sub Rename(symbol As String, newname As String, Optional force As Boolean = False)
 
-  Dim waitcount As Integer = 0
+  symbol = PrivateName(symbol)
+  newname = PrivateName(newname)
+
+  Dim bLocked As Boolean
 
   If Not InSession Then
     Error.raise("Sharedmem Access Assign value before BEGIN()")
@@ -1282,21 +1539,16 @@ Static Public Sub Rename(symbol As String, newname As String, Optional force As 
   If SymbolTable.Exist(Symbol) Then
     If Not SymbolTable.Exist(newname) Or If force Then
 
-      While sem_trywait(UserMem.AddrReal(MemMutex))
-        Inc waitcount
-        If waitcount > WaitTimeout Then
-          Error.Raise("Race condition sharedmem.put")
-          Return
-        Endif
-        sched_yield()
-      Wend
+      bLocked = LockMem("Rename")
+      If Not bLocked Then Error.Raise(LockError)
+      CollectionChanged()                                  ' save the current table, not the one read before the lock
 
       SymbolTable[newname] = SymbolTable[symbol]
       SymbolTable[newname].Symname = newname
       SymbolTable.Remove(symbol)
 
       SaveCollection()
-      sem_post(UserMem.AddrReal(MemMutex))
+      bLocked = UnlockMem()
 
     Else
       Error.Raise("Sharedmem Rename New name exists " & newname)
@@ -1305,6 +1557,10 @@ Static Public Sub Rename(symbol As String, newname As String, Optional force As 
     Error.Raise("Sharedmem Rename Symbol not found " & Symbol)
   Endif
 
+Catch
+  If bLocked Then UnlockMem()
+  Error.Propagate()
+
 End
 
 '' Set the value of a shared memory variable\
@@ -1312,8 +1568,24 @@ End
 '' x = SharedMem["MyVar"] or x = SharedMem["MyVar",6] <- index into an array type value
 Static Public Sub _put(data As Variant, index As Variant, ...)
 
-  Dim px, oldpx As SharedMemSymbol
-  Dim waitcount As Integer = 0
+  If TypeOf(index) = gb.String Then
+    If EnvNames.Count > 0 And If EnvNames.Exist(index) Then
+      Dim sValue As String = CStr(data)
+      If EnvNames[index] = "PWD" Then                       ' the directory of this process, like cd
+        If File.IsRelative(sValue) Then sValue = Env["PWD"] &/ sValue
+        If Not IsDir(sValue) Then Error.Raise("Not a directory: " & sValue)
+        If chdir(sValue) <> 0 Then Error.Raise("Unable to change to " & sValue & " " & String@(strerror(System.Error)))
+        Env["OLDPWD"] = Env["PWD"]
+      Endif
+      Env[EnvNames[index]] = sValue
+      Return
+    Endif
+    index = PrivateName(index)
+  Endif
+
+  Dim px As SharedMemSymbol = Null
+  Dim Newpx As SharedMemSymbol = Null
+  Dim bLocked As Boolean
   Dim IsNew As Boolean = False
 
   If Not InSession Then
@@ -1336,14 +1608,9 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
     Endif
   Endif
 
-  While sem_trywait(UserMem.AddrReal(MemMutex))
-    Inc waitcount
-    If waitcount > WaitTimeout Then
-      Error.Raise("Race condition sharedmem.put")
-      Return
-    Endif
-    sched_yield()
-  Wend
+  bLocked = LockMem("put")
+  If Not bLocked Then Error.Raise(LockError)
+  CollectionChanged()                                      ' another process may have added a variable since, saving a stale table erased it
 
   px = SymbolTable[index]
 
@@ -1374,46 +1641,57 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
     px.SetSymbol(index, data)
     SaveCollection()              ' update the shared area so other tasks know items add/deleted etc
     ' now notify if new variable added
-    oldpx = px
-    px = SymbolTable["#newvar"]
-    If px = Null Then px = oldpx
-    isNew = True
+    NewPx = SymbolTable["#newvar"]
   Endif
 
-  If memcmp(usermem.AddrReal(px.ShmWait + 1), zPointer, SizeOf(gb.long))   ' if waiting
+  'If memcmp(usermem.AddrReal(px.ShmWait + 1), zPointer, SizeOf(gb.long))   ' if waiting Then
+  If px <> Null And If Long@(usermem.AddrReal(px.ShmWait + 1)) <> 0 Then ' if waiting
 
     If px.ShmLastWriteTime = Null Then
-      sem_post(UserMem.AddrReal(MemMutex))
+      bLocked = UnlockMem()
       Error.Raise("Last write time is null" & px.SymName)
     Endif
 
     UserMem[px.ShmLastWriteTime, gb.float] = Now + Frac(Timer)
 
-    sem_post(UserMem.AddrReal(MemMutex))
+    bLocked = UnlockMem()
 
     sched_yield()
-    Try WaitQueue.dispatch(isnew)
+    Try WaitQueue.dispatch(IIf(isnew, px, Null))
 
-    If Error Then Error.Raise("Dispatch error on variable change event creation " & Error.text & ":" & Error.where)
+    If Error Then Error.Raise("Dispatch error on variable change event for " & px.ObjectName & " , " & Error.text & ":" & Error.where)
     sched_yield()
 
   Else
 
     UserMem[px.ShmLastWriteTime, gb.float] = Now + Frac(Timer)
-    sem_post(UserMem.AddrReal(MemMutex))
+    bLocked = UnlockMem()
+
+  Endif
+
+  If NewPx <> Null And If Long@(usermem.AddrReal(NewPx.ShmWait + 1)) <> 0 Then
+    bLocked = LockMem("put")
+    If Not bLocked Then Error.Raise(LockError)
+
+    If NewPx.ShmLastWriteTime = Null Then
+      bLocked = UnlockMem()
+      Error.Raise("Last write time is null" & NewPx.SymName)
+    Endif
+
+    UserMem[NewPx.ShmLastWriteTime, gb.float] = Now + Frac(Timer)
+
+    bLocked = UnlockMem()
+
+    sched_yield()
+    Try WaitQueue.dispatch(px)
+    If Error Then Error.Raise("Dispatch error on new variable event for " & px.ObjectName & " , " & Error.text & ":" & Error.where)
+    sched_yield()
 
   Endif
 
 Catch
-  Dim sMessage As String = Error.text & "-" & Error.where
-  Dim iCount As Integer
-  If Not InSession Then
-    Error.Propagate()
-  Endif
-
-  sem_getvalue(UserMem.AddrReal(MemMutex), VarPtr(iCount))
-  If iCount = 0 Then sem_post(UserMem.AddrReal(MemMutex))
-  Print #File.err, "Sharedmem._put Error:";; sMessage
+  If bLocked Then UnlockMem()
+  Error.Propagate()                                        ' the caller must know the value was not stored
 
 End
 
@@ -1422,27 +1700,24 @@ End
 Static Private Sub SaveCollection()
 
   Dim MFile As File
-  Dim counter As Integer = 0
+  Dim bLocked As Boolean
   Dim TotalLength As Long = 0
   Dim TotalEntries As Long = 0
 
-  While sem_trywait(ColMem.AddrReal(Mutex))
-    Inc counter
-    sched_yield()
-    If counter > WaitTimeout Then
-      Error.Raise("SaveCollection race condition !!!")
-    Endif
-  Wend
+  bLocked = LockCol("SaveCollection")
+  If Not bLocked Then Error.Raise(LockError)
 
-  Colmem[CollectionEntries] = SymbolTable.Length
+  ' write the copy that is not in use, then switch to it with one write
+  Dim iNext As Integer = If(ColMem[CollectionActive, gb.Integer] = 1, 0, 1)
+  Dim pArea As Pointer = CollectionAddress + (iNext * CollectionAreaLen)
 
-  mFile = Memory ColMem.AddrReal(CollectionAddress) For Write
+  mFile = Memory ColMem.AddrReal(pArea + 16) For Write
 
   For Each ISym As SharedMemSymbol In SymbolTable
     Inc TotalEntries
     TotalLength += ISym.Length
-    If TotalLength > Colmem.MemoryLength Then
-      sem_post(ColMem.AddrReal(Mutex))
+    If TotalLength > CollectionAreaLen - 16 Then
+      bLocked = UnlockCol()
       Error.Raise("SharedMem out of Symbol index space :" & Str(TotalEntries) & ", Adding Symbol :" & ISym.SymName)
     Endif
 
@@ -1452,16 +1727,18 @@ Static Private Sub SaveCollection()
 
   Close MFile
 
-  CollectionLastUpdate = Timer
+  ColMem[pArea] = CInt(TotalEntries)                        ' the count of this copy
+  ColMem[CollectionActive] = iNext                          ' the switch: readers now see the new copy
+  Colmem[CollectionEntries] = CInt(TotalEntries)
+
+  CollectionLastUpdate = ColMem[CollectionChangedIndicator, gb.float] + 1      ' a count, Timer is per process and two could write the same value
 
   colmem[CollectionChangedIndicator] = CollectionLastUpdate
 
-  sem_post(ColMem.AddrReal(Mutex))
+  bLocked = UnlockCol()
 
 Catch
-  Dim iCount As Integer
-  sem_getvalue(Mutex, VarPtr(iCount))
-  If iCount = 0 Then sem_post(ColMem.AddrReal(Mutex))
+  If bLocked Then UnlockCol()                              ' sem_getvalue(Mutex) used the offset 0 as an address and crashed
   Error.Propagate()
 
 End
@@ -1474,23 +1751,20 @@ Static Private Sub LoadCollection()
   Dim MFile As File
   Dim SymCount As Integer
   Dim ISym As SharedMemSymbol
-  Dim counter As Integer = 0
+  Dim bLocked As Boolean
 
-  While sem_trywait(ColMem.AddrReal(Mutex))
-    Inc counter
-    sched_yield()
-    If counter > WaitTimeout Then
-      Error.Raise("LoadCollection race condition !!!")
-    Endif
-  Wend
+  bLocked = LockCol("LoadCollection")
+  If Not bLocked Then Error.Raise(LockError)
 
   CollectionLastUpdate = colmem[CollectionChangedIndicator]
 
-  SymCount = colmem[CollectionEntries]
+  Dim pArea As Pointer = CollectionAddress + (ColMem[CollectionActive, gb.Integer] * CollectionAreaLen)
+
+  SymCount = ColMem[pArea, gb.Integer]
 
   SymbolTable.Clear()
 
-  MFile = Memory ColMem.AddrReal(CollectionAddress) For Read
+  MFile = Memory ColMem.AddrReal(pArea + 16) For Read
 
   For i As Integer = 1 To SymCount
 
@@ -1502,12 +1776,10 @@ Static Private Sub LoadCollection()
   Next
 
   Close MFile
-  sem_post(ColMem.AddrReal(Mutex))
+  bLocked = UnlockCol()
 
 Catch
-  Dim iCount As Integer
-  sem_getvalue(Mutex, VarPtr(iCount))
-  If iCount = 0 Then sem_post(ColMem.AddrReal(Mutex))
+  If bLocked Then UnlockCol()                              ' sem_getvalue(Mutex) used the offset 0 as an address and crashed
   Error.Propagate()
 
 End
@@ -1566,7 +1838,222 @@ Static Public Sub used() As Integer
 End
 
 '' Return true if the named variable exsists
+'' Env backed names: a variable that is the environment variable of each process, for example pwd is
+'' Env["PWD"]. Nothing is stored in the shared memory: every process has its own value, a child starts
+'' with the value of its parent. Writing PWD also changes the directory of the process.
+'' SetEnvBacked exports the list (SHAREDMEM_ENVVARS = "pwd=PWD,..."), a child process reads it when it loads this class.
+Static Private EnvNames As New Collection(gb.IgnoreCase)
+
+'' Make Name the environment variable EnvName of each process
+Static Public Sub SetEnvBacked(Name As String, EnvName As String)
+
+  Dim aList As New String[]
+
+  EnvNames[Name] = EnvName
+  For Each sEnv As String In EnvNames
+    aList.Add(EnvNames.Key & "=" & sEnv)
+  Next
+  Env["SHAREDMEM_ENVVARS"] = aList.Join(",")
+
+End
+
+'' True when Name is env backed
+Static Public Sub IsEnvBacked(Name As String) As Boolean
+
+  If EnvNames.Count = 0 Then Return False
+  Return EnvNames.Exist(Name)
+
+End
+
+Static Private Sub LoadEnvBackedFromEnv()
+
+  Dim iEq As Integer
+
+  EnvNames.Clear()
+  For Each sPair As String In Split(Env["SHAREDMEM_ENVVARS"], ",", "", True)
+    iEq = InStr(sPair, "=")
+    If iEq > 1 Then EnvNames[Left(sPair, iEq - 1)] = Mid(sPair, iEq + 1)
+  Next
+
+End
+
+'' Private names: a variable kept apart for one process tree, for example a root gsh and every program it
+'' starts. A private name is stored as name@tag. SetPrivate exports the names and the tag in the
+'' environment (SHAREDMEM_PRIVATE, SHAREDMEM_PRIVATE_TAG), a child process reads them when it loads this class.
+'' Each tree also records its names in the shared variable #private@tag, so its copies can be found and
+'' freed when it ends, even names a child added, and when its root crashed.
+Static Public PrivateTag As String = ""
+Static Private PrivateNames As New Collection(gb.IgnoreCase)
+Static Private Const RegistryPrefix As String = "#private@"
+
+'' Keep Names private to this process and its children, under Tag. An empty Tag turns it off
+Static Public Sub SetPrivate(Names As String[], Tag As String)
+
+  PrivateNames.Clear()
+  For Each sName As String In Names
+    PrivateNames[sName] = True
+  Next
+  PrivateTag = Tag
+  Env["SHAREDMEM_PRIVATE"] = Names.Join(",")
+  Env["SHAREDMEM_PRIVATE_TAG"] = Tag
+  SaveRegistry()
+
+End
+
+'' Make one more name private to this process tree, programs started from now on keep it private too.
+'' Does nothing when no tag is set (SetPrivate)
+Static Public Sub AddPrivate(Name As String)
+
+  If PrivateTag = "" Or If PrivateNames.Exist(Name) Then Return
+  PrivateNames[Name] = True
+  Env["SHAREDMEM_PRIVATE"] = LocalNames().Join(",")
+  SaveRegistry()
+
+End
+
+Static Private Sub LocalNames() As String[]
+
+  Dim aNames As New String[]
+
+  For Each vOne As Variant In PrivateNames
+    aNames.Add(PrivateNames.Key)
+  Next
+  Return aNames
+
+End
+
+Static Private Sub LoadPrivateFromEnv()
+
+  PrivateNames.Clear()
+  PrivateTag = Env["SHAREDMEM_PRIVATE_TAG"]
+  If PrivateTag = "" Then Return
+  For Each sName As String In Split(Env["SHAREDMEM_PRIVATE"], ",", "", True)
+    PrivateNames[sName] = True
+  Next
+
+End
+
+'' The private names of the tree Tag: its record in the shared memory, and for our own tree the names of this process
+Static Private Sub TreeNames(Tag As String) As String[]
+
+  Dim aNames As New String[]
+
+  If SharedMem.Exist(RegistryPrefix & Tag) Then aNames = Split(SharedMem[RegistryPrefix & Tag], ",", "", True)
+  If Tag = PrivateTag Then
+    For Each sName As String In LocalNames()
+      If Not aNames.Exist(sName, gb.IgnoreCase) Then aNames.Add(sName)
+    Next
+  Endif
+  Return aNames
+
+End
+
+'' Record this tree's private names in #private@tag
+Static Private Sub SaveRegistry()
+
+  If PrivateTag = "" Or If Not InSession Then Return
+  SharedMem[RegistryPrefix & PrivateTag] = TreeNames(PrivateTag).Join(",")
+
+End
+
+'' The name a variable is stored under: name@tag for a private name, the name itself otherwise
+Static Public Sub PrivateName(Symbol As String) As String
+
+  If PrivateTag = "" Then Return Symbol
+  If PrivateNames.Exist(Symbol) Then Return Symbol & "@" & PrivateTag
+  Return Symbol
+
+End
+
+'' The name to show for a stored name: name@tag of this tree is shown as name, other names as they are.
+'' Notify callbacks get it, so a callback for "path" sees "path" and not path@tag
+Static Public Sub PlainName(sName As String) As String
+
+  Dim iAt As Integer
+
+  If PrivateTag = "" Then Return sName
+  iAt = RInStr(sName, "@")
+  If iAt > 1 And If Mid(sName, iAt + 1) = PrivateTag And If PrivateNames.Exist(Left(sName, iAt - 1)) Then Return Left(sName, iAt - 1)
+  Return sName
+
+End
+
+'' The ,names, of every tree that has a record, by tag, for ShownName
+Static Private Sub AllTrees() As Collection
+
+  Dim cTrees As New Collection
+  Dim aKeys As New String[]
+
+  For Each vSym As Variant In SymbolTable                  ' keys first: reading a value may reload SymbolTable
+    If SymbolTable.Key Begins RegistryPrefix Then aKeys.Add(SymbolTable.Key)
+  Next
+  For Each sKey As String In aKeys
+    If SharedMem.Exist(sKey) Then cTrees[Mid(sKey, Len(RegistryPrefix) + 1)] = "," & LCase(SharedMem[sKey]) & ","
+  Next
+  Return cTrees
+
+End
+
+'' The name as this process tree sees it: its own private copy under the plain name,
+'' "" for the records, for the private copies of other trees and for the shared variable a private name hides
+Static Private Sub ShownName(sName As String, cTrees As Collection) As String
+
+  Dim iAt As Integer
+  Dim sTag, sBase As String
+
+  If sName Begins RegistryPrefix Then Return ""
+  If EnvNames.Exist(sName) Then Return ""                ' shown from the environment, not the stored copy
+  iAt = RInStr(sName, "@")
+  If iAt > 1 Then
+    sTag = Mid(sName, iAt + 1)
+    sBase = Left(sName, iAt - 1)
+    If sTag = PrivateTag And If PrivateNames.Exist(sBase) Then Return sBase
+    If cTrees.Exist(sTag) And If InStr(cTrees[sTag], "," & LCase(sBase) & ",") > 0 Then Return ""
+  Endif
+  If PrivateNames.Exist(sName) Then Return ""
+  Return sName
+
+End
+
+'' Free the copies of tree Tag and its record
+Static Private Sub FreeTree(Tag As String)
+
+  For Each sName As String In TreeNames(Tag)
+    If SharedMem.Exist(sName & "@" & Tag) Then Me.Free(sName & "@" & Tag)   ' Me., a plain Free is the built in memory Free
+  Next
+  If SharedMem.Exist(RegistryPrefix & Tag) Then Me.Free(RegistryPrefix & Tag)
+
+End
+
+'' Free the private copies of this process tree, call it when the process that made the tag ends
+Static Public Sub FreePrivate()
+
+  If PrivateTag = "" Then Return
+  FreeTree(PrivateTag)
+
+End
+
+'' Free the private copies of trees whose tag is the pid of a process that is gone, a crashed root gsh
+Static Public Sub FreeStalePrivate()
+
+  Dim aTags As New String[]
+  Dim sTag As String
+
+  CollectionChanged()
+  For Each vSym As Variant In SymbolTable
+    If SymbolTable.Key Begins RegistryPrefix Then aTags.Add(Mid(SymbolTable.Key, Len(RegistryPrefix) + 1))
+  Next
+  For Each sTag In aTags
+    If sTag = PrivateTag Then Continue
+    If IsDigit(sTag) And If Not Exist("/proc/" & sTag) Then FreeTree(sTag)   ' Exist here is the built in file test
+  Next
+
+End
+
 Static Public Sub Exist(Symbol As String) As Boolean
+
+  If EnvNames.Count > 0 And If EnvNames.Exist(Symbol) Then Return True
+  Symbol = PrivateName(Symbol)
 
   CollectionChanged()
   Return SymbolTable.Exist(Symbol)
@@ -1575,6 +2062,8 @@ End
 
 '' Returns a pointer to the datastorage area of the variable
 Static Public Sub _varptr(symbol As String) As Pointer
+
+  symbol = PrivateName(symbol)
 
   Dim MySym As Pointer = Null
   Dim MyEntry As SharedMemSymbol
@@ -1596,6 +2085,8 @@ End
 '' unless you know that the memory block will not change between
 '' As in a buffer of fixed value
 Static Public Sub RealAddress(symbol As String) As Pointer
+
+  symbol = PrivateName(symbol)
 
   Dim MySym As Pointer = Null
   Dim MemoryLocation As Pointer = Null
@@ -1624,6 +2115,8 @@ End
 '' Returns the length of the data storage block of the array
 Static Public Sub _varLen(symbol As String) As Integer
 
+  symbol = PrivateName(symbol)
+
   Dim MySym As Integer = 0
   Dim MyEntry As SharedMemSymbol
 
@@ -1650,6 +2143,9 @@ End
 '' Returns a Symbol table entry SharedMemSymbol
 Static Public Sub _Symbol(symbol As String) As SharedMemSymbol
 
+  If EnvNames.Count > 0 And If EnvNames.Exist(symbol) Then Return Null   ' env backed, nothing stored
+  symbol = PrivateName(symbol)
+
   Return SymbolTable[symbol]
 
 End
@@ -1657,6 +2153,8 @@ End
 '' returns the SymbolTable entry for simple variables\
 '' returns the managing object for Buffer(named memory blocks) and elements(pointers inside named blocks)
 Static Public Sub AsObject(symbol As String) As Variant
+
+  symbol = PrivateName(symbol)
 
   Dim MySym As Variant = Null
 
@@ -1863,10 +2361,12 @@ End
 '' the entire context of the variable is stored, for loading at a different time
 Static Public Sub WriteVarTo(symbol As String, Optional FileName As Variant = "", bsync As Boolean = False) As Integer
 
+  symbol = PrivateName(symbol)
+
   Dim wfile As File
   Dim mSymbol As SharedMemSymbol
   Dim retlen As Integer
-  Dim waittime As Long = 0
+  Dim bLocked As Boolean
 
   mSymbol = SymbolTable[symbol]
   If IsNull(mSymbol) Then
@@ -1900,34 +2400,28 @@ Static Public Sub WriteVarTo(symbol As String, Optional FileName As Variant = ""
     End Select
   Endif
 
-  While sem_trywait(UserMem.AddrReal(MemMutex)) ' wait till we have control of memory
-    Inc waittime
-    If waittime > WaitTimeout Then
-      If closefile Then Close wFile
-      sem_post(UserMem.AddrReal(MemMutex))                 ' do this to try and relese issue
-      Error.Raise("Race condition sharedmem.WriteVarto")
-    Endif
-    sched_yield()
-  Wend
+  bLocked = LockMem("WriteVarTo")
+  If Not bLocked Then
+    If closefile Then Close wFile
+    Error.Raise(LockError)                                        ' it used to release a lock another process held
+  Endif
 
   CollectionChanged()
   mSymbol = SymbolTable[symbol]
   If IsNull(mSymbol) Then
     If closefile Then Close wFile
-    sem_post(UserMem.AddrReal(MemMutex))
+    bLocked = UnlockMem()
     Error.Raise("WriteVarTo : Symbol not defined " & symbol)
   Endif
 
   Try mSymbol._write(wFile, True)                          ' write it with the data
   If Error Then
-    sem_post(UserMem.AddrReal(MemMutex))
+    bLocked = UnlockMem()
     If closefile Then Close wFile
     Error.Propagate()
   Endif
 
-  If sem_post(UserMem.AddrReal(MemMutex)) Then
-    Error.Raise("WriteVarTo: release mutex fail with pid = " & Str(getpid()))
-  Endif
+  bLocked = UnlockMem()
 
   If closefile Then
     retlen = Seek(wfile)
@@ -1944,6 +2438,7 @@ Static Public Sub WriteVarTo(symbol As String, Optional FileName As Variant = ""
   Return retlen
 
 Catch
+  If bLocked Then UnlockMem()
   Error.Propagate()
 
 End
@@ -1957,10 +2452,12 @@ End
 '' > SharedMem.ReadVarFrom("MyVar","TheOtherVar") <- reads from the content of a var called MyOtherVar
 Static Public Sub ReadVarFrom(symbol As String, Optional fileName As Variant = "", bsync As Boolean = False) As Integer
 
+  symbol = PrivateName(symbol)
+
   Dim wfile As File
   Dim mSymbol As SharedMemSymbol
   Dim closefile As Boolean
-  Dim waittime As Long = 0
+  Dim bLocked As Boolean
 
   If TypeOf(filename) = gb.object
     If Object.Class(filename).name = "File" Then
@@ -1995,14 +2492,12 @@ Static Public Sub ReadVarFrom(symbol As String, Optional fileName As Variant = "
 
   Me.Free(symbol) ' the free does a collection changed and only deletes when found
 
-  While sem_trywait(UserMem.AddrReal(MemMutex)) ' wait till we have control of memory
-    Inc waittime
-    If waittime > WaitTimeout Then
-      If closefile Then Close wFile
-      Error.Raise("Race condition sharedmem.ReadVarfrom")
-    Endif
-    sched_yield()
-  Wend
+  bLocked = LockMem("ReadVarFrom")
+  If Not bLocked Then
+    If closefile Then Close wFile
+    Error.Raise(LockError)
+  Endif
+  CollectionChanged()                                      ' save the current table, not the one read before the lock
 
   mSymbol = New SharedMemSymbol(Me)
   mSymbol._read(wFile, True)
@@ -2015,26 +2510,19 @@ Static Public Sub ReadVarFrom(symbol As String, Optional fileName As Variant = "
 
   SaveCollection()              ' update the shared area so other tasks know items add/deleted etc
 
-  If sem_post(UserMem.AddrReal(MemMutex)) Then
-    Error.Raise("ReadVarFrom: mem mutex post failed pid = " & Str(getpid()))
-  Endif
+  bLocked = UnlockMem()
 
   sched_yield()
 
   ' Check if a notify for this entry is wanted
   If memcmp(usermem.AddrReal(mSymbol.ShmWait + 1), zPointer, SizeOf(gb.long))
 
-    While sem_trywait(UserMem.AddrReal(MemMutex)) ' wait till we have control of memory
-      Inc waittime
-      If waittime > WaitTimeout Then
-        Error.Raise("Race condition sharedmem.ReadVarFrom")
-      Endif
-      sched_yield()
-    Wend
+    bLocked = LockMem("ReadVarFrom")
+    If Not bLocked Then Error.Raise(LockError)
 
     ' Print "_put has mutex wlt "; getpid()
     If mSymbol.ShmLastWriteTime = Null Then
-      sem_post(UserMem.AddrReal(MemMutex))
+      bLocked = UnlockMem()
       sched_yield()
       Error.Raise("last write time pointer is nill" & mSymbol.SymName)
     Endif
@@ -2043,11 +2531,9 @@ Static Public Sub ReadVarFrom(symbol As String, Optional fileName As Variant = "
 
     sched_yield()
 
-    If sem_post(UserMem.AddrReal(MemMutex)) Then
-      Error.Raise("_put: release mutex fail wlt pid = " & Str(getpid()))
-    Endif
+    bLocked = UnlockMem()
 
-    Try WaitQueue.dispatch()
+    Try WaitQueue.dispatch(msymbol)
 
     sched_yield()
 
@@ -2056,10 +2542,7 @@ Static Public Sub ReadVarFrom(symbol As String, Optional fileName As Variant = "
   Return mSymbol.storageLength
 
 Catch
-  If sem_post(UserMem.AddrReal(MemMutex)) Then
-    Print #File.err, "ReadVarFrom: mem mutex post failed pid = " & Str(getpid() & " " & Error.text)
-  Endif
-
+  If bLocked Then UnlockMem()                              ' it posted even when it did not hold the lock
   Error.Propagate()
 
 End
@@ -2068,18 +2551,20 @@ End
 '' this will write directly no context and only the raw data
 Static Public Sub write(wFile As File, symbol As String, Optional ilength As Integer = 0) As Integer
 
+  symbol = PrivateName(symbol)
+
   Dim mSymbol As SharedMemSymbol
   Dim ioLen As Integer
+  Dim bLocked As Boolean
 
-  While sem_trywait(UserMem.AddrReal(MemMutex))
-    sched_yield()
-  Wend
+  bLocked = LockMem("write")
+  If Not bLocked Then Error.Raise(LockError)
 
   CollectionChanged()
   mSymbol = SymbolTable[symbol]
 
   If IsNull(mSymbol) Then
-    sem_post(UserMem.AddrReal(MemMutex))
+    bLocked = UnlockMem()
     Error.Raise("Symbol not found '" & symbol & "'")
     Return 0
   Endif
@@ -2088,12 +2573,14 @@ Static Public Sub write(wFile As File, symbol As String, Optional ilength As Int
   If iLength > mSymbol.DataLength - 1 Then ilength = mSymbol.datalength - 1 ' take the length and defult to whole data if too long
   iolen = rWrite(wFile.handle, mem.AddrReal(mSymbol.DataAddress + 1), ilength)
 
-  If sem_post(UserMem.AddrReal(MemMutex)) Then
-    Error.Raise("release mutex fail wlt pid = " & Str(getpid()))
-  Endif
+  bLocked = UnlockMem()
 
   sched_yield()
   Return ioLen
+
+Catch
+  If bLocked Then UnlockMem()
+  Error.Propagate()
 
 End
 '' This will read directly from the file or stream into the data store without destroying the data type or other context information
@@ -2101,18 +2588,20 @@ End
 
 Static Public Sub read(rFile As File, symbol As String, Optional ilength As Integer = 0) As Integer
 
+  symbol = PrivateName(symbol)
+
   Dim mSymbol As SharedMemSymbol
   Dim ioLen As Integer
+  Dim bLocked As Boolean
 
-  While sem_trywait(UserMem.AddrReal(MemMutex))
-    sched_yield()
-  Wend
+  bLocked = LockMem("read")
+  If Not bLocked Then Error.Raise(LockError)
 
   CollectionChanged()
   mSymbol = SymbolTable[symbol]
 
   If IsNull(mSymbol) Then
-    sem_post(UserMem.AddrReal(MemMutex))
+    bLocked = UnlockMem()
     Error.Raise("Symbol not found '" & symbol & "'")
     Return 0
   Endif
@@ -2121,12 +2610,14 @@ Static Public Sub read(rFile As File, symbol As String, Optional ilength As Inte
   If iLength > mSymbol.DataLength - 1 Then ilength = mSymbol.datalength - 1 ' take the length and defult to whole data if too long
   iolen = rRead(rFile.handle, mem.AddrReal(mSymbol.DataAddress + 1), ilength)
 
-  If sem_post(UserMem.AddrReal(MemMutex)) Then
-    Error.Raise("release mutex fail wlt pid = " & Str(getpid()))
-  Endif
+  bLocked = UnlockMem()
 
   sched_yield()
   Return ioLen
+
+Catch
+  If bLocked Then UnlockMem()
+  Error.Propagate()
 
 End
 
@@ -2150,10 +2641,19 @@ Static Public Sub Variables(Optional filter As String = "*") As String[]
 
   Dim varlist As New String[]
 
+  Dim sShown As String
+  Dim cTrees As Collection
+
+  CollectionChanged()
+  cTrees = AllTrees()
   For Each MySym As SharedMemSymbol In SymbolTable
-    If MySym.SymName Like filter Then
-      varlist.Add(MySym.symname)
+    sShown = ShownName(MySym.SymName, cTrees)
+    If sShown <> "" And If sShown Like filter Then
+      varlist.Add(sShown)
     Endif
+  Next
+  For Each sEnvName As String In EnvNames
+    If EnvNames.Key Like filter Then varlist.Add(EnvNames.Key)
   Next
   Return varlist
 
@@ -2221,8 +2721,12 @@ Static Public Sub _next() As String
       Enum.Stop()
       Return
     Endif
+    Dim cTrees As Collection = AllTrees()
     For Each s As Variant In SymbolTable
-      nextlist.Add(SymbolTable.key)
+      If ShownName(SymbolTable.key, cTrees) <> "" Then nextlist.Add(ShownName(SymbolTable.key, cTrees))
+    Next
+    For Each sEnvName As String In EnvNames
+      nextlist.Add(EnvNames.Key)
     Next
     nextlist.Sort()
     Enum.index = 0

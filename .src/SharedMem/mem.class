@@ -6,7 +6,7 @@
 '  Version 3, 29 June 2007
 '  See project license file.
 Export
-Fast Unsafe
+'Fast Unsafe
 'Extern memset(dest As Pointer, Val As Integer, len As Integer) As Pointer In "libc:6"
 Extern strncpy(dest As Pointer, src As String, len As Integer) As Pointer In "libc:6" ' defined as string to force gambas to copy len 0 and return string type
 'Extern strcpy(dest As Pointer, src As Pointer) As String In "libc:6"
@@ -261,7 +261,12 @@ DoVariant:
   Endif
   mfile = Memory MemPointer For Read
   Try MyObject = Read #mFile As Object
-  If Error Then Print #File.err, "Object read failed"
+  If Error Then
+    Error "Object read failed";; Error.text
+    Try Close mFile
+    Stop
+  Endif
+
   $LastWriteLength = Seek(mFile)
   Close mFile
   Return MyObject
@@ -300,6 +305,11 @@ DoLongDate:
   cvVariant = Read #mfile As Variant
   Close mFile
   Return cvVariant
+
+Catch
+  Error "mem,_get ";; Error.Text
+  Try Close mFile
+  Stop
 
 End
 

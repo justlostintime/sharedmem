@@ -19,8 +19,8 @@ Static Public Const classversion As Integer = 1
 
 Static Public TypeToText As String[] = ["Binary", "Boolean", "Byte", "Short", "Integer", "Long", "Single", "Float", "Date", "String", "LongDate", "Pointer", "Variant",
   "Function", "Class", "NULL", "Object", "Not Array", "", "", "", "", "", ""]
-
-Private objectversion As Integer = -1
+Public objectversion As Integer = -1
+Private initdone As Boolean = False
 
 '' This is called whenever the object is created
 '' Can be just created no information
@@ -31,7 +31,7 @@ Public Sub _new(Optional LoadFrom As Variant = Null)
   Dim mFile As File = Null
 
   objectversion = classversion
-
+  initdone = True
   If IsNull(Loadfrom) Then Return
 
   If TypeOf(LoadFrom) = gb.pointer Then
@@ -63,6 +63,9 @@ End
 '' This is called whenever the object is destroyed
 Public Sub _free()
 
+  '  Print "object freed"
+  initdone = False
+
 End
 
 '' This will find every property of the object and try to\
@@ -73,14 +76,25 @@ Public Sub _write(mFile As File)  'do nothing by default
 
   Dim v As Variant
 
+  Write #mFile, "classversion" As String
   Write #mFile, objectversion As Integer
+
   For Each sym As String In Object.Class(Me).Symbols
-    If sym = "classversion" Then Continue
-    Try v = Object.GetProperty(Me, sym)
-    If Not Error Then
-      Write #mFile, v As Variant
-    Endif
+    'If sym = "classversion" Then Continue
+
+    'Print "processing symbol";; sym
+
+    v = Object.GetProperty(Me, sym)
+    'If not Error Then
+    Write #mfile, sym As String
+    Write #mFile, v As Variant
+    'Print "processing symbol write ";; sym;; v
+    'Endif
   Next
+Catch
+  Write #mfile, "######EOF######"
+  'Print "write complete"
+  Return
 
 End
 
@@ -90,21 +104,44 @@ End
 ''       are not the same as to a file stream
 Public Sub _read(mFile As File)  'do nothing by default
 
+  If Not initdone Then Return
   Dim v As Variant
+  Dim symbolIn As String
   Dim OldVersion As Integer
+  Dim symin As String
 
+  symbolin = Read #mfile As String
+  If symbolin <> "classversion" Then
+    Error.Raise("Invalid object class definition " & symbolin)
+  Endif
   OldVersion = Read #mFile As Integer
+  'Print "got class version number for ";; Object.Class(Me).name
+  '  If _convertstream(OldVersion, mFile) Then Return ' conversion completed the read
 
-  If _convertstream(OldVersion, mFile) Then Return ' conversion completed the read
-
-  For Each sym As String In Object.Class(Me).Symbols
-    If sym = "classversion" Then Continue
-    Try v = Object.GetProperty(Me, sym)
-    If Not Error Then
-      v = Read #mFile As Variant
-      Object.setproperty(Me, sym, v)
+  While Not Eof(mfile)
+    symin = Read #mfile As String
+    If symin == "######EOF######" Then
+      '   Print "Complete object read"
+      Break
     Endif
-  Next
+    v = Read #mfile As Variant
+    Object.setproperty(Me, symin, v)
+    'Print "_read and save sym";; symin;; "=";; v
+  Wend
+
+  ' For Each sym As String In Object.Class(Me).symbols
+  '   Print "_read sym";; sym
+  '   If sym = "classversion" Then Continue
+  '   Try v = Object.GetProperty(Me, sym)
+  '   If Not Error Then
+  '
+  '     v = Read #mFile As Variant
+  '     Object.setproperty(Me, sym, v)
+  '   Endif
+  ' Next
+Catch
+  Print "Error while reading object ";; Object.Class(Me).name;; Error.text
+  Stop
 
 End
 
@@ -126,7 +163,7 @@ End
 '' < 0 the version is greater than the objects version
 '' > 0 the class version is greater then the object version
 '' = 0 class and object have same version
-Private Sub CheckVersion(versionnumber As String) As Integer
+Public Sub CheckVersion(versionnumber As String) As Integer
 
   Return objectversion - versionnumber
 
@@ -198,8 +235,11 @@ End
 '' needs to decide what to do with a higher class version
 Private Sub _convertStream(versionnumber As Integer, mFile As File) As Boolean
 
+  Dim ProcessFile As File = mFile
+
   Select Case versionnumber
     Case ClassVersion ' indicate we did Not Read Or Do conversion As They are same version
+      Print CString(ProcessFile)
       Return False
 
     Default

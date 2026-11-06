@@ -2,13 +2,15 @@
 
 Public Sub main()
 
+  Dim s As String
+
   SharedMem.Begin(2000000)
 
   With SharedMem
     .["$a"] = 100
     .["$b"] = "hello world"
 
-    For Each s As String In SharedMem
+    For Each s In SharedMem
       Print s
       Dim a As SharedMemSymbol = SharedMem.SymbolTable[s]
       Print CFloat(Now), a.lastwritetime, CDate(a.LastWriteTime)
@@ -17,7 +19,7 @@ Public Sub main()
     .["$a"] = 2000
     .["$b"] = "by by by now"
 
-    For Each s As String In SharedMem
+    For Each s In SharedMem
       Print s
       a = SharedMem.SymbolTable[s]
       Print CDate(a.LastWriteTime)

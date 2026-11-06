@@ -10,6 +10,7 @@ Public Sub main()
   Dim myDest As Pointer = 0
   Dim MyTime As Float = 0
   Dim MyResult As Float = 0
+  Dim i As Integer
 
   SharedMem.begin(120000)
 
@@ -25,7 +26,7 @@ Public Sub main()
     Print "Begin Store value test, Storelen = "; SharedMem._varlen("MySource")
     MyTime = Timer
 
-    For i As Integer = 1 To LoopCount
+    For i = 1 To LoopCount
 
       .usermem[MySource] = 0
 
@@ -36,7 +37,7 @@ Public Sub main()
     Print "Begin Retrieve value test "
     MyTime = Timer
 
-    For i As Integer = 1 To LoopCount
+    For i = 1 To LoopCount
 
       MyResult = .usermem[MySource]
 
@@ -51,7 +52,7 @@ Public Sub main()
   Print "Begin  Store value test level 2"
   MyTime = Timer
 
-  For i As Integer = 1 To LoopCount
+  For i = 1 To LoopCount
 
     MySymbol.ShmWrite(MyLong)
 
@@ -63,7 +64,7 @@ Public Sub main()
 
   MyTime = Timer
 
-  For i As Integer = 1 To LoopCount
+  For i = 1 To LoopCount
 
     MyResult = MySymbol.ShmRead()
 
@@ -74,7 +75,7 @@ Public Sub main()
   Print "Begin  Store value test level 3"
   MyTime = Timer
 
-  For i As Integer = 1 To LoopCount
+  For i = 1 To LoopCount
 
     SharedMem["MyDest"] = MyLong
 
@@ -85,7 +86,7 @@ Public Sub main()
   Print "Begin  Retrieve value test level 3"
   MyTime = Timer
 
-  For i As Integer = 1 To LoopCount
+  For i = 1 To LoopCount
 
     MyResult = SharedMem["MySource"]
 

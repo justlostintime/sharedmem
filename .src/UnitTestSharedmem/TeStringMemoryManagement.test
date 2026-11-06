@@ -2,6 +2,8 @@
 
 Public Sub aStringGetsbigger()
 
+  Dim i As Integer
+
   With SharedMem
     .Begin(1450000)
 
@@ -11,12 +13,12 @@ Public Sub aStringGetsbigger()
 
     'Print .mystring.len, .len("myString"), Len(.mystring), mystring.LastWriteLength, MyString.storageLength, MyString.dataLength
     Dim starttime As Float = Timer
-    For i As Integer = 0 To 100000
+    For i = 0 To 100000
       .["myString"] = .["MyString"] & "++ "
       Dim LastWR As Integer = mystring.LastWriteLength
       Dim LenWR As Integer = .mystring.len
       If MyString.storageLength < MyString.dataLength Then
-        Assert.Fail("invalid memory allocation for string")
+        Assert.Fail("invalid memory allocation for string : time" & CStr(LastWr) & "; Len" & CStr(lenwr))
       Else If mystring.LastWriteLength <> .mystring.len + 1 Then  ' need to account for the write of the null terminator byte
         Assert.Fail("Invalid write length/possible data corruption")
       Endif
@@ -30,7 +32,7 @@ Public Sub aStringGetsbigger()
 
     Dim testString As String = "......................................."
     Starttime = Timer
-    For i As Integer = 0 To 100000
+    For i = 0 To 100000
       testString = testString & "++ "
     Next
 
@@ -38,7 +40,7 @@ Public Sub aStringGetsbigger()
 
     MyString.value = "................................................"
     starttime = Timer
-    For i As Integer = 0 To 100000
+    For i = 0 To 100000
       MyString.value = MyString.value & "++ "
     Next
 

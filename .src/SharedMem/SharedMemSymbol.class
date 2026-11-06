@@ -7,7 +7,9 @@
 '  See project license file.
 Export
 
-Fast Unsafe
+' Not Fast Unsafe: SharedMem calls into this class and back late bound, and the JIT crashed
+' (EXEC_push_unknown, _jit_end_try) whenever an error came back through such a call,
+' for example when the shared memory is full. Interpreted it reports the error, about 15% slower.
 
 Public SymName As String = ""
 Public $oShm As Variant = Null
@@ -259,6 +261,16 @@ Catch
 
 End
 
+'' A block of shared memory, the full memory error is raised here, in this class
+Private Sub NewBlock(iLength As Integer) As Pointer
+
+  Dim p As Pointer = SharedMem.ShmTryAlloc(iLength)
+
+  If p = 0 Then Error.Raise(SharedMem.LastAllocError)
+  Return p
+
+End
+
 Public Sub AllocStorage(iLength As Integer) As Boolean
 
   Dim NewStorageLength As Integer
@@ -277,13 +289,13 @@ Public Sub AllocStorage(iLength As Integer) As Boolean
           StorageLength += StringBufferExtra
         Endif
         SharedMem.ShmFree(SharedMem.UserMem[DataAddress + 1, gb.pointer, True])
-        newStorage = SharedMem.ShmAlloc(storageLength + 1)
+        newStorage = NewBlock(storageLength + 1)
         SharedMem.UserMem[DataAddress + 1, gb.pointer, True] = newstorage
         SharedMem.UserMem.SetType(DataAddress, symtype)
         SharedMem.UserMem.SetType(newStorage + SharedMem.DataOffset, symtype)     ' make sure the indexed storage also defines the type of data
       Else
         SharedMem.ShmFree(RootAddress)
-        RootAddress = SharedMem.ShmAlloc(storageLength + 1)
+        RootAddress = NewBlock(storageLength + 1)
         DataAddress = RootAddress + SharedMem.DataOffset
         ShmWait = RootAddress + SharedMem.WaitOffset
         ShmLastWriteTime = RootAddress + SharedMem.LastWriteOffset
@@ -295,14 +307,14 @@ Public Sub AllocStorage(iLength As Integer) As Boolean
   Else
     StorageLength = NewStorageLength
     If symtype = gb.string Or symtype = gb.object Then
-      RootAddress = SharedMem.ShmAlloc(SizeOf(gb.pointer) + 1 + SharedMem.AllocHeaderLen)
+      RootAddress = NewBlock(SizeOf(gb.pointer) + 1 + SharedMem.AllocHeaderLen)
       DataAddress = RootAddress + SharedMem.AllocHeaderLen
-      newStorage = SharedMem.ShmAlloc(storageLength + 1)
+      newStorage = NewBlock(storageLength + 1)
       SharedMem.UserMem[DataAddress + 1, gb.pointer, True] = newstorage
       SharedMem.UserMem.SetType(DataAddress, symtype)
       SharedMem.UserMem.SetType(NewStorage + SharedMem.dataoffset, symtype)
     Else
-      RootAddress = SharedMem.ShmAlloc(storageLength + 1)
+      RootAddress = NewBlock(storageLength + 1)
       DataAddress = RootAddress + SharedMem.AllocHeaderLen
       SharedMem.UserMem.Settype(DataAddress, symtype)
     Endif
@@ -477,7 +489,7 @@ Public Sub ShmCopy(mempointer As Pointer, memlen As Integer)
     If memLen > StorageLength Then
       SharedMem.ShmFree(RootAddress)
       StorageLength = memlen
-      RootAddress = SharedMem.ShmAlloc(storageLength)
+      RootAddress = NewBlock(storageLength)
       DataAddress = RootAddress + SharedMem.DataOffset
       ShmWait = RootAddress + SharedMem.WaitOffset
       ShmLastWriteTime = RootAddress + SharedMem.LastWriteOffset
@@ -486,7 +498,7 @@ Public Sub ShmCopy(mempointer As Pointer, memlen As Integer)
     memcpy(RootAddress, mempointer, memlen)
   Else
     StorageLength = memlen
-    RootAddress = SharedMem.ShmAlloc(storageLength)
+    RootAddress = NewBlock(storageLength)
     DataAddress = RootAddress + SharedMem.DataOffset
     ShmWait = RootAddress + SharedMem.WaitOffset
     ShmLastWriteTime = RootAddress + SharedMem.LastWriteOffset

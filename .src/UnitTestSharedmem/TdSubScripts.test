@@ -10,10 +10,12 @@ Public rTester As Integer
 
 Public Sub aSubScripts()
 
+  Dim i As Integer
+
   With sharedmem
 
     Dim MyIntArray As New Integer[]
-    For i As Integer = 0 To 800
+    For i = 0 To 800
       MyIntArray.Add(i)
     Next
 
@@ -30,20 +32,20 @@ Public Sub aSubScripts()
     Assert.Equals(SharedMem["dtest", 4], 36, "Verify can change numeric element")
 
     starttime = Timer
-    For i As Integer = 1 To LoopCount
+    For i = 1 To LoopCount
       SharedMem["dtest", 9] = i
     Next
     Assert.Equals(LoopCount, .dtest[9], "Write int Ending time = " & Str(Timer - starttime) & " Ending value = " & Str(SharedMem["dtest", 9]))
 
     starttime = Timer
-    For i As Integer = 1 To LoopCount
+    For i = 1 To LoopCount
       rTester = SharedMem["dtest", 9]
     Next
     Assert.Equals(LoopCount, .dtest[9], "Read int Ending time = " & Str(Timer - starttime) & " Ending value = " & Str(SharedMem["dtest", 9]))
 
     Dim dtest As SharedMemSymbol = SharedMem._symbol("dtest")
     starttime = Timer
-    For i As Integer = 1 To LoopCount
+    For i = 1 To LoopCount
       dtest[9] = i
       rTester = dtest[9]
     Next
@@ -51,7 +53,7 @@ Public Sub aSubScripts()
 
     starttime = Timer
     Dim a As Integer[] = dtest.value
-    For i As Integer = 1 To LoopCount
+    For i = 1 To LoopCount
       a[9] = i
       rTester = a[9]
     Next
@@ -61,7 +63,7 @@ Public Sub aSubScripts()
     Dim stest As SharedMemSymbol = SharedMem._symbol("stest")
     Dim sTester As String
     starttime = Timer
-    For i As Integer = 1 To LoopCount
+    For i = 1 To LoopCount
       stest[1] = "This " & Str(i)
       sTester = stest[1]
     Next

@@ -6,6 +6,9 @@ Private x As Integer = 24
 Public y As String = "This is a silly string"
 Public pp As String[] = ["This is ", "a", "big", "thing", "to", "do"]
 
+Property setx As Integer
+
+
 Public Sub callme()
 
   Print "Hello"
@@ -13,6 +16,19 @@ Public Sub callme()
     Print s;;
   Next
   Print
+  Print y
   Print "x="; x
+
+End
+
+Private Function setx_Read() As Integer
+
+  Return x
+
+End
+
+Private Sub setx_Write(Value As Integer)
+
+  x = value
 
 End
