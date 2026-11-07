@@ -1,10 +1,10 @@
 ' Gambas module file
 
 'Fast Unsafe
-'This is broken do not run
+' Unnamed memory grows when it is full: 1001 variables in a 20000 byte block. A named segment does not grow,
+' there the same loop stops with "SharedMem is full"
 
 Public Sub main()
-  ' not working causes crash
 
   Dim i As Integer
 

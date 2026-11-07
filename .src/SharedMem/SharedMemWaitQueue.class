@@ -10,7 +10,9 @@ Export
 
 Private WaitQueue As Variant[] = New Variant[]                ' we will queue wait requests here
 Private InitSignal As Integer = 0                             ' force the init on first call of wait
-Private PidList As Mem                                        ' pointer to shared memory
+Private PidList As Mem                                        ' pointer to shared memory, use Pids()
+Private $pNotify As Pointer = 0                               ' the notifylist block, an offset in the variable memory
+Private $pRootSeen As Pointer = 0                             ' where the variable memory was when PidList was made
 Private Const pidlistlen As Integer = 500                     ' Number of entries in the list
 Public Const ChangeSignal As Integer = 16                     ' Sigsys = 31, SigUSr2 = 12, sig16 is unused too
 Public $oShm As Variant = Null                                ' The SharedMemory object
@@ -205,11 +207,22 @@ Public Sub reset()
 
 End
 
+'' The pid list. PidList holds a real address: unnamed memory that grows may move (mremap), then it is made again
+Private Sub Pids() As Mem
+
+  If SharedMem.UserMem.RootAddress <> $pRootSeen Or If IsNull(PidList) Then
+    PidList = New Mem(SharedMem.UserMem.AddrData($pNotify) + SharedMem.AllocHeaderLen, False, pidlistlen * SizeOf(gb.integer) + SizeOf(gb.integer))
+    $pRootSeen = SharedMem.UserMem.RootAddress
+  Endif
+  Return PidList
+
+End
+
 '' Check if a specific PID is in the PID wait queue
 Fast Unsafe Private Sub findpid(pid As Integer) As Integer
 
   For i As Integer = 0 To pidlistlen
-    If PidList[i * SizeOf(gb.integer), gb.integer, True] = pid Then Return i
+    If Pids()[i * SizeOf(gb.integer), gb.integer, True] = pid Then Return i
   Next
   Return -1
 
@@ -222,7 +235,7 @@ Fast Unsafe Private Sub addpid(pid As Integer)
   If findpid(pid) >= 0 Then Return
   Dim i As Integer = findpid(0)
   If i >= 0 Then
-    PidList[i * SizeOf(gb.integer), gb.integer, True] = pid
+    Pids()[i * SizeOf(gb.integer), gb.integer, True] = pid
     Return
   Endif
   Error.Raise("Out of pid slots")
@@ -235,7 +248,7 @@ Fast Unsafe Private Sub removepid(pid As Integer)
 
   Dim i As Integer = findpid(pid)
 
-  If i >= 0 Then PidList[i * SizeOf(gb.integer), gb.integer, True] = 0
+  If i >= 0 Then Pids()[i * SizeOf(gb.integer), gb.integer, True] = 0
 
 End
 
@@ -251,10 +264,11 @@ Public Sub _begin() '' we will allocate a fixed table of pids to be used for not
     If Not .Exist("notifylist") Then
       memoryloc = .ShmAlloc(memlen)
       .["notifylist"] = memoryloc
-      PidList = New Mem(.UserMem.AddrData(memoryloc) + .AllocHeaderLen, False, memlen - .AllocHeaderLen)
     Else
-      If IsNull(PidList) Then PidList = New Mem(.UserMem.AddrData(.["notifylist"]) + .AllocHeaderLen, False, memlen - .AllocHeaderLen)
+      memoryloc = .["notifylist"]
     Endif
+    $pNotify = memoryloc
+    $pRootSeen = 0                                          ' Pids() makes PidList
 
   End With
 
@@ -346,12 +360,12 @@ End
 Fast Unsafe Public Sub dispatch(Optional newVariable As SharedMemSymbol = Null)
 
   For i As Integer = 0 To pidlistlen
-    Dim CurrentPid As Integer = PidList[i * SizeOf(gb.integer), gb.integer, True]
+    Dim CurrentPid As Integer = Pids()[i * SizeOf(gb.integer), gb.integer, True]
     If CurrentPid > 0 Then
       'Error "Signaling PID="; CurrentPid
       If Not NotifyPid(CurrentPid) Then                     ' remove pids of processes that are gone
         'Error "Error sending signal:"; System.Error
-        PidList[i * SizeOf(gb.integer), gb.integer, True] = 0
+        Pids()[i * SizeOf(gb.integer), gb.integer, True] = 0
       Endif
       sched_yield()
     Endif

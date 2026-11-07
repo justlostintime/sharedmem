@@ -484,6 +484,25 @@ Public Sub WriteOrRaise(mdata As Variant) As Integer
 
 End
 
+'' Interpreted: ShmWriteSub with these parameters, the error text or "" when it worked. SharedMem._put is
+'' compiled: after a Try there caught an error from interpreted code, the error it raised next was lost
+Public Sub WriteSubStatus(Params As Variant[]) As String
+
+  Try Object.Call(Me, "ShmWriteSub", Params)
+  If Error Then Return Error.Text
+  Return ""
+
+End
+
+'' Interpreted: write an element of the buffer or element object, the error text or "" when it worked
+Public Sub SpecialPutStatus(vIndex As Variant, vData As Variant) As String
+
+  Try SpecialObject[vIndex] = vData
+  If Error Then Return Error.Text
+  Return ""
+
+End
+
 Public Sub ShmWriteSub(data As Variant, ...)
 
   If SpecialType = 1 Then

@@ -1,70 +1,81 @@
 ' Gambas module file
 
 Fast Unsafe
-Public Const LoopCount As Integer = 10
-TestSharedMem As Boolean = True           ' test the old format shared memory
+Public Const LoopCount As Integer = 100000      ' operations per test, a speed test needs enough of them to measure
+TestSharedMem As Boolean = True                 ' run the test
 
 Public Sub main()
 
   Dim tstart As Float
-  Dim tStop As Float
   Dim j As Integer
   Dim sj As String
   Dim i As Integer
+  Dim iBad As Integer
 
   If TestSharedMem Then
     With sharedmem
-      Print "Begin Speed Access Test Shared Memory V2++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+      Print "Begin Speed Access Test Shared Memory, "; LoopCount; " operations per test ++++++++++++++++++++++++++++++++++++"
 
       .begin(128000)
 
-      Print "Set value to zero"
       !integer = CInteger(0)
-      '._print()
+
       '**************************************************************************************************************************
-      Print "Start testing change var from integer to string and back to integer 1000000 times"
+      ' a variable that changes type is freed and made again each time, so this one is slow: a tenth of the loops
+      iBad = 0
       tstart = Timer
-      For i = 0 To loopcount
+      For i = 1 To LoopCount \ 10
         !integer = i
-        Print !integer
-        ' !integer = "this is a long string"
-        Print !integer
+        !integer = "this is a long string"
+        !integer = i
+        If !integer <> i Then Inc iBad
       Next
-      tstop = Timer
-      Print "i = "; SharedMem["integer"]
-      Print "Int->str->int Write test ", tstop - tstart, " loops(" & Str(LoopCount) & ") = "; !integer
-      '._print()
+      Result("Integer -> string -> integer, type change", Timer - tstart, (LoopCount \ 10) * 3, iBad)
 
       '**************************************************************************************************************************
       tstart = Timer
-      For i = 0 To loopcount
+      For i = 1 To LoopCount
         !ThisString = "This is a little message to be saved"
       Next
-      tstop = Timer
-      Print "String write test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
+      Result("String write   SharedMem!Name", Timer - tstart, LoopCount, 0)
       '**************************************************************************************************************************
+      iBad = 0
       tstart = Timer
-      For i = 0 To loopcount
+      For i = 1 To LoopCount
         sj = !ThisString
+        If Len(sj) <> 36 Then Inc iBad
       Next
-      tstop = Timer
-      Print "String Read test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
+      Result("String read    SharedMem!Name", Timer - tstart, LoopCount, iBad)
+      '**************************************************************************************************************************
+      iBad = 0
+      tstart = Timer
+      For i = 1 To LoopCount
+        sj = .["ThisString"]
+        If Len(sj) <> 36 Then Inc iBad
+      Next
+      Result("String read    SharedMem[\"Name\"]", Timer - tstart, LoopCount, iBad)
       '**************************************************************************************************************************
       tstart = Timer
-      For i = 0 To loopcount
+      For i = 1 To LoopCount
         !ThisNumber = i
       Next
-      tstop = Timer
-      Print "Integer write test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
+      Result("Integer write  SharedMem!Name", Timer - tstart, LoopCount, If(!ThisNumber = LoopCount, 0, 1))
+      '**************************************************************************************************************************
+      iBad = 0
+      tstart = Timer
+      For i = 1 To LoopCount
+        j = !ThisNumber
+        If j <> LoopCount Then Inc iBad
+      Next
+      Result("Integer read   SharedMem!Name", Timer - tstart, LoopCount, iBad)
       '**************************************************************************************************************************
       tstart = Timer
-      For i = 0 To loopcount
-        j = !ThisNumber
+      For i = 1 To LoopCount
+        !ThisString = "a string of length " & CStr(i Mod 500)   ' changing length, it stays in its storage block
       Next
-      tstop = Timer
-      Print "Integer read test using . ", tstop - tstart, " loops(" & Str(LoopCount) & ")"
+      Result("String write, changing length", Timer - tstart, LoopCount, If(!ThisString = "a string of length " & CStr(LoopCount Mod 500), 0, 1))
 
-      Print "Number of shared variables =", .Count
+      Print "Number of shared variables ="; .Count
 
       PrintVariables(.Vars)
 
@@ -77,10 +88,19 @@ Public Sub main()
 
 End
 
+'' One line of results: the time of each operation, operations per second, and wrong values read back
+Private Sub Result(sTest As String, fSeconds As Float, iOperations As Integer, iBad As Integer)
+
+  Print Left(sTest & Space(44), 44); Format(fSeconds / iOperations * 1000000, "##0.00"); " us   "; Format(iOperations / fSeconds, "#######0"); " per second"; IIf(iBad > 0, "   WRONG VALUES: " & CStr(iBad), "")
+
+End
+
+'' The variables and their values, without the ones the library keeps for itself
 Sub PrintVariables(thearray As Collection)
 
   Print "\nSymbol Table \n"
   For Each v As Variant In thearray
+    If thearray.key Begins "#" Or thearray.key = "notifylist" Then Continue
     Print thearray.key; " = "; v
   Next
   Print "-----------------------------------"

@@ -190,6 +190,7 @@ Extern pthread_mutex_consistent(mutex As Pointer) As Integer In "libc:6"
 ' A shared flock on the named segment file by every process using it, the kernel drops it when a process dies
 Extern flock(fd As Integer, operation As Integer) As Integer In "libc:6"
 Extern chdir(sPath As String) As Integer In "libc:6"
+Extern memfd_create(sName As String, iFlags As Integer) As Integer In "libc:6"
 Extern cRename(sOld As String, sNew As String) As Integer In "libc:6" Exec "rename"
 Extern fstat(fd As Integer, buf As Pointer) As Integer In "libc:6"
 
@@ -204,6 +205,10 @@ Static Private Const LOCK_SH As Integer = 1
 Static Private Const LOCK_EX As Integer = 2
 Static Private Const LOCK_NB As Integer = 4
 Static Private Const LOCK_UN As Integer = 8
+' Unnamed memory (Begin) is a memfd file, not MAP_ANONYMOUS: a shared anonymous mapping can not grow,
+' mremap made it larger but writing past its first size failed (SIGBUS, "Illegal memory access")
+Static Private UnnamedHandle As Integer = -1
+Static Private Const MFD_CLOEXEC As Integer = 1
 Static Private Const LockWaitSeconds As Float = 30.0          ' a live holder keeping a lock longer than this is an error. Not less:
 ' 12 processes changing the table at once kept a waiter waiting over 3 s
 
@@ -405,6 +410,9 @@ Static Private Sub AllocChunk() As Pointer
   If Not SoleUser() Then
     Error.Raise("SharedMem is full, unable to allocate a new memory block while other tasks use this shared memory")
   Endif
+  If ftruncate(UnnamedHandle, UserMem.MemoryLength + UserMem.MemoryBlockSize) = -1 Then   ' the file first, the mapping can not go past it
+    Error.Raise("SharedMem is full, unable to grow the memory, " & String@(strerror(System.Error)))
+  Endif
   P = mremap(UserMem.RootAddress, UserMem.MemoryLength, (UserMem.MemoryLength + UserMem.MemoryBlockSize), MREMAP_MAYMOVE)
   If p <> UserMem.RootAddress Then
     If p = -1 Then
@@ -571,8 +579,12 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
 
     'BlockSize += 4096  ' SharedMemoryControlHeader             add 4096 for basic header           ' add the length of the header, management area
 
-    If NamedMemHandle = -1 Then
-      MemoryStorage = mmap(Null, BlockSize + 4096, (PROT_READ Or PROT_WRITE), (MAP_SHARED Or MAP_ANONYMOUS), NamedMemHandle, 0) 'Or MAP_ANONYMOUS
+    If NamedMemHandle = -1 Then                            ' shared with the tasks this program forks, it may grow, see AllocChunk
+      If UnnamedHandle < 0 Then UnnamedHandle = memfd_create("sharedmem", MFD_CLOEXEC)
+      If UnnamedHandle < 0 Or If ftruncate(UnnamedHandle, BlockSize + 4096) = -1 Then
+        Error.Raise("SharedMem unable to make the memory, " & String@(strerror(System.Error)))
+      Endif
+      MemoryStorage = mmap(Null, BlockSize + 4096, (PROT_READ Or PROT_WRITE), MAP_SHARED, UnnamedHandle, 0)
     Else
       MemoryStorage = mmap(Null, BlockSize + 4096, (PROT_READ Or PROT_WRITE), MAP_SHARED, NamedMemHandle, 0) 'Or MAP_ANONYMOUS
       setInUseZero = False
@@ -995,6 +1007,10 @@ Static Public Sub End(Optional FileName As String = "\t\t") ' free all the block
   If NamedMemHandle > 0 Then InUseFlag = If(flock(NamedMemHandle, LOCK_EX Or LOCK_NB) = 0, 0, 1)   ' last user when nobody else holds the flock
   Dim releaseLen As Integer = UserMem[MemoryLength]
   munmap(MemoryStorage, releaseLen)
+  If UnnamedHandle >= 0 Then                              ' the memfd of unnamed memory goes with it
+    rClose(UnnamedHandle)
+    UnnamedHandle = -1
+  Endif
   munmap(CollectionStorage, CollectMemLen)
 
   MemoryStorage = Null
@@ -1529,7 +1545,7 @@ Static Public Sub _get(index As String, ...) As Variant
 
   If px.SpecialType > ShmTypeAry Then        ' type 1 is an array, type 2 is a buffer, type 3 is a element in a buffer
 
-    rx = px.SpecialObject[If(Param.Count = 0, 0, Param[0])]
+    rx = px.SpecialObject[If(Param.Count = 0, 0, Param[0])]   ' an error from there goes to the Catch below: printed, Null
 
   Else
     If Param.count > 0 Then
@@ -1625,6 +1641,8 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
   Dim Newpx As SharedMemSymbol = Null
   Dim bLocked As Boolean
   Dim IsNew As Boolean = False
+  Dim sSubError As String                                   ' the JIT lost an error raised after a Try caught one from interpreted
+                                                            ' code: the helpers catch it there and return its text, raised here
 
   If Not InSession Then
     Error.raise("Sharedmem Access Assign value before BEGIN()")
@@ -1656,12 +1674,14 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
     Endif
 
     If px.SpecialType > ShmTypeAry Then
-      px.SpecialObject[If(Param.Count = 0, 0, Param[0])] = data
+      sSubError = px.SpecialPutStatus(If(Param.Count = 0, 0, Param[0]), data)   ' interpreted, returns the error text
+      If sSubError <> "" Then Error.Raise(sSubError)
     Else If Param.count > 0 Then
       Dim params As New Variant[]
       params.Add(data)
       params.Insert(Param.all)
-      Object.Call(px, "ShmWriteSub", params)
+      sSubError = px.WriteSubStatus(params)               ' interpreted, returns the error text
+      If sSubError <> "" Then Error.Raise(sSubError)
       'px.ShmWriteSub(data, subscript)
     Else
       If px.ShmWrite(data) < 0 Then Error.Raise(px.LastStoreError)   ' raised here: _put catches it and passes it to the caller
