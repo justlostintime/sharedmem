@@ -1530,12 +1530,12 @@ Static Public Sub _get(index As String, ...) As Variant
     Error.raise("Sharedmem Access get value before BEGIN()")
   Endif
 
+  px = SymbolTable.Lookup(index)                           ' before the lock: a cached variable needs no lock to find
+
   bLocked = LockMem("get")
   If Not bLocked Then Error.Raise(LockError)
 
-  CollectionChanged()
-
-  px = SymbolTable[index]
+  If Not SymbolTable.IsCurrent(px) Then px = SymbolTable.Lookup(index)   ' freed or changed by another process meanwhile
 
   If IsNull(px) Then
     bLocked = UnlockMem()                                  ' before the error, it was left locked
@@ -1559,9 +1559,7 @@ Static Public Sub _get(index As String, ...) As Variant
     Endif
   Endif
 
-  bLocked = UnlockMem()
-
-  sched_yield()
+  bLocked = UnlockMem()                                   ' no sched_yield: a system call on every read, 10-15% of a read
 
   Return rx
 
@@ -1674,8 +1672,8 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
 
   If Not IsNull(px) Then
 
-    Dim sTableInfo As String                                ' what other processes read from the symbol table
-    If px.symtype = gb.string Or px.symtype = gb.object Then sTableInfo = px.TableInfo()   ' the other types never change it
+    Dim bTableKind As Boolean = (px.symtype = gb.string Or px.symtype = gb.object) And Param.Count = 0 And px.SpecialType <= ShmTypeAry   ' the plain write below, the other types never change the table
+    If bTableKind Then px.MarkTable()                       ' what other processes read from the symbol table
     If px.symtype = gb.object And If Param.count = 0 Then
       px.updateobjectinfo(data)
     Endif
@@ -1698,7 +1696,7 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
       ' the object class or array size. A value that fits its storage is only in the shared memory, the
       ' other processes read it from there, they keep their table: saving it made them all reload it, 0.5 ms
       ' for the save and 8 ms for each reload with 300 variables
-      If (px.symtype = gb.string Or px.symtype = gb.object) And If px.TableInfo() <> sTableInfo Then
+      If bTableKind And If px.TableChanged() Then
         If Not SymbolTable.Update(px) Then Error.Raise(SymbolTable.LastError)   ' only this variable's slot
       Endif
     Endif

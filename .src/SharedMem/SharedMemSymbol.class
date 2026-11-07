@@ -27,6 +27,14 @@ Public ElementType As Integer = 17
 
 Public RootAddress As Pointer = Null   ' pointer to where the storage starts
 Public DataAddress As Pointer = Null   ' Pointer to where the data is actually stored
+Private $tRoot As Pointer              ' the TableInfo fields at MarkTable
+Private $tData As Pointer
+Private $tLen As Integer
+Private $tSpecial As Integer
+Private $tClass As String
+Private $tObject As String
+Private $tCount As Integer
+Private $tElemType As Integer
 
 Public ShmWait As Pointer = Null
 Public ShmLastWriteTime As Pointer = Null
@@ -293,6 +301,35 @@ Public Sub RefreshLength()
 End
 
 '' The fields other processes need from the symbol table, to see if a write changed them
+'' Remember what other processes read from the symbol table, TableChanged tells if a write changed it.
+'' The same fields as TableInfo, kept as values: building the TableInfo text twice took time in every
+'' string write, inside the lock
+Fast Public Sub MarkTable()
+
+  $tRoot = RootAddress
+  $tData = DataAddress
+  $tLen = StorageLength
+  $tSpecial = SpecialType
+  $tClass = ClassName
+  $tObject = ObjectName
+  $tCount = ElementCount
+  $tElemType = ElementType
+
+End
+
+'' True when the write changed a field of TableInfo since MarkTable
+Fast Public Sub TableChanged() As Boolean
+
+  Dim bChanged As Boolean = ClassName <> $tClass Or ObjectName <> $tObject
+
+  $tClass = ""                                              ' the symbol keeps no string between writes
+  $tObject = ""
+  If bChanged Then Return True
+  If RootAddress <> $tRoot Or DataAddress <> $tData Or StorageLength <> $tLen Or SpecialType <> $tSpecial Then Return True
+  Return ElementCount <> $tCount Or ElementType <> $tElemType
+
+End
+
 Fast Public Sub TableInfo() As String
 
   Return CStr(RootAddress) & "|" & CStr(DataAddress) & "|" & CStr(StorageLength) & "|" & CStr(SpecialType) & "|" & ClassName & "|" & ObjectName & "|" & CStr(ElementCount) & "|" & CStr(ElementType)
@@ -459,7 +496,11 @@ Fast Public Sub ShmWrite(mdata As Variant) As Integer
     Return -1
   Endif
 
-  If IsNull(RootAddress) Or SymType = gb.object Or symtype = gb.string Then
+  If symtype = gb.string And If Not IsNull(RootAddress) And If SharedMem.AllocHeaderLen + Len(mdata) + 2 <= StorageLength Then
+    DataLength = Len(mdata) + 2                             ' fits its block: all AllocStorage does then, without the interpreted SetStorage
+    SharedMem.UserMem[DataAddress] = mdata
+    LastWriteLength = SharedMem.UserMem.LastWriteLength
+  Else If IsNull(RootAddress) Or SymType = gb.object Or symtype = gb.string Then
     If Not SetStorage(mdata) Then Return -1                ' SetStorage set LastStoreError
     SharedMem.UserMem[DataAddress] = mdata
     LastWriteLength = SharedMem.UserMem.LastWriteLength
