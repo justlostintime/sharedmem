@@ -2,7 +2,7 @@ TestNotifyFG
 Shared Memory object -sharedmem
 #sharedmem
 
-3.24.24
+3.24.25
 
 gb.debug
 gb.eval

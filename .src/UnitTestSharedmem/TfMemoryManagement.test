@@ -126,6 +126,8 @@ Public Sub dFullMemory()
     .TableUnlock()
 
     Assert.Ok(p = 0, "ShmTryAlloc returned Null when the memory was full")
+    Assert.Ok(.FreeMem < 1000, "FreeMem is less than one block when the memory is full: " & CStr(.FreeMem))
+    Assert.Equals(.UsedMem + .FreeMem, .SizeMem, "UsedMem and FreeMem add up to SizeMem")
     Assert.Ok(aBlocks.Count > 10 And aBlocks.Count < 1000, "blocks of 1000 bytes that fitted in 40000: " & CStr(aBlocks.Count))
     Assert.Ok(InStr(.LastAllocError, "is full") > 0, "LastAllocError: " & .LastAllocError)
 
@@ -142,6 +144,7 @@ Public Sub dFullMemory()
     Next
     .TableUnlock()
     Assert.Equals(.used(), iBase, "memory in use after freeing the blocks")
+    Assert.Equals(.UsedMem, iBase, "UsedMem after freeing the blocks")
 
     .["zqAfterFull"] = String(5000, "a")                    ' usable again
     Assert.Equals(Len(.["zqAfterFull"]), 5000, "a variable fits after the blocks were freed")

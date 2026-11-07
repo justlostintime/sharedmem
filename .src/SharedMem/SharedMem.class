@@ -96,6 +96,13 @@ Static Public UserMem As New Mem
 Static Public ColMem As New Mem
 
 Static Property Read Count As Long
+'' Bytes of variable memory not in use: never allocated, plus freed blocks waiting to be used again. 0 outside a session
+Static Property Read FreeMem As Long
+'' Bytes of variable memory the variables take now, SizeMem - FreeMem. 0 outside a session
+Static Property Read UsedMem As Long
+'' Bytes of variable memory in all, from the first variable block to the end, the control header excluded.
+'' Memory made by Begin grows when it is full, SizeMem grows with it. 0 outside a session
+Static Property Read SizeMem As Long
 Static Property Read Vars As Collection
 Static Property key As String Use $key
 
@@ -2747,6 +2754,42 @@ Static Public Sub _next() As String
   Endif
   $key = nextlist[Enum.index]
   Return $key
+
+End
+
+Static Private Function SizeMem_Read() As Long
+
+  If Not InSession Then Return 0
+  Return CLong(UserMem[EndOfBlock]) - CLong(UserMem[MemoryAddress])
+
+End
+
+Static Private Function FreeMem_Read() As Long
+
+  Dim iFree As Long
+  Dim pBlock As Pointer
+
+  If Not InSession Then Return 0
+  If Not LockMem("FreeMem") Then Return 0                 ' the free list must not change while it is walked
+  iFree = CLong(UserMem[EndOfBlock]) - CLong(UserMem[NextFree])   ' never allocated
+  pBlock = UserMem[FreeListStart, gb.pointer]
+  While Not IsNull(pBlock)                                 ' freed blocks
+    iFree += UserMem[pBlock + LenOffset]
+    pBlock = UserMem[pBlock, gb.pointer]
+  Wend
+  UnlockMem()
+  Return iFree
+
+Catch
+  UnlockMem()
+  Return 0
+
+End
+
+Static Private Function UsedMem_Read() As Long
+
+  If Not InSession Then Return 0
+  Return SizeMem_Read() - FreeMem_Read()
 
 End
 
