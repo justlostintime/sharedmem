@@ -17,7 +17,8 @@ Public $oShm As Variant = Null                                ' The SharedMemory
 ' returns to the loop. A busy program gets them at its next SharedMem read, write or Exist (CheckSignal).
 Private Const NotifyPipePrefix As String = "/dev/shm/sharedmem-notify-"
 Private Const KeyChanged As String = "C"                      ' written to the pipe: a variable we wait for changed
-Private Const KeyNew As String = "N"                          ' a variable was made, its name is on our NotifyNew queue
+Private Const KeyNew As String = "N"                          ' a variable was made, an event is on our queue
+Private Const KeyDeleted As String = "D"                      ' a variable was freed, an event is on our queue
 Private Const PipeFull As Integer = 1024                      ' this many bytes waiting: nothing more is written, the reader does both
 Private $bKeyNew As Boolean                                   ' the keys DrainNotifyPipe read
 Private $bKeyChanged As Boolean
@@ -27,12 +28,16 @@ Private $iNotifyPid As Integer = 0                            ' the process that
 Private bDelivering As Boolean = False                        ' a notify function that uses SharedMem does not deliver again
 
 ' Each process that waits for notifications has its own queue of events in the variable memory. The table
-' #notifyq lists the queues, QSlots entries of 16 bytes: Integer pid at 0, Integer 0 at 4, Long queue offset at 8. A queue is a Long count of events written at 0, a Long count read at 8,
-' an Integer count of new variable events dropped at 16, an Integer count of change events dropped at 20, then QSize events of 16 bytes: Integer kind (QKindNew, QKindChanged) at 0,
-' Integer symbol table slot at 4, Long slot generation at 8, so an event points to its variable in the table.
+' #notifyq lists the queues, QSlots entries of 16 bytes: Integer pid at 0, Integer 0 at 4, Long queue offset at 8.
+' A queue is a Long count of entries written at 0, a Long count read at 8, an Integer count of new and deleted
+' variable events dropped at 16, an Integer count of change events dropped at 20, a Long index of the first entry
+' of the last event at 24, then QSize entries of 16 bytes. A new or changed event is one entry: Integer kind
+' (QKindNew, QKindChanged) at 0, Integer symbol table slot at 4, Long slot generation at 8, it points to its
+' variable in the table. A deleted event, QKindDeleted, carries the name, the slot may be used again at once:
+' Integer kind, Integer name length, then the name and a zero in the entries after it.
 ' Each variable has the list of the processes waiting for it in its symbol table slot (ShmSymbolTable.Waiters):
 ' an Integer count, an Integer capacity, then the pids, after the allocation header. NotifyNew waits on #newvar,
-' so its list holds the processes waiting for new variables. SharedMem._put adds the events under its lock to the
+' so its list holds the processes waiting for new variables; NotifyDeleted waits on #delnotifyq. SharedMem._put adds the events under its lock to the
 ' queues of the processes in the list of the variable, and writes their key, KeyNew or KeyChanged, to their pipes. The process takes the events from its queue and calls the notify functions of
 ' those variables. A change event for the variable of the last event not read yet is not added again. A full
 ' queue drops its oldest event and counts it: the reader checks every variable after dropped changes, and
@@ -42,15 +47,17 @@ Private $pMyQ As Pointer = 0                                  ' offset of our qu
 Private $iMyQPid As Integer = 0                               ' the process that made $pMyQ, a forked Task inherits it
 Private $aSignalNew As New Integer[]                          ' processes QueueEvent gave a new variable, SignalQueued wakes them
 Private $aSignalChanged As New Integer[]                      ' processes QueueEvent gave a change
+Private $aSignalDeleted As New Integer[]                      ' processes QueueDeleted gave a deleted variable
 Private Const QSlots As Integer = 64
 Private Const QSize As Integer = 1024
-Private Const QHeader As Integer = 24
+Private Const QHeader As Integer = 32
 Private Const QEntry As Integer = 16
 Private $cMyWaits As New Collection                           ' slot:generation -> number of our waits for that variable
 Private $iMyWaitsPid As Integer = 0                           ' the process $cMyWaits belongs to, a forked Task inherits it
 Private Const WaitersFirst As Integer = 16                    ' pids in a new list, it doubles when full
 Public Const QKindNew As Integer = 1
 Public Const QKindChanged As Integer = 2
+Public Const QKindDeleted As Integer = 3
 
 Public Struct WaitHeader
   pid As Integer
@@ -100,6 +107,20 @@ Public Sub NotifyList() As String[]
 
 End
 
+'' Stop the NotifyDeleted calls for NotifyObject
+Public Sub NotifyDelCanceled(NotifyObject As Variant)
+
+  NotifyCancel("#delnotifyq", NotifyObject)
+
+End
+
+'' Notify when a variable is freed, in any process: FunctionName(Name As String), var_deleted by default
+Public Sub NotifyDeleted(NotifyObject As Variant, Optional FunctionName As String = "") As Boolean
+
+  Return NotifyChange("#delnotifyq", NotifyObject, -1, FunctionName)
+
+End
+
 '' Cancel Notify New
 Public Sub NotifyNewCancel(NotifyObject As Variant)
 
@@ -136,6 +157,8 @@ Public Sub NotifyChange(Symbol As String, NotifyObject As Variant, Optional iTim
   'Dim fName As String
   If symbol = "#newvar" And If FuncName = "" Then
     FuncName = "newvar_created"
+  Else If symbol = "#delnotifyq" And If FuncName = "" Then
+    FuncName = "var_deleted"
   Else If FuncName = "" Then
     FuncName = Symbol & "_changed"
   Endif
@@ -385,8 +408,9 @@ Private Sub Deliver(bNew As Boolean, bChanged As Boolean, bAll As Boolean)
   'Error "Wait Queue not empty!"
 
   Dim aNew As New String[]                                  ' the variables made since the last call, for NotifyNew
+  Dim aDeleted As New String[]                              ' the variables freed since the last call, for NotifyDeleted
   Dim cChanged As New Collection                            ' slot:generation of the variables that changed
-  If TakeEvents(aNew, cChanged) Then bAll = True            ' events were dropped: check every variable
+  If TakeEvents(aNew, cChanged, aDeleted) Then bAll = True  ' events were dropped: check every variable
   If bAll Then bChanged = True
 
   For counter = WaitQueue.max DownTo 0
@@ -400,6 +424,10 @@ Private Sub Deliver(bNew As Boolean, bChanged As Boolean, bAll As Boolean)
 
     If MyWait.sym.SymName = "#newvar" Then                 ' NotifyNew: each variable made since the last call
       DeliverNew(MyWait, aNew)
+      Continue
+    Endif
+    If MyWait.sym.SymName = "#delnotifyq" Then             ' NotifyDeleted: each variable freed since the last call
+      DeliverDeleted(MyWait, aDeleted)
       Continue
     Endif
     If Not bChanged Then Continue
@@ -477,26 +505,20 @@ Fast Unsafe Public Sub QueueEvent(iKind As Integer, oSym As SharedMemSymbol, oLi
     pQ = QData(pQ)
     iWritten = Long@(pQ)
     iRead = Long@(pQ + 8)
-    If iKind = QKindChanged And If iWritten > iRead Then     ' the same change not read yet: the reader gives the value once
-      pEntry = pQ + QHeader + CInt((iWritten - 1) Mod QSize) * QEntry
+    If iKind = QKindChanged And If Long@(pQ + 24) >= iRead And If iWritten > iRead Then   ' the same change not read yet: the reader gives the value once
+      pEntry = pQ + QHeader + CInt(Long@(pQ + 24) Mod QSize) * QEntry
       If Integer@(pEntry) = iKind And If Integer@(pEntry + 4) = oSym.SlotIndex And If Long@(pEntry + 8) = oSym.SlotGen Then
         Inc i
         Continue
       Endif
     Endif
-    If iWritten - iRead >= QSize Then                       ' full: drop the oldest event, counted by kind
-      pEntry = pQ + QHeader + CInt(iRead Mod QSize) * QEntry
-      If Integer@(pEntry) = QKindNew Then
-        Integer@(pQ + 16) = Integer@(pQ + 16) + 1
-      Else
-        Integer@(pQ + 20) = Integer@(pQ + 20) + 1
-      Endif
-      Long@(pQ + 8) = iRead + 1
-    Endif
+    MakeRoom(pQ, 1)
+    iWritten = Long@(pQ)
     pEntry = pQ + QHeader + CInt(iWritten Mod QSize) * QEntry
     Integer@(pEntry) = iKind
     Integer@(pEntry + 4) = oSym.SlotIndex
     Long@(pEntry + 8) = oSym.SlotGen
+    Long@(pQ + 24) = iWritten
     Long@(pQ) = iWritten + 1
     If iKind = QKindNew Then $aSignalNew.Add(iPid) Else $aSignalChanged.Add(iPid)
     Inc i
@@ -511,6 +533,18 @@ Fast Unsafe Public Sub HasWaiters(oSym As SharedMemSymbol) As Boolean
 
   If pList = 0 Then Return False
   Return Integer@(QData(pList)) > 0
+
+End
+
+'' The number of processes in the list of oSym
+Public Sub WaiterCount(oSym As SharedMemSymbol) As Integer
+
+  Dim iCount As Integer
+
+  If Not SharedMem.TableLock() Then Return 0
+  If HasWaiters(oSym) Then iCount = Integer@(QData(SharedMem.SymbolTable.Waiters(oSym)))
+  SharedMem.TableUnlock()
+  Return iCount
 
 End
 
@@ -628,6 +662,88 @@ Private Sub RemoveWaiter(oSym As SharedMemSymbol)
 
 End
 
+'' The number of entries of the event starting at entry n of queue data pQ
+Fast Unsafe Private Sub EventSize(pQ As Pointer, n As Long) As Integer
+
+  Dim pEntry As Pointer = pQ + QHeader + CInt(n Mod QSize) * QEntry
+
+  If Integer@(pEntry) = QKindDeleted Then Return 1 + (Integer@(pEntry + 4) + QEntry) \ QEntry
+  Return 1
+
+End
+
+'' Drop the oldest events of queue data pQ until iEntries entries are free, counted by kind
+Fast Unsafe Private Sub MakeRoom(pQ As Pointer, iEntries As Integer)
+
+  Dim iRead As Long
+  Dim pEntry As Pointer
+
+  While Long@(pQ) - Long@(pQ + 8) + iEntries > QSize
+    iRead = Long@(pQ + 8)
+    pEntry = pQ + QHeader + CInt(iRead Mod QSize) * QEntry
+    If Integer@(pEntry) = QKindChanged Then
+      Integer@(pQ + 20) = Integer@(pQ + 20) + 1
+    Else
+      Integer@(pQ + 16) = Integer@(pQ + 16) + 1
+    Endif
+    Long@(pQ + 8) = iRead + EventSize(pQ, iRead)
+  Wend
+
+End
+
+'' SharedMem.free holds the lock: add a deleted event with sName to the queue of every process in the list of
+'' oList, #delnotifyq. SignalQueued wakes them after the lock. Raises nothing
+Fast Unsafe Public Sub QueueDeleted(sName As String, oList As SharedMemSymbol)
+
+  Dim pList, pPids, pQ, pEntry As Pointer
+  Dim iPid, iCount, i, iLen, iEntries, k As Integer
+  Dim iWritten, iBase As Long
+
+  If $pQTable = 0 Or If oList = Null Then Return
+  pList = SharedMem.SymbolTable.Waiters(oList)
+  If pList = 0 Then Return
+  iLen = Len(sName)
+  If iLen > 127 Then iLen = 127
+  iEntries = 1 + (iLen + QEntry) \ QEntry                    ' the header, then the name and its zero
+  pPids = QData(pList)
+  iCount = Integer@(pPids)
+  i = 0
+  While i < iCount
+    iPid = Integer@(pPids + 8 + i * 4)
+    pQ = QueueOf(iPid)
+    If pQ = 0 Then                                          ' no queue: the process ended without End
+      If Not Exist("/proc/" & CStr(iPid)) Then
+        Dec iCount
+        Integer@(pPids + 8 + i * 4) = Integer@(pPids + 8 + iCount * 4)
+        Integer@(pPids) = iCount
+        Continue
+      Endif
+      Inc i
+      Continue
+    Endif
+    pQ = QData(pQ)
+    MakeRoom(pQ, iEntries)
+    iWritten = Long@(pQ)
+    pEntry = pQ + QHeader + CInt(iWritten Mod QSize) * QEntry
+    Integer@(pEntry) = QKindDeleted
+    Integer@(pEntry + 4) = iLen
+    Long@(pEntry + 8) = 0
+    iBase = (iWritten + 1) * QEntry                          ' the name, byte by byte: it may wrap round the end
+    For k = 0 To iLen
+      If k < iLen Then
+        Byte@(pQ + QHeader + CInt((iBase + k) Mod (QSize * QEntry))) = Asc(sName, k + 1)
+      Else
+        Byte@(pQ + QHeader + CInt((iBase + k) Mod (QSize * QEntry))) = 0
+      Endif
+    Next
+    Long@(pQ + 24) = iWritten
+    Long@(pQ) = iWritten + iEntries
+    $aSignalDeleted.Add(iPid)
+    Inc i
+  Wend
+
+End
+
 '' Write the keys of the events QueueEvent added to the pipes of their processes, after the lock
 Public Sub SignalQueued()
 
@@ -639,8 +755,12 @@ Public Sub SignalQueued()
   For Each iPid In $aSignalChanged
     NotifyPid(iPid, KeyChanged)
   Next
+  For Each iPid In $aSignalDeleted
+    NotifyPid(iPid, KeyDeleted)
+  Next
   $aSignalNew.Clear()
   $aSignalChanged.Clear()
+  $aSignalDeleted.Clear()
 
 End
 
@@ -676,7 +796,7 @@ Private Sub OpenQueue()
     SharedMem.TableUnlock()
     Error.Raise("Notify: " & SharedMem.LastAllocError)
   Endif
-  For i = 0 To 2
+  For i = 0 To 3
     Long@(QData(pQ) + i * 8) = 0
   Next
   pTable = QData($pQTable)             ' the allocation may have moved memory that grows
@@ -722,34 +842,46 @@ Private Sub CloseQueue()
 End
 
 '' Take the events out of our queue: the names of the new variables into aNew, slot:generation of the changed
-'' ones into cChanged. True when change events were dropped because the queue was full
-Private Sub TakeEvents(aNew As String[], cChanged As Collection) As Boolean
+'' ones into cChanged, the names of the deleted ones into aDeleted. True when change events were dropped
+'' because the queue was full
+Private Sub TakeEvents(aNew As String[], cChanged As Collection, aDeleted As String[]) As Boolean
 
   Dim pQ, pEntry As Pointer
-  Dim iWritten, iRead, n As Long
-  Dim iDroppedNew, iDroppedChanged As Integer
+  Dim iWritten, n, iBase As Long
+  Dim iDroppedNew, iDroppedChanged, iLen, k As Integer
   Dim oSym As SharedMemSymbol
+  Dim sName As String
 
   If $iMyQPid <> getpid() Or If $pMyQ = 0 Then Return False
   If Not SharedMem.TableLock() Then Return False
   pQ = QData($pMyQ)
   iWritten = Long@(pQ)
-  iRead = Long@(pQ + 8)
-  For n = iRead To iWritten - 1
+  n = Long@(pQ + 8)
+  While n < iWritten
     pEntry = pQ + QHeader + CInt(n Mod QSize) * QEntry
-    If Integer@(pEntry) = QKindNew Then
-      oSym = SharedMem.SymbolTable.SymbolAt(Integer@(pEntry + 4), Long@(pEntry + 8))
-      If oSym <> Null Then aNew.Add(oSym.SymName)           ' Null: freed again meanwhile
-    Else
-      cChanged[CStr(Integer@(pEntry + 4)) & ":" & CStr(Long@(pEntry + 8))] = True
-    Endif
-  Next
+    Select Case Integer@(pEntry)
+      Case QKindNew
+        oSym = SharedMem.SymbolTable.SymbolAt(Integer@(pEntry + 4), Long@(pEntry + 8))
+        If oSym <> Null Then aNew.Add(oSym.SymName)         ' Null: freed again meanwhile
+      Case QKindChanged
+        cChanged[CStr(Integer@(pEntry + 4)) & ":" & CStr(Long@(pEntry + 8))] = True
+      Case QKindDeleted
+        iLen = Integer@(pEntry + 4)
+        iBase = (n + 1) * QEntry
+        sName = ""
+        For k = 0 To iLen - 1
+          sName &= Chr(Byte@(pQ + QHeader + CInt((iBase + k) Mod (QSize * QEntry))))
+        Next
+        aDeleted.Add(sName)
+    End Select
+    n += EventSize(pQ, n)
+  Wend
   Long@(pQ + 8) = iWritten
   iDroppedNew = Integer@(pQ + 16)
   iDroppedChanged = Integer@(pQ + 20)
   Long@(pQ + 16) = 0
   SharedMem.TableUnlock()
-  If iDroppedNew > 0 Then Print #File.Err, "SharedMem NotifyNew: "; iDroppedNew; " new variables were not reported, the queue of "; QSize; " events was full"
+  If iDroppedNew > 0 Then Print #File.Err, "SharedMem notify: "; iDroppedNew; " new or deleted variables were not reported, the queue of "; QSize; " entries was full"
   Return iDroppedChanged > 0
 
 End
@@ -759,10 +891,21 @@ Private Sub ShowNew(sName As String) As Boolean
 
   Dim iAt As Integer
 
-  If sName = "#newvar" Or If sName = "#notifyq" Or If sName Begins "#private@" Then Return False
+  If sName = "#newvar" Or If sName = "#notifyq" Or If sName = "#delnotifyq" Or If sName Begins "#private@" Then Return False
   iAt = RInStr(sName, "@")
   If iAt > 1 And If SharedMem.PlainName(sName) = sName And If IsDigit(Mid(sName, iAt + 1)) Then Return False   ' path@pid of another tree
   Return True
+
+End
+
+'' Call the NotifyDeleted function of MyWait once for each freed variable, with its name
+Private Sub DeliverDeleted(MyWait As WaitHeader, aNames As String[])
+
+  For Each sName As String In aNames
+    If Not ShowNew(sName) Then Continue
+    Try Object.Call(MyWait.CallBack, MyWait.Method, [SharedMem.PlainName(sName)])   ' path, not this tree's path@tag
+    If Error Then Print #File.Err, "SharedMem notify "; MyWait.Method; " error: "; Error.Text
+  Next
 
 End
 

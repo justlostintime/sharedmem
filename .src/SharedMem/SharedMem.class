@@ -455,6 +455,21 @@ Static Public Sub NotifyCancel(Symbol As String, NotifyObject As Object)
 
 End
 
+'' Stop the calls NotifyDeleted asked for NotifyObject
+Static Public Sub NotifyDelCanceled(NotifyObject As Object)
+
+  WaitQueue.NotifyDelCanceled(NotifyObject)
+
+End
+
+'' Ask to be told when a variable is freed, in any process using the shared memory: NotifyObject.FunctionName(Name As
+'' String) is called once for each one, var_deleted by default. Name is the plain name of a private variable
+Static Public Sub NotifyDeleted(NotifyObject As Object, Optional FunctionName As String = "") As Boolean
+
+  Return WaitQueue.NotifyDeleted(NotifyObject, FunctionName)
+
+End
+
 '' This Method is used to cancel the notification sent when new symbols are created\
 '' NofifyObject id the Object which is waiting for a notification
 Static Public Sub NotifyNewCancel(NotifyObject As Object)
@@ -504,7 +519,7 @@ Static Public Sub NotifyWaiting() As String[]
   Dim WaitCount As Integer
 
   For Each s As SharedMemSymbol In SymbolTable
-    WaitCount = s.getWaitCount()
+    WaitCount = WaitQueue.WaiterCount(s)                   ' the processes in its list
     If WaitCount > 0 Then
       results.Add(Subst("[&1,&2,&3]", s.symname, datatypes[s.SymType], WaitCount) & WaitQueue.getWhoWaiting(s.symname))
     Endif
@@ -653,6 +668,7 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
 
   InSession = True
   RegistrySaved = False                                     ' a new segment has no record of this tree yet
+  If Not SymbolTable.Exist("#delnotifyq") Then SharedMem["#delnotifyq"] = CPointer(0)   ' NotifyDeleted waits on it
   If Not SymbolTable.Exist("#newvar") Then SharedMem["#newvar"] = CPointer(0)   ' NotifyNew waits on it. Not rewritten: that cleared the wait count of the processes waiting
   WaitQueue._begin()
   Return True
@@ -792,7 +808,7 @@ Static Public Sub BeginNamed(Optional MemName As String = User.Name & "gsh", Mem
 
 End
 
-Static Private ProtectedVariables As String[] = ["#notifyq", "#newvar"]   ' ClearMem keeps them: the notify queues and NotifyNew use them
+Static Private ProtectedVariables As String[] = ["#notifyq", "#newvar", "#delnotifyq"]   ' ClearMem keeps them: the notify queues and NotifyNew use them
 
 '' this function clears the memory and deletes all the variables
 
@@ -827,6 +843,7 @@ Static Public Sub ClearMem()
   LastMemorySync = ""
 
   bLocked = UnlockMem()
+  WaitQueue.SignalQueued()                                 ' NotifyDeleted: the keys of the freed variables
 
 Catch
   If bLocked Then UnlockMem()
@@ -1471,7 +1488,7 @@ End
 
 '' free a variables storage and move the block to the free list
 
-Static Public Sub free(symbolKey As String, Optional bLock As Boolean = True) As Boolean       ' note here the symbols shared memory will be freed and the symbol table entry will be deleted true if deleted
+Static Public Sub free(symbolKey As String, Optional bLock As Boolean = True, bNotify As Boolean = True) As Boolean       ' note here the symbols shared memory will be freed and the symbol table entry will be deleted true if deleted
 
   If EnvNames.Count > 0 And If EnvNames.Exist(symbolKey) Then Return False   ' an env backed name has nothing stored to free
   symbolKey = PrivateName(symbolKey)
@@ -1494,6 +1511,7 @@ Static Public Sub free(symbolKey As String, Optional bLock As Boolean = True) As
   Endif
 
   SymbolTable.Remove(symbolKey)
+  If bNotify And If Symbol.SymName <> "#delnotifyq" Then WaitQueue.QueueDeleted(Symbol.SymName, SymbolTable.Lookup("#delnotifyq"))   ' for NotifyDeleted
 
   If symbol.symtype = gb.string Or symbol.symtype = gb.object Then
     Dim pdataBlock As Pointer = usermem[symbol.DataAddress + 1, gb.pointer, True]
@@ -1502,7 +1520,10 @@ Static Public Sub free(symbolKey As String, Optional bLock As Boolean = True) As
 
   ShmFree(Symbol.RootAddress)           ' release the memory used by this thing
 
-  If bLocked Then bLocked = UnlockMem()
+  If bLocked Then
+    bLocked = UnlockMem()
+    WaitQueue.SignalQueued()                               ' the keys into the pipes. A caller holding the lock does it after
+  Endif
 
   Return True
 
@@ -1601,6 +1622,7 @@ Static Public Sub Rename(symbol As String, newname As String, Optional force As 
       pxRename.SymName = newname
       If Not SymbolTable.Add(pxRename) Then Error.Raise(SymbolTable.LastError)
       bLocked = UnlockMem()
+      WaitQueue.SignalQueued()                             ' NotifyDeleted: a variable it replaced
 
     Else
       Error.Raise("Sharedmem Rename New name exists " & newname)
@@ -1642,7 +1664,7 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
   Dim bLocked As Boolean
   Dim IsNew As Boolean = False
   Dim sSubError As String                                   ' the JIT lost an error raised after a Try caught one from interpreted
-                                                            ' code: the helpers catch it there and return its text, raised here
+  ' code: the helpers catch it there and return its text, raised here
 
   If Not InSession Then
     Error.raise("Sharedmem Access Assign value before BEGIN()")
@@ -1663,7 +1685,7 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
 
   If Not IsNull(px) And Param.count = 0 And If px.symtype <> TypeOf(data)
     If Not WaitQueue.HasWaiters(px) Then                 ' the type may change when nobody waits for the variable
-      Me.free(index, False)                                ' we hold the lock
+      Me.free(index, False, False)                         ' we hold the lock; made again at once, not a deletion
       px = Null
     Else
       Error.Raise("Unable to Change Symbol data type, Tasks have requested notification of value changed: " & index)
@@ -2337,7 +2359,7 @@ Static Public Sub _read(mFile As File, Optional iMerge As Boolean = False) As Bo
       Endif
       Continue
     Endif
-    If iMerge And If SymbolTable.Exist(symbol.SymName) Then Me.Free(symbol.SymName)   ' replaced: free its storage
+    If iMerge And If SymbolTable.Exist(symbol.SymName) Then Me.Free(symbol.SymName, True, False)   ' replaced: free its storage, not a deletion
     symbol.LoadData(mFile)
     If Not add(symbol) Then Print #File.Err, "SharedMem image: "; LastAddError
   Next
@@ -2503,7 +2525,7 @@ Static Public Sub ReadVarFrom(symbol As String, Optional fileName As Variant = "
     End Select
   Endif
 
-  Me.Free(symbol) ' the free does a collection changed and only deletes when found
+  Me.Free(symbol, True, False) ' replaced by the one read, not a deletion
 
   bLocked = LockMem("ReadVarFrom")
   If Not bLocked Then

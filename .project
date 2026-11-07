@@ -1,7 +1,7 @@
 # Gambas Project File 3.0
 Title=Shared Memory object -sharedmem
 Startup=TestNotifyFG
-Version=3.24.22
+Version=3.24.23
 Component=gb.debug
 Component=gb.eval
 Component=gb.image
@@ -23,14 +23,14 @@ Address=brian@westwoodsvcs.com
 Url=www.westwoodsvcs.com
 License=General Public License
 Prefix=1
-PackageName=westwood-sharedmem-3.24.0
-PackageLastVersion="3.24.0"
+PackageName=westwood-sharedmem-3.24.22
+PackageLastVersion="3.24.22"
 CreateEachDirectory=1
 RuntimeVersion="3.22"
 Packager=1
 Systems=archlinux,autotools,debian,fedora,mageia,slackware,suse,ubuntu
 SameDependencies=1
-Groups=archlinux:"libdevel"
+Groups=archlinux:"libs"
 Groups=debian:"libs"
 Groups=fedora:"Development/Libraries"
 Groups=mageia:"Development/Tools"
