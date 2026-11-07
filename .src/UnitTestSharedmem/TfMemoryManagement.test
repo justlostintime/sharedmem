@@ -1,146 +1,195 @@
 ' Gambas test file
 
+' The allocator of the variable memory: blocks handed out for variables and by ShmAlloc, given back by Free and
+' ShmFree. Every check compares SharedMem.used() with its value right after Begin: Begin makes variables of its
+' own (#newvar, #delnotifyq, #notifyq), the tests do not need to know them.
+' No underscore in the test names: gb.test takes a_Name for the handler of event Name of an object a and skips it
+
 Const LoopCount As Integer = 1000
 
+'' Making and freeing variables of every kind leaves no memory in use
+Public Sub aAllocFree()
 
-Public Sub a_ALLOCFree()
+  Dim iBase, iLeaks, iMoved, iFirstUse As Integer
+  Dim fStart As Float
 
-  Dim starttime As Float
-
-  With sharedmem
-
+  With SharedMem
     .Begin(128000)
+    iBase = .used()
 
-    'begin makes the #notifyq table, removed for this test, see SharedMemWaitQueue._begin
-    .ShmFree(.["#notifyq"])
-    .free("#notifyq")
-
-    starttime = Timer
+    fStart = Timer
     For i As Integer = 1 To LoopCount
-
-      SharedMem["ThisString"] = "This is a test string of this size"
-      SharedMem["ThisFloat"] = 0.0
-      SharedMem["ThisLong"] = CLong(0)
-      SharedMem["ThisInt"] = 0
-      SharedMem["ThatString"] = "************************************************************************************************"
-      SharedMem["MyARRAY"] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-
-      'SharedMem._print()
-
-      SharedMem.Free("ThisLong")
-      SharedMem.Free("ThisInt")
-      SharedMem.Free("ThisFloat")
-
-      'SharedMem._print()
-
-      SharedMem.free("ThatString")
-
-      'SharedMem._print()
-
-      SharedMem.free("ThisString")
-
-      'SharedMem._print()
-
-      SharedMem.free("MyARRAY")
-
-      .a = "asdasdasd"
-      .b = "hhhhhhhhhhhh"
-      .free("b")
-      .e = ""
-      .d = 6
-
-      .b = "wqewweweqwe"
-      .free("b")
-      .free("a")
-      .free("e")
-      .free("d")
-
-      If SharedMem.used() <> 0 Then
-        'Print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-        'Print "Used Amount reports "; .used();; " After "; i;; "Loops"
-        'SharedMem._print()
-        Assert.Fail("Used(" & .used() & ") Not zero Total time = " & Str(Timer - starttime) & " Ops/Sec =" & Str((LoopCount * 6) / (Timer - starttime)))
+      MakeVariables()
+      If i = 1 Then
+        iFirstUse = .used()
+      Else If .used() <> iFirstUse Then                     ' the freed blocks were not used again
+        Inc iMoved
       Endif
-
+      FreeVariables()
+      If .used() <> iBase Then Inc iLeaks
     Next
 
-    Assert.Pass("Alloc/Free time = " & Str(Timer - starttime) & "Total Ops=" & Str(LoopCount * 6) & " Ops/Sec =" & Str((LoopCount * 6) / (Timer - starttime)))
-
-    SharedMem.End()
+    Assert.Equals(iLeaks, 0, "rounds that left memory in use, " & CStr(.used() - iBase) & " bytes at the end")
+    Assert.Equals(iMoved, 0, "rounds whose variables did not reuse the freed memory")
+    Assert.Equals(.used(), iBase, "memory in use after " & CStr(LoopCount) & " rounds")
+    Assert.Pass("Alloc/Free " & CStr(LoopCount * 11) & " variables in " & Format(Timer - fStart, "0.000") & " s")
+    .End()
   End With
 
 End
 
-Public Sub b_lowLevelAllocAndFree()
+'' Raw blocks freed in another order than made combine again: nothing is left on the free list. ListFreeBlocks
+'' ends with the start of the unused memory, an empty free list gives that one entry
+Public Sub bLowLevelAllocFree()
 
-  With sharedmem
-    Dim pp As Pointer
-    Dim xx As Pointer
-    Dim yy As Pointer
-    Dim aa As Pointer
-    '    Dim cc As Pointer
+  Dim iBase, iBad As Integer
+  Dim pp, xx, yy, aa As Pointer
+  Dim fStart As Float
 
-    .begin(500000)
-    'begin makes the #notifyq table, removed for this test, see SharedMemWaitQueue._begin
-    .ShmFree(.["#notifyq"])
-    .free("#notifyq")
+  With SharedMem
+    .Begin(500000)
+    iBase = .used()
 
-    Dim starttime As Float = Timer
-    For i As Integer = 0 To 500000
-
+    fStart = Timer
+    For i As Integer = 1 To 100000
+      If Not .TableLock() Then Assert.Fail("lock")
       pp = .ShmAlloc(500)
-      '._print()
       xx = .ShmAlloc(1000)
-      '._print()
       yy = .ShmAlloc(800)
-      '._print()
       aa = .ShmAlloc(700)
-      '._print()
-      'Print " ===========================================================================================End allocations";; pp;; xx;; yy;; aa
-
-      .ShmFree(xx)
-      '._print()
-      .ShmFree(aa)
-      '._print()
-      .ShmFree(yy)
-      '._print()
+      .ShmFree(xx)                                          ' a hole in the middle
+      .ShmFree(aa)                                          ' the end: combines with the heap
+      .ShmFree(yy)                                          ' combines with xx and the heap
       .ShmFree(pp)
-      '._print()
-      'Print "============================================================================================End Free "
-
-      ' Print "Begin Reallocation of old blocks"
-      ' xx = .ShmAlloc(900)
-      '  '   ._print()
-      ' aa = .ShmAlloc(100)
-      '  '   ._print()
-      ' cc = .ShmAlloc(94)
-      '  '   ._print()
-      ' bb = .ShmAlloc(1200)
-      '  '   ._print()
-      'Print "===========================================================================================Done reallocate blocks";; xx;; aa;; cc;; bb
-
-      ' data = 1234567890
-      ' .usermem[cc + .DataOffset] = data
-      ' ._print()
-      '
-      ' data = "This is a string to stick into memory"
-      ' .usermem[aa + .DataOffset] = data
-      ' Print "=============================================================================================DataString"
-      ' ._print()
-      '
-      ' data = .usermem[cc + .DataOffset]
-      ' data = .usermem[aa + .DataOffset]
-      '
-      ' .usermem[bb + .DataOffset] = MyObject
-      '
-      ' data = .usermem[bb + .DataOffset]
-      '
-      ' ._print()
+      .TableUnlock()
+      If .used() <> iBase Or .ListFreeBlocks().Count <> 1 Then Inc iBad
     Next
-    Print "Time = "; Timer - starttime
-    ._print()
+
+    Assert.Equals(iBad, 0, "rounds that left blocks in use or on the free list")
+    Assert.Equals(.used(), iBase, "memory in use after the blocks were freed")
+    Assert.Equals(.ListFreeBlocks().Count - 1, 0, "free blocks left, they did not combine")
+    Assert.Pass("ShmAlloc/ShmFree 400000 blocks in " & Format(Timer - fStart, "0.000") & " s")
     .End()
   End With
-  'Print "End Test Alloc Free ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+
+End
+
+'' A string that grows past its storage block gets a new one, the old block is freed
+Public Sub cStringOutgrowsBlock()
+
+  Dim iBase, iBlock As Integer
+  Dim oSym As SharedMemSymbol
+
+  With SharedMem
+    .Begin(128000)
+    iBase = .used()
+
+    .["zqGrow"] = String(100, "g")
+    oSym = ._Symbol("zqGrow")
+    iBlock = oSym.StorageLength
+    Assert.Ok(iBlock >= 100 And iBlock <= 1024, "a short string has one block of 1024 bytes, got " & CStr(iBlock))
+
+    .["zqGrow"] = String(3000, "G")                         ' past the block
+    oSym = ._Symbol("zqGrow")
+    Assert.Ok(oSym.StorageLength >= 3000, "the storage grew, " & CStr(oSym.StorageLength) & " bytes")
+    Assert.Equals(Len(.["zqGrow"]), 3000, "the long value reads back")
+    Assert.Equals(.["zqGrow"], String(3000, "G"), "the long value is intact")
+
+    .["zqGrow"] = "short again"                             ' fits: the storage stays
+    Assert.Equals(.["zqGrow"], "short again", "a shorter value after growing")
+
+    .Free("zqGrow")
+    Assert.Equals(.used(), iBase, "memory in use after freeing the grown string: the old block was freed too")
+    .End()
+  End With
+
+End
+
+'' A full named segment: ShmTryAlloc returns Null and says why, and the memory is usable again after freeing
+Public Sub dFullMemory()
+
+  Dim iBase As Integer
+  Dim aBlocks As New Pointer[]
+  Dim p As Pointer
+
+  With SharedMem
+    .BeginNamed("zqtf_full", 40000, True)                   ' a named segment does not grow
+    iBase = .used()
+
+    If Not .TableLock() Then Assert.Fail("lock")
+    Do
+      p = .ShmTryAlloc(1000)
+      If p = 0 Then Break
+      aBlocks.Add(p)
+      If aBlocks.Count > 1000 Then Break                    ' the segment should be full long before
+    Loop
+    .TableUnlock()
+
+    Assert.Ok(p = 0, "ShmTryAlloc returned Null when the memory was full")
+    Assert.Ok(aBlocks.Count > 10 And aBlocks.Count < 1000, "blocks of 1000 bytes that fitted in 40000: " & CStr(aBlocks.Count))
+    Assert.Ok(InStr(.LastAllocError, "is full") > 0, "LastAllocError: " & .LastAllocError)
+
+    Dim iFull As Integer = .used()
+    Try .["zqTooBig"] = String(50000, "x")                  ' a variable that does not fit raises the error
+    Assert.Ok(Error, "an assignment that does not fit raises an error")
+    Assert.Ok(InStr(Error.Text, "full") > 0, "its text: " & Error.Text)
+    Assert.Equals(.used(), iFull, "a failed assignment leaves no block in use")
+    Assert.Ok(Not .Exist("zqTooBig"), "a failed assignment makes no variable")
+
+    If Not .TableLock() Then Assert.Fail("lock")
+    For Each p In aBlocks
+      .ShmFree(p)
+    Next
+    .TableUnlock()
+    Assert.Equals(.used(), iBase, "memory in use after freeing the blocks")
+
+    .["zqAfterFull"] = String(5000, "a")                    ' usable again
+    Assert.Equals(Len(.["zqAfterFull"]), 5000, "a variable fits after the blocks were freed")
+    Dim iGrown As Integer = .used()
+    Try .["zqAfterFull"] = String(60000, "b")               ' growing past the memory
+    Assert.Ok(Error, "a value that can not grow raises an error")
+    Assert.Equals(.["zqAfterFull"], String(5000, "a"), "the old value stays when it can not grow")
+    Assert.Equals(.used(), iGrown, "a failed growth leaves no block in use")
+    .Free("zqAfterFull")
+    Assert.Equals(.used(), iBase, "memory in use at the end")
+    .End()
+  End With
+
+End
+
+'' Two strings, a float, a long, an integer, an array, an empty string, a short one and an integer
+Private Sub MakeVariables()
+
+  With SharedMem
+    .["ThisString"] = "This is a test string of this size"
+    .["ThisFloat"] = 0.0
+    .["ThisLong"] = CLong(0)
+    .["ThisInt"] = 0
+    .["ThatString"] = String(96, "*")
+    .["MyARRAY"] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    .["zqa"] = "asdasdasd"
+    .["zqb"] = "hhhhhhhhhhhh"
+    .["zqe"] = ""
+    .["zqd"] = 6
+    .["zqb2"] = "wqewweweqwe"
+  End With
+
+End
+
+Private Sub FreeVariables()
+
+  With SharedMem
+    .Free("ThisLong")                                       ' not in the order they were made
+    .Free("ThisInt")
+    .Free("ThisFloat")
+    .Free("ThatString")
+    .Free("ThisString")
+    .Free("MyARRAY")
+    .Free("zqb")
+    .Free("zqb2")
+    .Free("zqa")
+    .Free("zqe")
+    .Free("zqd")
+  End With
 
 End

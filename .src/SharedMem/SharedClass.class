@@ -68,33 +68,28 @@ Public Sub _free()
 
 End
 
-'' This will find every property of the object and try to\
-'' write it to the output stream
-'' Note: remember formats to a buffer ie memory stream
-''       are not the same as to a file stream
-Public Sub _write(mFile As File)  'do nothing by default
+'' Write every public variable and property of the object that is not static, by name,
+'' then an end mark. Methods, constants and events are skipped: GetProperty raised on the first method and the
+'' Catch ended the record there, so no data was ever saved
+Public Sub _write(mFile As File)
 
   Dim v As Variant
+  Dim hClass As Class = Object.Class(Me)
 
   Write #mFile, "classversion" As String
   Write #mFile, objectversion As Integer
 
-  For Each sym As String In Object.Class(Me).Symbols
-    'If sym = "classversion" Then Continue
-
-    'Print "processing symbol";; sym
-
-    v = Object.GetProperty(Me, sym)
-    'If not Error Then
+  For Each sym As String In hClass.Symbols
+    With hClass[sym]
+      If .Static Then Continue                              ' not ReadOnly: it is True for plain public variables too
+      If .Kind <> Class.Variable And .Kind <> Class.Property Then Continue
+    End With
+    Try v = Object.GetProperty(Me, sym)
+    If Error Then Continue
     Write #mfile, sym As String
     Write #mFile, v As Variant
-    'Print "processing symbol write ";; sym;; v
-    'Endif
   Next
-Catch
-  Write #mfile, "######EOF######"
-  'Print "write complete"
-  Return
+  Write #mfile, "######EOF######" As String
 
 End
 
@@ -118,14 +113,21 @@ Public Sub _read(mFile As File)  'do nothing by default
   'Print "got class version number for ";; Object.Class(Me).name
   '  If _convertstream(OldVersion, mFile) Then Return ' conversion completed the read
 
+  Dim iPos As Long
+  Dim sRaw As String
+
   While Not Eof(mfile)
+    iPos = Seek(mFile)                                      ' older versions wrote the end mark as raw text
+    Try sRaw = Read #mFile, Len("######EOF######")
+    If sRaw = "######EOF######" Then Break
+    Seek #mFile, iPos
     symin = Read #mfile As String
     If symin == "######EOF######" Then
       '   Print "Complete object read"
       Break
     Endif
     v = Read #mfile As Variant
-    Object.setproperty(Me, symin, v)
+    Try Object.SetProperty(Me, symin, v)                    ' a field the class does not have any more is skipped
     'Print "_read and save sym";; symin;; "=";; v
   Wend
 

@@ -89,13 +89,27 @@ Public Sub aSaveLoadSharedMemBlock()
     Assert.Equals(StartingVarList, SecondReloadStartupVarList, "Test Reload Section 2")
     Assert.equals(MyMemoryVarList, ReloadMyMemoryVarList, "Test Reload Differential")
     Assert.NotEquals(StartingVarList, ChangedStartupVarList, "Test After adding var")
-    Assert.Equals(ChangedStartupVarList & " , " & Right(MyMemoryVarList, -13), CombinedVarList, "Test Merge variables")
+    Assert.Equals(UserNames(CombinedVarList), UserNames(ChangedStartupVarList & " , " & MyMemoryVarList), "Test Merge variables")
 
   End With
 
 End
 
-' Gambas module file
+'' The names of a VariableList without the ones the library keeps (#newvar, #notifyq ...), sorted, once each:
+'' the symbol table is a hash table, its order is not the order the variables were made
+Private Sub UserNames(sList As String) As String
+
+  Dim aNames As New String[]
+
+  For Each sName As String In Split(sList, ",")
+    sName = Trim(sName)
+    If sName = "" Or If sName Begins "#" Or If aNames.Exist(sName) Then Continue
+    aNames.Add(sName)
+  Next
+  aNames.Sort(gb.IgnoreCase)
+  Return aNames.Join(" , ")
+
+End
 
 Public Sub bSaveAndLoadVariables()
 

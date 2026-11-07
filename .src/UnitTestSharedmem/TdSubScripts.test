@@ -4,9 +4,9 @@
 
 Const LoopCount As Integer = 100000
 
-Public starttime As Float = 0.0
+Private starttime As Float = 0.0                         ' Private: gb.test runs every public symbol of a test file as a test
 
-Public rTester As Integer
+Private rTester As Integer
 
 Public Sub aSubScripts()
 

@@ -360,18 +360,19 @@ Public Sub AllocStorage(iLength As Integer) As Boolean
   If Not IsNull(RootAddress) Then       ' free and reallocate storage
 
     If NewStorageLength > StorageLength Then
-      StorageLength = NewStorageLength
 
       If symtype = gb.string Or symtype = gb.object Then
+        newStorage = NewBlock(RoundToBlock(NewStorageLength) + 1)   ' first: when it does not fit the old value stays
         StorageLength = RoundToBlock(NewStorageLength)
         SharedMem.ShmFree(SharedMem.UserMem[DataAddress + 1, gb.pointer, True])
-        newStorage = NewBlock(storageLength + 1)
         SharedMem.UserMem[DataAddress + 1, gb.pointer, True] = newstorage
         SharedMem.UserMem.SetType(DataAddress, symtype)
         SharedMem.UserMem.SetType(newStorage + SharedMem.DataOffset, symtype)     ' make sure the indexed storage also defines the type of data
       Else
+        Dim pNewRoot As Pointer = NewBlock(NewStorageLength + 1)   ' first: when it does not fit the old value stays
+        StorageLength = NewStorageLength
         SharedMem.ShmFree(RootAddress)
-        RootAddress = NewBlock(storageLength + 1)
+        RootAddress = pNewRoot
         DataAddress = RootAddress + SharedMem.DataOffset
         ShmWait = RootAddress + SharedMem.WaitOffset
         ShmLastWriteTime = RootAddress + SharedMem.LastWriteOffset
@@ -385,8 +386,14 @@ Public Sub AllocStorage(iLength As Integer) As Boolean
     If symtype = gb.string Or symtype = gb.object Then
       StorageLength = RoundToBlock(NewStorageLength)
       RootAddress = NewBlock(SizeOf(gb.pointer) + 1 + SharedMem.AllocHeaderLen)
+      Try newStorage = NewBlock(storageLength + 1)
+      If Error Then                                         ' the value does not fit: give the header block back
+        Dim sFull As String = Error.Text
+        SharedMem.ShmFree(RootAddress)
+        RootAddress = Null
+        Error.Raise(sFull)
+      Endif
       DataAddress = RootAddress + SharedMem.AllocHeaderLen
-      newStorage = NewBlock(storageLength + 1)
       SharedMem.UserMem[DataAddress + 1, gb.pointer, True] = newstorage
       SharedMem.UserMem.SetType(DataAddress, symtype)
       SharedMem.UserMem.SetType(NewStorage + SharedMem.dataoffset, symtype)
