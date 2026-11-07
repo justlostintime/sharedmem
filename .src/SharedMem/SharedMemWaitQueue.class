@@ -25,12 +25,42 @@ Public $oShm As Variant = Null                                ' The SharedMemory
 ' point of the program and crashed it (segfaults, JIT stack mismatch). A signal from an older version stays
 ' pending until CheckSignal takes it with sigtimedwait.
 Private Const NotifyPipePrefix As String = "/dev/shm/sharedmem-notify-"
+Private Const KeyChanged As String = "C"                      ' written to the pipe: a variable we wait for changed
+Private Const KeyNew As String = "N"                          ' a variable was made, its name is on our NotifyNew queue
+Private Const PipeFull As Integer = 1024                      ' this many bytes waiting: nothing more is written, the reader does both
+Private $bKeyNew As Boolean                                   ' the keys DrainNotifyPipe read
+Private $bKeyChanged As Boolean
+Private $bKeyAll As Boolean                                   ' a byte of an older version, or a full pipe: check every variable
 Private hNotify As File = Null                                ' our notify pipe, open while we wait for changes
 Private $iNotifyPid As Integer = 0                            ' the process that opened hNotify, a forked Task inherits it
 Private Const SIG_BLOCK As Integer = 0
 Private SigSet As New Byte[128]                               ' sigset_t holding ChangeSignal
 Private ZeroTime As New Long[2]                               ' timespec 0, sigtimedwait only looks
 Private bDelivering As Boolean = False                        ' a notify function that uses SharedMem does not deliver again
+
+' Each process that waits for notifications has its own queue of events in the variable memory. The table
+' #notifyq lists the queues, QSlots entries of 16 bytes: Integer pid at 0, Integer flags at 4 (QWantNew,
+' QWantChanged), Long queue offset at 8. A queue is a Long count of events written at 0, a Long count read at 8,
+' an Integer count of new variable events dropped at 16, an Integer count of change events dropped at 20, then QSize events of 16 bytes: Integer kind (QKindNew, QKindChanged) at 0,
+' Integer symbol table slot at 4, Long slot generation at 8, so an event points to its variable in the table.
+' SharedMem._put adds the events under its lock and writes their key, KeyNew or KeyChanged, to the notify pipe
+' of each process it gave one. The process takes the events from its queue and calls the notify functions of
+' those variables. A change event for the variable of the last event not read yet is not added again. A full
+' queue drops its oldest event and counts it: the reader checks every variable after dropped changes, and
+' reports the new variables it could not name
+Private $pQTable As Pointer = 0                               ' offset of the table, 0 before _begin
+Private $pMyQ As Pointer = 0                                  ' offset of our queue, 0 when we have none
+Private $iMyQPid As Integer = 0                               ' the process that made $pMyQ, a forked Task inherits it
+Private $aSignalNew As New Integer[]                          ' processes QueueEvent gave a new variable, SignalQueued wakes them
+Private $aSignalChanged As New Integer[]                      ' processes QueueEvent gave a change
+Private Const QSlots As Integer = 64
+Private Const QSize As Integer = 1024
+Private Const QHeader As Integer = 24
+Private Const QEntry As Integer = 16
+Private Const QWantNew As Integer = 1
+Private Const QWantChanged As Integer = 2
+Public Const QKindNew As Integer = 1
+Public Const QKindChanged As Integer = 2
 
 Public Struct WaitHeader
   pid As Integer
@@ -49,6 +79,7 @@ Extern sigtimedwait(sigset As Pointer, info As Pointer, timeout As Pointer) As I
 Extern sKill(sigpid As Integer, Sig As Integer) As Integer In "libc:6" Exec "kill"
 Extern getpid() As Integer In "libc:6"
 Extern sched_yield() As Integer In "libpthread:0"
+Extern memcpyString(dest As Pointer, src As String, Len As Integer) As Pointer In "libc:6" Exec "memcpy"
 
 '' Return a printable list of objects waiting for a notification
 '' of value change for a specific symbol name. For all PIDs
@@ -151,12 +182,14 @@ Public Sub NotifyChange(Symbol As String, NotifyObject As Variant, Optional iTim
   MyWait.pid = getpid()
 
   MyWait.timeout = iTimeout
+  OpenQueue()                                               ' our event queue, raises when the table is full
 
   WaitQueue.Add(MyWait)
+  SetQueueFlags()
 
   MyWait.sym._wait()
   MyWait.sym.setLastWrite()
-  MyWait.OldTime = Now + Timer 'MyWait.sym.getLastWrite()
+  MyWait.OldTime = MyWait.sym.getLastWrite()              ' only a write from now on is a change. Now + Timer never equalled it: every wait fired once at once
 
   OpenNotifyPipe()
   If findpid(MyWait.pid) < 0 Then
@@ -186,6 +219,7 @@ Public Sub NotifyCancel(Symbol As String, NotifyObject As Object)
     Endif
     Inc i
   Next
+  SetQueueFlags()                                           ' no wait left: the queue is closed
 
 End
 
@@ -271,6 +305,20 @@ Public Sub _begin() '' we will allocate a fixed table of pids to be used for not
     $pNotify = memoryloc
     $pRootSeen = 0                                          ' Pids() makes PidList
 
+    $pQTable = 0                                            ' QueueEvent does nothing until the table exists
+    $pMyQ = 0
+    If Not .Exist("#notifyq") Then
+      memoryloc = .ShmAlloc(.AllocHeaderLen + QSlots * 16)
+      Dim pTable As Pointer = QData(memoryloc)               ' after the allocation header, as for notifylist
+      For iSlot As Integer = 0 To QSlots * 2 - 1
+        Long@(pTable + iSlot * 8) = 0
+      Next
+      .["#notifyq"] = memoryloc
+    Else
+      memoryloc = .["#notifyq"]
+    Endif
+    $pQTable = memoryloc
+
   End With
 
 End
@@ -278,6 +326,7 @@ End
 '' Remove the Application from the list of applications waiting for a notification
 Public Sub Dofree()
 
+  CloseQueue()
   removepid(Application.id)
   CloseNotifyPipe()
 
@@ -324,25 +373,40 @@ Public Sub File_Read()
   DrainNotifyPipe()
   If bDelivering Then Return
   bDelivering = True
-  Deliver()
+  Deliver($bKeyNew, $bKeyChanged, $bKeyAll)
   bDelivering = False
 
 End
 
+'' Read the keys waiting in our pipe: N new variables, C changes. Any other byte, from a version that wrote
+'' no key, or a pipe that was full, means both
 Private Sub DrainNotifyPipe()
 
   Dim sData As String
+  Dim iTotal As Integer
 
+  $bKeyNew = False
+  $bKeyChanged = False
+  $bKeyAll = False
   If hNotify = Null Then Return
   While Lof(hNotify) > 0
     Try sData = Read #hNotify, -256
     If Error Then Break
+    iTotal += Len(sData)
+    If InStr(sData, KeyNew) Then $bKeyNew = True
+    If InStr(sData, KeyChanged) Then $bKeyChanged = True
+    If Len(Replace(Replace(sData, KeyNew, ""), KeyChanged, "")) > 0 Then $bKeyAll = True
   Wend
+  If iTotal >= PipeFull Then $bKeyAll = True
+  If $bKeyAll Then
+    $bKeyNew = True
+    $bKeyChanged = True
+  Endif
 
 End
 
-'' Tell process Pid that a variable changed. False when the process is gone
-Private Sub NotifyPid(Pid As Integer) As Boolean
+'' Write sKey into the pipe of process Pid: KeyChanged or KeyNew. False when the process is gone
+Private Sub NotifyPid(Pid As Integer, sKey As String) As Boolean
 
   Dim sPipe As String = NotifyPipePrefix & CStr(Pid)
   Dim hPipe As File
@@ -354,7 +418,7 @@ Private Sub NotifyPid(Pid As Integer) As Boolean
   If Not Exist(sPipe) Then Return sKill(Pid, ChangeSignal) = 0    ' an older version, no pipe. Open Pipe would make one
   Try hPipe = Open Pipe sPipe For Write                     ' never blocks
   If Error Then Return True
-  If Lof(hPipe) = 0 Then Try Write #hPipe, "x", 1          ' a byte already waiting is enough, the pipe never fills
+  If Lof(hPipe) < PipeFull Then Try Write #hPipe, sKey, 1   ' more waiting: the reader does both, the pipe never fills
   Try Close hPipe
   Return True
 
@@ -377,9 +441,9 @@ Fast Unsafe Public Sub dispatch(Optional newVariable As SharedMemSymbol = Null)
 
   For i As Integer = 0 To pidlistlen
     Dim CurrentPid As Integer = Pids()[i * SizeOf(gb.integer), gb.integer, True]
-    If CurrentPid > 0 Then
+    If CurrentPid > 0 And If Not HasQueue(CurrentPid) Then   ' a process with a queue got its event, this is for older versions
       'Error "Signaling PID="; CurrentPid
-      If Not NotifyPid(CurrentPid) Then                     ' remove pids of processes that are gone
+      If Not NotifyPid(CurrentPid, KeyChanged) Then         ' remove pids of processes that are gone
         'Error "Error sending signal:"; System.Error
         Pids()[i * SizeOf(gb.integer), gb.integer, True] = 0
       Endif
@@ -407,11 +471,15 @@ Public Sub CheckSignal()
   DropInheritedPipe()
   If hNotify <> Null And If Lof(hNotify) > 0 Then          ' the event loop did not run yet, a busy program
     DrainNotifyPipe()
-  Else If sigtimedwait(SigSet.Data, Null, ZeroTime.Data) <> ChangeSignal Then   ' a signal from an older version
+  Else If sigtimedwait(SigSet.Data, Null, ZeroTime.Data) = ChangeSignal Then   ' a signal from an older version: both
+    $bKeyNew = True
+    $bKeyChanged = True
+    $bKeyAll = True
+  Else
     Return
   Endif
   bDelivering = True
-  Deliver()
+  Deliver($bKeyNew, $bKeyChanged, $bKeyAll)
   bDelivering = False
 
 End
@@ -426,7 +494,7 @@ End
 '' Call the notify functions of this process whose variable changed. There can be individual
 '' entry points for each symbol, or all the same entry point.
 '' Not Fast: an error of a notify function is caught here, the JIT crashed on errors caught across JIT functions
-Private Sub Deliver()
+Private Sub Deliver(bNew As Boolean, bChanged As Boolean, bAll As Boolean)
 
   Dim MyWait As WaitHeader
   Dim Counter As Integer = 0
@@ -437,6 +505,11 @@ Private Sub Deliver()
   If WaitQueue.count = 0 Then Return
   'Error "Wait Queue not empty!"
 
+  Dim aNew As New String[]                                  ' the variables made since the last call, for NotifyNew
+  Dim cChanged As New Collection                            ' slot:generation of the variables that changed
+  If TakeEvents(aNew, cChanged) Then bAll = True            ' events were dropped: check every variable
+  If bAll Then bChanged = True
+
   For counter = WaitQueue.max DownTo 0
 
     mywait = WaitQueue[counter]
@@ -446,12 +519,18 @@ Private Sub Deliver()
       Continue
     Endif
 
+    If MyWait.sym.SymName = "#newvar" Then                 ' NotifyNew: each variable made since the last call
+      DeliverNew(MyWait, aNew)
+      Continue
+    Endif
+    If Not bChanged Then Continue
+
     Dim oldtime As Float = MyWait.OldTime
     Dim writetime As Float = MyWait.sym.getLastWrite()
 
-    'Error "Signal Times ";; oldtime;; "<>";; MyWait.sym.getLastWrite()
-
-    If OldTime = writetime Then
+    If bAll Then                                            ' no reliable events: the write time tells
+      If OldTime = writetime Then Continue
+    Else If Not cChanged.Exist(CStr(MyWait.sym.SlotIndex) & ":" & CStr(MyWait.sym.SlotGen)) Then
       Continue
     Endif
 
@@ -477,5 +556,235 @@ Private Sub Deliver()
 
 Catch
   Print #File.Err, "SharedMem notify error pid = "; getpid(); " "; Error.Text; " "; Error.Where
+
+End
+
+'' The address of the data of a block from ShmAlloc: after its allocation header
+Private Sub QData(pBlock As Pointer) As Pointer
+
+  Return SharedMem.UserMem.AddrData(pBlock) + SharedMem.AllocHeaderLen
+
+End
+
+'' SharedMem._put holds the lock: add an event for variable oSym, QKindNew or QKindChanged, to the queue of
+'' every process that wants it. SignalQueued wakes them after the lock. Raises nothing
+Fast Unsafe Public Sub QueueEvent(iKind As Integer, oSym As SharedMemSymbol)
+
+  Dim pTable, pSlot, pQ, pEntry As Pointer
+  Dim iPid, iWant As Integer
+  Dim iWritten, iRead As Long
+
+  If $pQTable = 0 Or If oSym = Null Or If oSym.SlotIndex < 0 Then Return
+  If iKind = QKindNew Then iWant = QWantNew Else iWant = QWantChanged
+  pTable = QData($pQTable)
+  For i As Integer = 0 To QSlots - 1
+    pSlot = pTable + i * 16
+    iPid = Integer@(pSlot)
+    If iPid <= 0 Or If (Integer@(pSlot + 4) And iWant) = 0 Then Continue
+    pQ = QData(Pointer@(pSlot + 8))
+    iWritten = Long@(pQ)
+    iRead = Long@(pQ + 8)
+    If iKind = QKindChanged And If iWritten > iRead Then     ' the same change not read yet: the reader gives the value once
+      pEntry = pQ + QHeader + CInt((iWritten - 1) Mod QSize) * QEntry
+      If Integer@(pEntry) = iKind And If Integer@(pEntry + 4) = oSym.SlotIndex And If Long@(pEntry + 8) = oSym.SlotGen Then Continue
+    Endif
+    If iWritten - iRead >= QSize Then                       ' full: drop the oldest event, counted by kind
+      pEntry = pQ + QHeader + CInt(iRead Mod QSize) * QEntry
+      If Integer@(pEntry) = QKindNew Then
+        Integer@(pQ + 16) = Integer@(pQ + 16) + 1
+      Else
+        Integer@(pQ + 20) = Integer@(pQ + 20) + 1
+      Endif
+      Long@(pQ + 8) = iRead + 1
+    Endif
+    pEntry = pQ + QHeader + CInt(iWritten Mod QSize) * QEntry
+    Integer@(pEntry) = iKind
+    Integer@(pEntry + 4) = oSym.SlotIndex
+    Long@(pEntry + 8) = oSym.SlotGen
+    Long@(pQ) = iWritten + 1
+    If iKind = QKindNew Then $aSignalNew.Add(iPid) Else $aSignalChanged.Add(iPid)
+  Next
+
+End
+
+'' Write the keys of the events QueueEvent added to the pipes of their processes, after the lock
+Public Sub SignalQueued()
+
+  Dim iPid As Integer
+
+  For Each iPid In $aSignalNew
+    NotifyPid(iPid, KeyNew)
+  Next
+  For Each iPid In $aSignalChanged
+    NotifyPid(iPid, KeyChanged)
+  Next
+  $aSignalNew.Clear()
+  $aSignalChanged.Clear()
+
+End
+
+'' True when process iPid has a queue in the table
+Private Sub HasQueue(iPid As Integer) As Boolean
+
+  Dim pTable As Pointer
+
+  If $pQTable = 0 Then Return False
+  pTable = QData($pQTable)
+  For i As Integer = 0 To QSlots - 1
+    If Integer@(pTable + i * 16) = iPid Then Return True
+  Next
+  Return False
+
+End
+
+'' Make our event queue and put it in the table. A queue left by a process that ended without End is freed
+'' and its entry used again
+Private Sub OpenQueue()
+
+  Dim pTable, pSlot As Pointer
+  Dim iPid As Integer
+  Dim iFree As Integer = -1
+  Dim pQ As Pointer
+
+  If $iMyQPid <> getpid() Then $pMyQ = 0                    ' a forked Task: the queue is its parent's
+  If $pMyQ <> 0 Or If $pQTable = 0 Then Return
+  If Not SharedMem.TableLock() Then Error.Raise(SharedMem.LockError)
+  pTable = QData($pQTable)
+  For i As Integer = 0 To QSlots - 1
+    pSlot = pTable + i * 16
+    iPid = Integer@(pSlot)
+    If iPid > 0 And If Not Exist("/proc/" & CStr(iPid)) Then  ' its process is gone
+      SharedMem.ShmFree(Pointer@(pSlot + 8))
+      Integer@(pSlot) = 0
+      iPid = 0
+    Endif
+    If iPid = 0 And If iFree < 0 Then iFree = i
+  Next
+  If iFree < 0 Then
+    SharedMem.TableUnlock()
+    Error.Raise("Notify: " & CStr(QSlots) & " processes already wait for notifications")
+  Endif
+  pQ = SharedMem.ShmTryAlloc(SharedMem.AllocHeaderLen + QHeader + QSize * QEntry)
+  If pQ = 0 Then
+    SharedMem.TableUnlock()
+    Error.Raise("Notify: " & SharedMem.LastAllocError)
+  Endif
+  For i = 0 To 2
+    Long@(QData(pQ) + i * 8) = 0
+  Next
+  pTable = QData($pQTable)             ' the allocation may have moved memory that grows
+  pSlot = pTable + iFree * 16
+  Pointer@(pSlot + 8) = pQ
+  Integer@(pSlot + 4) = 0
+  Integer@(pSlot) = getpid()
+  SharedMem.TableUnlock()
+  $pMyQ = pQ
+  $iMyQPid = getpid()
+
+End
+
+'' Set the flags of our queue from our waits: new variables, changes. No wait left: the queue is closed
+Private Sub SetQueueFlags()
+
+  Dim iFlags As Integer
+  Dim pTable As Pointer
+
+  If $iMyQPid <> getpid() Then $pMyQ = 0
+  If $pMyQ = 0 Or If $pQTable = 0 Then Return
+  For Each MyWait As WaitHeader In WaitQueue
+    If MyWait.pid <> getpid() Then Continue
+    If MyWait.sym.SymName = "#newvar" Then iFlags = iFlags Or QWantNew Else iFlags = iFlags Or QWantChanged
+  Next
+  If iFlags = 0 Then
+    CloseQueue()
+    Return
+  Endif
+  If Not SharedMem.TableLock() Then Return
+  pTable = QData($pQTable)
+  For i As Integer = 0 To QSlots - 1
+    If Integer@(pTable + i * 16) = getpid() Then Integer@(pTable + i * 16 + 4) = iFlags
+  Next
+  SharedMem.TableUnlock()
+
+End
+
+'' Take our queue out of the table and free it
+Private Sub CloseQueue()
+
+  Dim pTable, pSlot As Pointer
+
+  If $iMyQPid <> getpid() Then $pMyQ = 0
+  If $pMyQ = 0 Or If $pQTable = 0 Then Return
+  If Not SharedMem.TableLock() Then Return
+  pTable = QData($pQTable)
+  For i As Integer = 0 To QSlots - 1
+    pSlot = pTable + i * 16
+    If Integer@(pSlot) = getpid() Then
+      Integer@(pSlot) = 0
+      SharedMem.ShmFree(Pointer@(pSlot + 8))
+    Endif
+  Next
+  SharedMem.TableUnlock()
+  $pMyQ = 0
+
+End
+
+'' Take the events out of our queue: the names of the new variables into aNew, slot:generation of the changed
+'' ones into cChanged. True when change events were dropped because the queue was full
+Private Sub TakeEvents(aNew As String[], cChanged As Collection) As Boolean
+
+  Dim pQ, pEntry As Pointer
+  Dim iWritten, iRead, n As Long
+  Dim iDroppedNew, iDroppedChanged As Integer
+  Dim oSym As SharedMemSymbol
+
+  If $iMyQPid <> getpid() Or If $pMyQ = 0 Then Return False
+  If Not SharedMem.TableLock() Then Return False
+  pQ = QData($pMyQ)
+  iWritten = Long@(pQ)
+  iRead = Long@(pQ + 8)
+  For n = iRead To iWritten - 1
+    pEntry = pQ + QHeader + CInt(n Mod QSize) * QEntry
+    If Integer@(pEntry) = QKindNew Then
+      oSym = SharedMem.SymbolTable.SymbolAt(Integer@(pEntry + 4), Long@(pEntry + 8))
+      If oSym <> Null Then aNew.Add(oSym.SymName)           ' Null: freed again meanwhile
+    Else
+      cChanged[CStr(Integer@(pEntry + 4)) & ":" & CStr(Long@(pEntry + 8))] = True
+    Endif
+  Next
+  Long@(pQ + 8) = iWritten
+  iDroppedNew = Integer@(pQ + 16)
+  iDroppedChanged = Integer@(pQ + 20)
+  Long@(pQ + 16) = 0
+  SharedMem.TableUnlock()
+  If iDroppedNew > 0 Then Print #File.Err, "SharedMem NotifyNew: "; iDroppedNew; " new variables were not reported, the queue of "; QSize; " events was full"
+  Return iDroppedChanged > 0
+
+End
+
+'' False for the variables the library makes for itself, and the private copies of other gsh trees
+Private Sub ShowNew(sName As String) As Boolean
+
+  Dim iAt As Integer
+
+  If sName = "#newvar" Or If sName = "#notifyq" Or If sName = "notifylist" Or If sName Begins "#private@" Then Return False
+  iAt = RInStr(sName, "@")
+  If iAt > 1 And If SharedMem.PlainName(sName) = sName And If IsDigit(Mid(sName, iAt + 1)) Then Return False   ' path@pid of another tree
+  Return True
+
+End
+
+'' Call the NotifyNew function of MyWait once for each new variable, with its value and name
+Private Sub DeliverNew(MyWait As WaitHeader, aNames As String[])
+
+  Dim vValue As Variant
+
+  For Each sName As String In aNames
+    If Not ShowNew(sName) Then Continue
+    If Not SharedMem.Exist(sName) Then Continue             ' freed again meanwhile
+    vValue = SharedMem[sName]
+    Try Object.Call(MyWait.CallBack, MyWait.Method, [vValue, SharedMem.PlainName(sName)])   ' path, not this tree's path@tag
+    If Error Then Print #File.Err, "SharedMem notify "; MyWait.Method; " error: "; Error.Text
+  Next
 
 End

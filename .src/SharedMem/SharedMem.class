@@ -653,7 +653,7 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
 
   InSession = True
   RegistrySaved = False                                     ' a new segment has no record of this tree yet
-  SharedMem["#newvar"] = CPointer(0)
+  If Not SymbolTable.Exist("#newvar") Then SharedMem["#newvar"] = CPointer(0)   ' NotifyNew waits on it. Not rewritten: that cleared the wait count of the processes waiting
   WaitQueue._begin()
   Return True
 
@@ -792,7 +792,7 @@ Static Public Sub BeginNamed(Optional MemName As String = User.Name & "gsh", Mem
 
 End
 
-Static Private ProtectedVariables As String[] = ["notifylist"]
+Static Private ProtectedVariables As String[] = ["notifylist", "#notifyq", "#newvar"]   ' ClearMem keeps them: the notify queues and NotifyNew use them
 
 '' this function clears the memory and deletes all the variables
 
@@ -1705,8 +1705,8 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
 
     px = New SharedMemSymbol(Me)
     px.SetSymbol(index, data)                              ' it adds the variable to the shared table
-    ' now notify if new variable added
-    NewPx = SymbolTable["#newvar"]
+    WaitQueue.QueueEvent(WaitQueue.QKindNew, px)           ' for NotifyNew: an event on each waiting process's queue, we hold the lock
+    IsNew = True
   Endif
 
   'If memcmp(usermem.AddrReal(px.ShmWait + 1), zPointer, SizeOf(gb.long))   ' if waiting Then
@@ -1718,11 +1718,13 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
     Endif
 
     UserMem[px.ShmLastWriteTime, gb.float] = Now + Frac(Timer)
+    WaitQueue.QueueEvent(WaitQueue.QKindChanged, px)       ' an event on each waiting process's queue, we hold the lock
 
     bLocked = UnlockMem()
 
+    WaitQueue.SignalQueued()                               ' the keys into their pipes
     sched_yield()
-    Try WaitQueue.dispatch(IIf(isnew, px, Null))
+    Try WaitQueue.dispatch(IIf(isnew, px, Null))           ' processes of older versions, without a queue
 
     If Error Then Error.Raise("Dispatch error on variable change event for " & px.ObjectName & " , " & Error.text & ":" & Error.where)
     sched_yield()
@@ -1734,25 +1736,7 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
 
   Endif
 
-  If NewPx <> Null And If Long@(usermem.AddrReal(NewPx.ShmWait + 1)) <> 0 Then
-    bLocked = LockMem("put")
-    If Not bLocked Then Error.Raise(LockError)
-
-    If NewPx.ShmLastWriteTime = Null Then
-      bLocked = UnlockMem()
-      Error.Raise("Last write time is null" & NewPx.SymName)
-    Endif
-
-    UserMem[NewPx.ShmLastWriteTime, gb.float] = Now + Frac(Timer)
-
-    bLocked = UnlockMem()
-
-    sched_yield()
-    Try WaitQueue.dispatch(px)
-    If Error Then Error.Raise("Dispatch error on new variable event for " & px.ObjectName & " , " & Error.text & ":" & Error.where)
-    sched_yield()
-
-  Endif
+  If IsNew Then WaitQueue.SignalQueued()                   ' after the lock: wake the processes waiting for new variables
 
 Catch
   If bLocked Then UnlockMem()

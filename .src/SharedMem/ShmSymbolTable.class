@@ -210,6 +210,19 @@ Private Sub FromSlot(i As Integer) As SharedMemSymbol
 
 End
 
+'' The variable in slot iSlot when it is still the one of generation iGen, else Null: a notify queue entry
+'' points to a variable this way. The caller holds the SharedMem lock
+Public Sub SymbolAt(iSlot As Integer, iGen As Long) As SharedMemSymbol
+
+  Dim p As Pointer
+
+  If iSlot < 0 Or If iSlot >= $iSlots Then Return Null
+  p = Slot(iSlot)
+  If Integer@(p) <> StUsed Or If Long@(p + 8) <> iGen Then Return Null
+  Return FromSlot(iSlot)
+
+End
+
 '' The variable named Key, Null when there is none
 Public Sub _get(Key As String) As SharedMemSymbol
 

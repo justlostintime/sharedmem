@@ -1,7 +1,7 @@
 # Gambas Project File 3.0
 Title=Shared Memory object -sharedmem
 Startup=TestNotifyFG
-Version=3.24.20
+Version=3.24.21
 Component=gb.debug
 Component=gb.eval
 Component=gb.image
