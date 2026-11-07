@@ -86,7 +86,10 @@ Public Sub main()
     '    Wait 0.5
     ' Wend
 
-    MyTask.Wait()
+    While MyTask.Running     ' MyTask.Wait() would block without running the event loop, the notify functions would not be called
+      ' until the end
+      Wait 0.05
+    Wend
 
     !WaitTest = -1
 

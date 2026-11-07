@@ -1,6 +1,6 @@
 [Component]
 Key=sharedmem
-Version=3.24.17
+Version=3.24.19
 Authors=Westwood
 Requires=gb.debug,gb.eval,gb.pcre,gb.highlight,gb.image,gb.signal
 CompatibleUntil=3.99

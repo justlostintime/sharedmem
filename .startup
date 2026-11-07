@@ -1,8 +1,8 @@
-TestObjectRdWr
+TestNotifyFG
 Shared Memory object -sharedmem
 #sharedmem
 
-3.24.17
+3.24.19
 
 gb.debug
 gb.eval

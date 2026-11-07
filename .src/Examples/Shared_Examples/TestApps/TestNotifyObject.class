@@ -1,5 +1,7 @@
 ' Gambas class file
 
+'  Gambas class file
+
 Private Ocount As Integer = Object.Class(Me).count
 Private sName As String = Object.Class(Me).Name & Format(Ocount, "000")
 

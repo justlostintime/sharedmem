@@ -1650,13 +1650,17 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
     Error.raise("Sharedmem Access Assign value before BEGIN()")
   Endif
 
-  bLocked = LockMem("put")                                 ' one lock for the whole write: each lookup outside it took the lock again
-  If Not bLocked Then Error.Raise(LockError)
-
   If TypeOf(index) = gb.string Then
-    px = SymbolTable[index]
+    px = SymbolTable.Lookup(index)                         ' before the lock: a cached variable needs no lock to find
   Else
     px = index
+  Endif
+
+  bLocked = LockMem("put")
+  If Not bLocked Then Error.Raise(LockError)
+
+  If TypeOf(index) = gb.string And If Not SymbolTable.IsCurrent(px) Then   ' new, or changed by another process meanwhile
+    px = SymbolTable.Lookup(index)
   Endif
 
   If Not IsNull(px) And Param.count = 0 And If px.symtype <> TypeOf(data)
@@ -1670,7 +1674,8 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
 
   If Not IsNull(px) Then
 
-    Dim sTableInfo As String = px.TableInfo()               ' what other processes read from the symbol table
+    Dim sTableInfo As String                                ' what other processes read from the symbol table
+    If px.symtype = gb.string Or px.symtype = gb.object Then sTableInfo = px.TableInfo()   ' the other types never change it
     If px.symtype = gb.object And If Param.count = 0 Then
       px.updateobjectinfo(data)
     Endif

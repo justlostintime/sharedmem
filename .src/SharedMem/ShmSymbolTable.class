@@ -260,6 +260,17 @@ Public Sub Lookup(Key As String) As SharedMemSymbol
 
 End
 
+'' True when oSym, found by Lookup, is still the variable in its slot with the same record: three reads, no lock
+Public Sub IsCurrent(oSym As SharedMemSymbol) As Boolean
+
+  Dim p As Pointer
+
+  If $iSlots = 0 Or If oSym = Null Then Return False
+  p = Slot(oSym.SlotIndex)
+  Return Integer@(p) = StUsed And Long@(p + 8) = oSym.SlotGen And Long@(p + 16) = oSym.SlotVersion
+
+End
+
 '' True when the variable exists
 Public Sub Exist(Key As String) As Boolean
 

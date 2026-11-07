@@ -26,6 +26,7 @@ Public $oShm As Variant = Null                                ' The SharedMemory
 ' pending until CheckSignal takes it with sigtimedwait.
 Private Const NotifyPipePrefix As String = "/dev/shm/sharedmem-notify-"
 Private hNotify As File = Null                                ' our notify pipe, open while we wait for changes
+Private $iNotifyPid As Integer = 0                            ' the process that opened hNotify, a forked Task inherits it
 Private Const SIG_BLOCK As Integer = 0
 Private SigSet As New Byte[128]                               ' sigset_t holding ChangeSignal
 Private ZeroTime As New Long[2]                               ' timespec 0, sigtimedwait only looks
@@ -285,16 +286,30 @@ End
 '' Open our notify pipe, read and write so it never reports end of file when a writer closes it
 Private Sub OpenNotifyPipe()
 
+  DropInheritedPipe()
   If hNotify <> Null Then Return
   For Each sName As String In Dir("/dev/shm", "sharedmem-notify-*")   ' pipes left by processes that crashed
     If Not Exist("/proc/" & Mid(sName, Len("sharedmem-notify-") + 1)) Then Try Kill "/dev/shm" &/ sName
   Next
   hNotify = Open Pipe NotifyPipePrefix & CStr(getpid()) For Read Write Watch
+  $iNotifyPid = getpid()
+
+End
+
+'' A forked Task inherits the pipe of its parent: close our copy without reading it, the bytes are for the
+'' parent. The pipe file stays, it is the parent's
+Private Sub DropInheritedPipe()
+
+  If hNotify = Null Or If $iNotifyPid = getpid() Then Return
+  Try Close hNotify
+  hNotify = Null
+  $iNotifyPid = 0
 
 End
 
 Private Sub CloseNotifyPipe()
 
+  DropInheritedPipe()
   If hNotify = Null Then Return
   Try Close hNotify
   hNotify = Null
@@ -305,6 +320,7 @@ End
 '' A change came in: the event loop calls this as soon as a byte is in our notify pipe
 Public Sub File_Read()
 
+  DropInheritedPipe()
   DrainNotifyPipe()
   If bDelivering Then Return
   bDelivering = True
@@ -388,6 +404,7 @@ End
 Public Sub CheckSignal()
 
   If bDelivering Or If WaitQueue.Count = 0 Then Return
+  DropInheritedPipe()
   If hNotify <> Null And If Lof(hNotify) > 0 Then          ' the event loop did not run yet, a busy program
     DrainNotifyPipe()
   Else If sigtimedwait(SigSet.Data, Null, ZeroTime.Data) <> ChangeSignal Then   ' a signal from an older version
