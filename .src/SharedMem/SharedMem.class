@@ -20,7 +20,7 @@ Export
 
 Fast Unsafe
 Static Property Read Version As String Use $Version = Application.Version
-Static Public MemSigConst As Integer = 3192                     ' 3192: robust pthread mutexes in the collection segment, 3191 used semaphores
+Static Public MemSigConst As Integer = 3193                     ' 3193: shared symbol table of slots, 3192: robust pthread mutexes in the collection segment, 3191 used semaphores
 
 '' Notify every time value changes
 Public Const Repeat As Integer = -1
@@ -61,7 +61,7 @@ Static Public SymbolTableDefaultLength As Integer = 4512000      ' 4mb the defau
 Static Private CollectionLastUpdate As Float = 0.0                              ' the time the last addition of item to collection happened
 
 '' Collection of the Symbols defined in the Shared Memory Area
-Static Public SymbolTable As New Collection(gb.IgnoreCase)         ' as symbols must be defined before a new task is started
+Static Public SymbolTable As New ShmSymbolTable              ' the shared symbol table, empty until Begin. As symbols must be defined befor         ' as symbols must be defined before a new task is started
 Static Public DefaultSaveLocation As String = User.Home & "/vars/" ' the default location for creating stored variables or mem
 Static Public LastMemorySync As String = "."                                        ' The Last file that was restored for memory
 Static Public NamedMemHandle As Integer = -1                                  ' Handle of the named memory area
@@ -298,12 +298,36 @@ Static Private aDeadline As New Long[2]
 '' Why the last LockMem or LockCol returned False
 Static Public LockError As String = ""
 
+' The symbol table in the collection segment, after the two locks
+Static Private Const TableHeader As Integer = 160
+Static Private Const TableStart As Integer = 256
+Static Private Const TableSlotSize As Integer = 512
+
+'' Why the last Add returned False
+Static Public LastAddError As String = ""
+
+'' The lock for ShmSymbolTable, recursive: a table function called while SharedMem holds it takes it again
+Static Public Sub TableLock() As Boolean
+
+  Return LockMem("table")
+
+End
+
+Static Public Sub TableUnlock()
+
+  UnlockMem()
+
+End
+
 '' Lock the variable memory: bLocked = LockMem("name") then If Not bLocked Then Error.Raise(LockError)
 Static Private Sub LockMem(sWhat As String) As Boolean
 
   Dim iRet As Integer = LockAt(ColMem.AddrReal(MemLock), sWhat)
 
-  If iRet = 1 Then CollectionLastUpdate = -1                ' reload the symbol table, it may be half changed
+  If iRet = 1 Then                                          ' a variable record it was writing may be half written
+    Dim aLost As String[] = SymbolTable.Repair()
+    If aLost.Count > 0 Then Print #File.Err, "SharedMem: removed variables half written when their process died: "; aLost.Join(", ")
+  Endif
   Return iRet >= 0
 
 End
@@ -602,28 +626,16 @@ Static Public Sub Begin(Optional blockSize As Variant = ".") As Boolean
 
     ColMem.RootAddress = CollectionStorage
     ColMem.MemoryLength = CollectMemLen
-    Mutex = 0                                                                                                                         ' we will now use offsets CollectionStorage
-    MemLock = Mutex + (SizeOf(gb.long) * 8) + 8                                     ' the variable memory lock, 72 bytes like Mutex
-    CollectionChangedIndicator = MemLock + (SizeOf(gb.long) * 8) + 8                ' Changed content by a task
-    CollectionEntries = CollectionChangedIndicator + SizeOf(gb.long) + 1       ' Number of entries in the index of database
-    CollectionActive = CollectionEntries + SizeOf(gb.long) + 1                 ' the current copy of the symbol table
-    CollectionAreaSlot = CollectionActive + SizeOf(gb.long) + 1                ' the length of a copy
-    CollectionAddress = CollectionAreaSlot + SizeOf(gb.long) + 1 + 4           ' The address of the collection, two copies from here
+    Mutex = 0                                                                ' offsets in CollectionStorage
+    MemLock = Mutex + (SizeOf(gb.long) * 8) + 8                              ' the variable memory lock, 72 bytes like Mutex
 
     If InitSemaphors Then                                                    ' the creator makes the locks, the others use them
       InitLock(ColMem.AddrReal(Mutex))
       InitLock(ColMem.AddrReal(MemLock))
-      ColMem[CollectionAreaSlot] = ((CLong(CollectMemLen) - CLong(CollectionAddress)) \ 2) And Not 7
     Endif
-    CollectionAreaLen = ColMem[CollectionAreaSlot, gb.Long]
 
-    SymbolTable.Clear()
-
-    If ColMem[CollectionEntries, gb.Long] = 0 Then                                                   ' the memory is cleared when first allocated for security reasons
-      SaveCollection()                                                                                                            ' if memory is already defined just sync here
-    Else
-      LoadCollection()                                                                                                           ' sync with current symbol table
-    Endif
+    ' the symbol table: a header at TableHeader, the slots from TableStart, see ShmSymbolTable
+    SymbolTable = New ShmSymbolTable(ColMem.AddrReal(TableHeader), ColMem.AddrReal(TableStart), CInt((CLong(CollectMemLen) - TableStart) \ TableSlotSize), InitSemaphors)
 
   Endif
 
@@ -797,8 +809,6 @@ Static Public Sub ClearMem()
     'Wend
     SymbolTable.Remove(s.SymName)
   Next
-
-  SaveCollection()
 
   ' WaitQueue = New SharedMemWaitQueue
   WaitQueue.reset()
@@ -990,7 +1000,7 @@ Static Public Sub End(Optional FileName As String = "\t\t") ' free all the block
   MemoryStorage = Null
   CollectionStorage = Null
 
-  SymbolTable = New Collection(gb.ignorecase)
+  SymbolTable = New ShmSymbolTable                                 ' not attached, empty
   'WaitQueue.reset()
   LastMemorySync = ""
 
@@ -1122,9 +1132,10 @@ Static Private Sub PointerAlloc(symbol As String, MyObject As Object, Rootaddr A
     MySymbol.SetZeros()
     MySymbol.storageLength = ilen
 
-    SymbolTable.Add(MySymbol, symbol)
-
-    SaveCollection()
+    If Not SymbolTable.Add(MySymbol) Then
+      bLocked = UnlockMem()
+      Error.Raise(SymbolTable.LastError)
+    Endif
 
     bLocked = UnlockMem()
 
@@ -1174,8 +1185,10 @@ Static Public Sub NamedAlloc(Symbol As String, MemSize As Integer, MyObject As V
     MySymbol.SetZeros()
     MySymbol.storageLength = MemSize + AllocHeaderLen + 1
 
-    SymbolTable.Add(MySymbol, symbol)
-    SaveCollection()
+    If Not SymbolTable.Add(MySymbol) Then
+      bLocked = UnlockMem()
+      Error.Raise(SymbolTable.LastError)
+    Endif
 
     bLocked = UnlockMem()
 
@@ -1430,13 +1443,13 @@ Static Public Sub ShmFreeChk(DataSize As Integer) As Pointer
 End
 
 '' add a symbol to the symbol table
-Static Public Sub Add(LSymbol As SharedMemSymbol)
+'' Put LSymbol in the shared symbol table, or replace the variable of that name. False when the table is
+'' full or the name too long, LastAddError says why. It raises nothing, the caller raises
+Static Public Sub Add(LSymbol As SharedMemSymbol) As Boolean
 
-  SymbolTable.Add(LSymbol, LSymbol.SymName)
-
-Catch
-  Error.Raise("Add Symbol :" & Error.text & " " & Error.where)
-  Stop
+  If SymbolTable.Add(LSymbol) Then Return True
+  LastAddError = SymbolTable.LastError
+  Return False
 
 End
 
@@ -1472,8 +1485,6 @@ Static Public Sub free(symbolKey As String, Optional bLock As Boolean = True) As
   Endif
 
   ShmFree(Symbol.RootAddress)           ' release the memory used by this thing
-
-  SaveCollection()
 
   If bLocked Then bLocked = UnlockMem()
 
@@ -1568,11 +1579,11 @@ Static Public Sub Rename(symbol As String, newname As String, Optional force As 
       If Not bLocked Then Error.Raise(LockError)
       CollectionChanged()                                  ' save the current table, not the one read before the lock
 
-      SymbolTable[newname] = SymbolTable[symbol]
-      SymbolTable[newname].Symname = newname
+      If force And If SymbolTable.Exist(newname) Then Me.Free(newname, False)   ' the variable it replaces
+      Dim pxRename As SharedMemSymbol = SymbolTable[symbol]
       SymbolTable.Remove(symbol)
-
-      SaveCollection()
+      pxRename.SymName = newname
+      If Not SymbolTable.Add(pxRename) Then Error.Raise(SymbolTable.LastError)
       bLocked = UnlockMem()
 
     Else
@@ -1619,8 +1630,10 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
     Error.raise("Sharedmem Access Assign value before BEGIN()")
   Endif
 
+  bLocked = LockMem("put")                                 ' one lock for the whole write: each lookup outside it took the lock again
+  If Not bLocked Then Error.Raise(LockError)
+
   If TypeOf(index) = gb.string Then
-    CollectionChanged()
     px = SymbolTable[index]
   Else
     px = index
@@ -1628,18 +1641,12 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
 
   If Not IsNull(px) And Param.count = 0 And If px.symtype <> TypeOf(data)
     If Not px._waiting() Then 'allow To change the type Of data stored by a symbol
-      Me.free(index)
+      Me.free(index, False)                                ' we hold the lock
       px = Null
     Else
       Error.Raise("Unable to Change Symbol data type, Tasks have requested notification of value changed: " & index)
     Endif
   Endif
-
-  bLocked = LockMem("put")
-  If Not bLocked Then Error.Raise(LockError)
-  CollectionChanged()                                      ' another process may have added a variable since, saving a stale table erased it
-
-  px = SymbolTable[index]
 
   If Not IsNull(px) Then
 
@@ -1663,15 +1670,14 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
       ' other processes read it from there, they keep their table: saving it made them all reload it, 0.5 ms
       ' for the save and 8 ms for each reload with 300 variables
       If (px.symtype = gb.string Or px.symtype = gb.object) And If px.TableInfo() <> sTableInfo Then
-        SaveCollection()
+        If Not SymbolTable.Update(px) Then Error.Raise(SymbolTable.LastError)   ' only this variable's slot
       Endif
     Endif
     ' still to fix if location change
   Else
 
     px = New SharedMemSymbol(Me)
-    px.SetSymbol(index, data)
-    SaveCollection()              ' update the shared area so other tasks know items add/deleted etc
+    px.SetSymbol(index, data)                              ' it adds the variable to the shared table
     ' now notify if new variable added
     NewPx = SymbolTable["#newvar"]
   Endif
@@ -1729,92 +1735,10 @@ End
 
 '' Saved the collection to a special shared memory block\
 '' A flag is set to let other tasks know that the symbol table has been updated
-Static Private Sub SaveCollection()
-
-  Dim MFile As File
-  Dim bLocked As Boolean
-  Dim TotalLength As Long = 0
-  Dim TotalEntries As Long = 0
-
-  bLocked = LockCol("SaveCollection")
-  If Not bLocked Then Error.Raise(LockError)
-
-  ' write the copy that is not in use, then switch to it with one write
-  Dim iNext As Integer = If(ColMem[CollectionActive, gb.Integer] = 1, 0, 1)
-  Dim pArea As Pointer = CollectionAddress + (iNext * CollectionAreaLen)
-
-  mFile = Memory ColMem.AddrReal(pArea + 16) For Write
-
-  For Each ISym As SharedMemSymbol In SymbolTable
-    Inc TotalEntries
-    TotalLength += ISym.Length
-    If TotalLength > CollectionAreaLen - 16 Then
-      bLocked = UnlockCol()
-      Error.Raise("SharedMem out of Symbol index space :" & Str(TotalEntries) & ", Adding Symbol :" & ISym.SymName)
-    Endif
-
-    ISym._write(MFile)
-
-  Next
-
-  Close MFile
-
-  ColMem[pArea] = CInt(TotalEntries)                        ' the count of this copy
-  ColMem[CollectionActive] = iNext                          ' the switch: readers now see the new copy
-  Colmem[CollectionEntries] = CInt(TotalEntries)
-
-  CollectionLastUpdate = ColMem[CollectionChangedIndicator, gb.float] + 1      ' a count, Timer is per process and two could write the same value
-
-  colmem[CollectionChangedIndicator] = CollectionLastUpdate
-
-  bLocked = UnlockCol()
-
-Catch
-  If bLocked Then UnlockCol()                              ' sem_getvalue(Mutex) used the offset 0 as an address and crashed
-  Error.Propagate()
-
-End
 
 '' Used by a task when it sees that the symbol table has changed to syncronize\
 '' this causes the symbol table to be reloaded\
 '' variables and waits
-Static Private Sub LoadCollection()
-
-  Dim MFile As File
-  Dim SymCount As Integer
-  Dim ISym As SharedMemSymbol
-  Dim bLocked As Boolean
-
-  bLocked = LockCol("LoadCollection")
-  If Not bLocked Then Error.Raise(LockError)
-
-  CollectionLastUpdate = colmem[CollectionChangedIndicator]
-
-  Dim pArea As Pointer = CollectionAddress + (ColMem[CollectionActive, gb.Integer] * CollectionAreaLen)
-
-  SymCount = ColMem[pArea, gb.Integer]
-
-  SymbolTable.Clear()
-
-  MFile = Memory ColMem.AddrReal(pArea + 16) For Read
-
-  For i As Integer = 1 To SymCount
-
-    ISym = New SharedMemSymbol(Me)
-    ISym._read(MFile)
-
-    Me.Add(ISym)
-
-  Next
-
-  Close MFile
-  bLocked = UnlockCol()
-
-Catch
-  If bLocked Then UnlockCol()                              ' sem_getvalue(Mutex) used the offset 0 as an address and crashed
-  Error.Propagate()
-
-End
 '' a function which may be called to dump the content of any memory area to a file
 '' The default location if no name specified is the users desktop as dumpfile
 
@@ -1843,13 +1767,7 @@ End
 
 Static Private Sub CollectionChanged() As Boolean
 
-  'If Not (CollectionLastUpdate = mem[CollectionChangedIndicator, gb.float]) Then         ' try speed slow
-  'If CollectionLastUpdate <> float@(CollectionChangedIndicator + 1) Then                  ' Same
-  'If memcmp(VarPtr(CollectionLastUpdate), ColMem.AddrReal(CollectionChangedIndicator + 1), SizeOf(gb.float)) <> 0 Then     ' best speed
-
-  If CollectionLastUpdate <> ColMem[CollectionChangedIndicator, gb.float] Then            ' try speed slow
-    LoadCollection()
-  Endif
+  Return False                                              ' nothing to reload: ShmSymbolTable checks each variable as it is used
 
 End
 
@@ -2356,9 +2274,20 @@ Static Public Sub _write(mFile As File) As Boolean
 
   Write #mFile, UserMem[MemoryLength] As Integer      ' total length of allocated memory
   Write #mFile, UserMem[ChunkLength] As Integer       ' length of each allocated chunk
-  Write #mFile, SymbolTable.length As Integer         ' number of entries in the symbol table
-
+  ' Not saved: # variables, they belong to the running processes, and the private copies of the trees that
+  ' have a record, they end with their tree. The count is written first, so the list is made first
+  Dim aSave As New SharedMemSymbol[]
+  Dim cTrees As Collection = AllTrees()
+  Dim iAt As Integer
   For Each wsymbol In SymbolTable
+    If wsymbol.SymName Begins "#" Then Continue
+    iAt = RInStr(wsymbol.SymName, "@")
+    If iAt > 1 And If cTrees.Exist(Mid(wsymbol.SymName, iAt + 1)) And If InStr(cTrees[Mid(wsymbol.SymName, iAt + 1)], "," & LCase(Left(wsymbol.SymName, iAt - 1)) & ",") > 0 Then Continue
+    aSave.Add(wsymbol)
+  Next
+  Write #mFile, aSave.Count As Integer                ' number of entries in the symbol table
+
+  For Each wsymbol In aSave
     wsymbol._write(mFile, True)                        ' write the data as well as the parameters
   Next
 
@@ -2386,13 +2315,33 @@ Static Public Sub _read(mFile As File, Optional iMerge As Boolean = False) As Bo
 
   TableCount = Read #mFile As Integer
 
+  Dim cImageTrees As New Collection                         ' tag -> private names, from #private@tag records of older images
+  Dim sRecord As String
+
   For I As Integer = 1 To TableCount
     symbol = New SharedMemSymbol(Me)
-    symbol._read(mFile, True)                     ' read the symbol and load the data
-    add(symbol)
+    symbol._read(mFile, False)
+    If symbol.SymName Begins "#" Then                     ' # variables belong to the running processes, never to an image
+      If symbol.SymName Begins RegistryPrefix And If symbol.SymType = gb.String Then
+        sRecord = Read #mFile, symbol.DataLength           ' the text, its zero and one more byte, as WriteData wrote it
+        If InStr(sRecord, Chr(0)) > 0 Then sRecord = Left(sRecord, InStr(sRecord, Chr(0)) - 1)
+        cImageTrees[Mid(symbol.SymName, Len(RegistryPrefix) + 1)] = sRecord
+      Else
+        symbol.SkipData(mFile)
+      Endif
+      Continue
+    Endif
+    If iMerge And If SymbolTable.Exist(symbol.SymName) Then Me.Free(symbol.SymName)   ' replaced: free its storage
+    symbol.LoadData(mFile)
+    If Not add(symbol) Then Print #File.Err, "SharedMem image: "; LastAddError
   Next
 
-  SaveCollection()
+  ' an older image saved the private copies of trees with their record, those trees ended: free their copies
+  For Each sRecord In cImageTrees
+    For Each sName As String In Split(sRecord, ",", "", True)
+      If SymbolTable.Exist(sName & "@" & cImageTrees.Key) Then Me.Free(sName & "@" & cImageTrees.Key)
+    Next
+  Next
 
   Return True
 
@@ -2560,13 +2509,11 @@ Static Public Sub ReadVarFrom(symbol As String, Optional fileName As Variant = "
   mSymbol = New SharedMemSymbol(Me)
   mSymbol._read(wFile, True)
   mSymbol.symname = symbol                    'make sure the name is what we asked for
-  add(mSymbol)
+  If Not add(mSymbol) Then Error.Raise(LastAddError)
 
   If closefile Then Close wFile
 
   If bsync And closefile Then mSymbol.LastMemorySync = filename
-
-  SaveCollection()              ' update the shared area so other tasks know items add/deleted etc
 
   bLocked = UnlockMem()
 

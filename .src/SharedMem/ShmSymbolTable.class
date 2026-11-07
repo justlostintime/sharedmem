@@ -1,0 +1,451 @@
+' Gambas class file
+
+'Author Westwood JustLostintime
+'Released Under:
+'  GNU GENERAL Public LICENSE
+'  Version 3, 29 June 2007
+'  See project license file.
+
+''' The symbol table, shared by every process using the segment: a hash table of fixed slots in the
+''' collection segment. Each slot holds one variable record, the same format as SharedMemSymbol._write.
+''' This process keeps the records it used in a cache, checked at each access against the slot generation,
+''' which changes when the variable is freed or made again, and the slot version, which changes when its
+''' record is rewritten. Only the changed variable is read again, no process reloads the whole table.
+'''
+''' It is used like the Collection it replaced: SymbolTable[name], Exist, Add, Remove, For Each with Key,
+''' Count and Length. Names are not case sensitive.
+'''
+''' Compiled, and nothing here raises an error: the JIT crashed when an error raised in compiled code was
+''' caught in another compiled function. Functions return False or Null, LastError says why, SharedMem raises.
+''' The caller holds the SharedMem lock or the functions take it, the lock is recursive.
+
+Export
+Fast
+
+'' Slot layout, 512 bytes
+'' 0  Integer state       0 empty, 1 used, 2 deleted
+'' 4  Integer hash        of the lower case name
+'' 8  Long generation     +1 for each new variable in the slot and when it is freed
+'' 16 Long version        +1 before and +1 after each record write, odd while it is written
+'' 24 Integer record length
+'' 32 the lower case name, zero terminated, at most NameMax bytes
+'' 160 the record, at most RecordMax bytes
+Private Const SlotSize As Integer = 512
+Private Const NameOffset As Integer = 32
+Private Const NameMax As Integer = 127
+Private Const RecordOffset As Integer = 160
+Private Const RecordMax As Integer = 352
+Private Const StEmpty As Integer = 0
+Private Const StUsed As Integer = 1
+Private Const StDeleted As Integer = 2
+
+Private $pHeader As Pointer                                  ' Long slot count, Long used count
+Private $pBase As Pointer                                    ' the first slot
+Private $iSlots As Integer = 0                               ' 0: not attached to a segment, the table is empty
+Private $cCache As New Collection(gb.IgnoreCase)             ' name -> SharedMemSymbol used by this process
+Private $iFree As Integer                                    ' Find: first empty or deleted slot on the way
+Private $sKey As String = ""
+
+'' Why the last Add, Update or lookup failed
+Public LastError As String = ""
+
+'' The name of the variable the last For Each step returned
+Property Read Key As String
+
+'' Number of variables in the table
+Property Read Count As Integer
+
+'' Number of variables in the table
+Property Read Length As Integer
+
+'' Number of slots
+Property Read Slots As Integer
+
+'' pHeader: two Longs in the shared memory, pBase: the first of iSlots slots. bCreate: a new segment,
+'' write the slot count. Without parameters the table is not attached and empty
+Public Sub _new(Optional pHeader As Pointer = Null, pBase As Pointer = Null, iSlots As Integer = 0, bCreate As Boolean = False)
+
+  If pHeader = Null Then Return
+  $pHeader = pHeader
+  $pBase = pBase
+  If bCreate Then
+    Long@(pHeader) = iSlots
+    Long@(pHeader + 8) = 0
+  Endif
+  $iSlots = CInt(Long@(pHeader))
+
+End
+
+Private Function Key_Read() As String
+
+  Return $sKey
+
+End
+
+Private Function Count_Read() As Integer
+
+  If $iSlots = 0 Then Return 0
+  Return CInt(Long@($pHeader + 8))
+
+End
+
+Private Function Length_Read() As Integer
+
+  Return Count_Read()
+
+End
+
+Private Function Slots_Read() As Integer
+
+  Return $iSlots
+
+End
+
+Private Sub Slot(i As Integer) As Pointer
+
+  Return $pBase + CLong(i) * SlotSize
+
+End
+
+Private Sub Hash(sLower As String) As Integer
+
+  Dim h As Long = 2166136261
+  Dim i As Integer
+
+  For i = 1 To Len(sLower)
+    h = ((h Xor Asc(sLower, i)) * 16777619) And &HFFFFFFFF&
+  Next
+  Return CInt(h And &H7FFFFFFF&)
+
+End
+
+'' The slot of sLower, -1 when it is not in the table. $iFree is the first empty or deleted slot met
+Private Sub Find(sLower As String, iHash As Integer) As Integer
+
+  Dim i, n, iState As Integer
+  Dim p As Pointer
+
+  $iFree = -1
+  If $iSlots = 0 Then Return -1
+  i = iHash Mod $iSlots
+  For n = 1 To $iSlots
+    p = Slot(i)
+    iState = Integer@(p)
+    If iState = StEmpty Then
+      If $iFree < 0 Then $iFree = i
+      Return -1
+    Else If iState = StDeleted Then
+      If $iFree < 0 Then $iFree = i
+    Else If Integer@(p + 4) = iHash And If String@(p + NameOffset) = sLower Then
+      Return i
+    Endif
+    Inc i
+    If i >= $iSlots Then i = 0
+  Next
+  Return -1
+
+End
+
+'' Read the record of slot p into oSym. False when it can not be read
+Private Sub ReadRecord(oSym As SharedMemSymbol, p As Pointer) As Boolean
+
+  Dim hMem As File
+
+  hMem = Memory p + RecordOffset For Read
+  Try oSym._read(hMem, False)                              ' interpreted, an error raised there may be caught here
+  If Error Then
+    LastError = "SharedMem symbol record unreadable: " & Error.Text
+    Try Close hMem
+    Return False
+  Endif
+  Close hMem
+  oSym.SlotGen = Long@(p + 8)
+  oSym.SlotVersion = Long@(p + 16)
+  Return True
+
+End
+
+'' Write the record of oSym into slot p, the version is odd while it is written
+Private Sub WriteRecord(oSym As SharedMemSymbol, p As Pointer) As Boolean
+
+  Dim hMem As File
+  Dim iLen As Integer
+
+  iLen = oSym._serialize(False)
+  If iLen > RecordMax Then
+    LastError = "SharedMem symbol record too long for " & oSym.SymName & ": " & CStr(iLen) & " bytes, at most " & CStr(RecordMax)
+    Return False
+  Endif
+  Long@(p + 16) = Long@(p + 16) + 1                        ' odd: being written
+  hMem = Memory p + RecordOffset For Write
+  oSym._write(hMem, False)
+  Close hMem
+  Integer@(p + 24) = iLen
+  Long@(p + 16) = Long@(p + 16) + 1                        ' even: complete
+  Return True
+
+End
+
+'' The variable of used slot i, from the cache when it is still valid
+Private Sub FromSlot(i As Integer) As SharedMemSymbol
+
+  Dim p As Pointer = Slot(i)
+  Dim oSym As SharedMemSymbol
+  Dim sName As String = String@(p + NameOffset)
+
+  oSym = $cCache[sName]
+  If oSym <> Null Then
+    If oSym.SlotIndex = i And If oSym.SlotGen = Long@(p + 8) Then
+      If oSym.SlotVersion <> Long@(p + 16) Then
+        If Not ReadRecord(oSym, p) Then Return Null
+      Endif
+      Return oSym
+    Endif
+  Endif
+  oSym = New SharedMemSymbol(Classes["SharedMem"])
+  If Not ReadRecord(oSym, p) Then Return Null
+  oSym.SlotIndex = i
+  $cCache[oSym.SymName] = oSym
+  Return oSym
+
+End
+
+'' The variable named Key, Null when there is none
+Public Sub _get(Key As String) As SharedMemSymbol
+
+  Return Lookup(Key)
+
+End
+
+'' The same as SymbolTable[Key], a plain method: SharedMem calls it on every read and write
+Public Sub Lookup(Key As String) As SharedMemSymbol
+
+  Dim oSym As SharedMemSymbol
+  Dim p As Pointer
+  Dim i As Integer
+  Dim sLower As String
+
+  If $iSlots = 0 Then Return Null
+  oSym = $cCache[Key]
+  If oSym <> Null Then                                      ' without the lock: three aligned reads, each one atomic
+    p = Slot(oSym.SlotIndex)
+    If Integer@(p) = StUsed And If Long@(p + 8) = oSym.SlotGen And If Long@(p + 16) = oSym.SlotVersion Then Return oSym
+  Endif
+  ' not cached, freed, made again, or its record changed or is being written (odd version): look under the lock
+  If Not SharedMem.TableLock() Then
+    LastError = SharedMem.LockError
+    Return Null
+  Endif
+  oSym = $cCache[Key]
+  If oSym <> Null Then
+    p = Slot(oSym.SlotIndex)
+    If Integer@(p) = StUsed And If Long@(p + 8) = oSym.SlotGen Then
+      If Long@(p + 16) <> oSym.SlotVersion Then           ' its record changed: read only this one again
+        If Not ReadRecord(oSym, p) Then oSym = Null
+      Endif
+      SharedMem.TableUnlock()
+      Return oSym
+    Endif
+    $cCache.Remove(Key)                                     ' freed or made again by another process
+  Endif
+  sLower = LCase(Key)
+  i = Find(sLower, Hash(sLower))
+  If i >= 0 Then
+    oSym = FromSlot(i)
+  Else
+    oSym = Null
+  Endif
+  SharedMem.TableUnlock()
+  Return oSym
+
+End
+
+'' True when the variable exists
+Public Sub Exist(Key As String) As Boolean
+
+  Return Lookup(Key) <> Null
+
+End
+
+'' Add oSym under its SymName, or replace the record of the variable of that name, as Collection.Add
+'' did. Key is not used, it is kept for the Collection interface. False when the table is full
+Public Sub Add(oSym As SharedMemSymbol, Optional Key As String) As Boolean
+
+  Dim sLower As String = LCase(oSym.SymName)
+  Dim iHash, i As Integer
+  Dim p As Pointer
+  Dim bNew As Boolean
+
+  If $iSlots = 0 Then
+    LastError = "SharedMem is not started"
+    Return False
+  Endif
+  If Len(sLower) > NameMax Or If Len(sLower) = 0 Then
+    LastError = "SharedMem variable name must have 1 to " & CStr(NameMax) & " characters: " & oSym.SymName
+    Return False
+  Endif
+  If Not SharedMem.TableLock() Then
+    LastError = SharedMem.LockError
+    Return False
+  Endif
+  iHash = Hash(sLower)
+  i = Find(sLower, iHash)
+  If i < 0 Then
+    If $iFree < 0 Then
+      LastError = "SharedMem symbol table is full, " & CStr($iSlots) & " variables, start it with a larger CollectMemLen"
+      SharedMem.TableUnlock()
+      Return False
+    Endif
+    i = $iFree
+    bNew = True
+  Endif
+  p = Slot(i)
+  If bNew Then                                              ' the slot is invisible until its state is set last
+    Integer@(p + 4) = iHash
+    WriteName(p, sLower)
+    Long@(p + 8) = Long@(p + 8) + 1                        ' a new variable: a new generation
+  Endif
+  If Not WriteRecord(oSym, p) Then
+    SharedMem.TableUnlock()
+    Return False
+  Endif
+  If bNew Then
+    Integer@(p) = StUsed
+    Long@($pHeader + 8) = Long@($pHeader + 8) + 1
+  Endif
+  oSym.SlotIndex = i
+  oSym.SlotGen = Long@(p + 8)
+  oSym.SlotVersion = Long@(p + 16)
+  If $cCache.Exist(oSym.SymName) Then $cCache.Remove(oSym.SymName)
+  $cCache[oSym.SymName] = oSym
+  SharedMem.TableUnlock()
+  Return True
+
+End
+
+Private Sub WriteName(p As Pointer, sLower As String)
+
+  Dim hMem As File
+
+  hMem = Memory p + NameOffset For Write
+  Write #hMem, sLower & Chr(0), Len(sLower) + 1
+  Close hMem
+
+End
+
+'' Write the changed record of oSym to its slot, the other processes read it again at their next access
+Public Sub Update(oSym As SharedMemSymbol) As Boolean
+
+  Dim p As Pointer
+  Dim bOk As Boolean
+
+  If $iSlots = 0 Then Return False
+  If oSym.SlotIndex < 0 Then Return Add(oSym)
+  If Not SharedMem.TableLock() Then
+    LastError = SharedMem.LockError
+    Return False
+  Endif
+  p = Slot(oSym.SlotIndex)
+  If Integer@(p) <> StUsed Or If Long@(p + 8) <> oSym.SlotGen Then   ' freed meanwhile
+    SharedMem.TableUnlock()
+    Return Add(oSym)
+  Endif
+  bOk = WriteRecord(oSym, p)
+  If bOk Then oSym.SlotVersion = Long@(p + 16)
+  SharedMem.TableUnlock()
+  Return bOk
+
+End
+
+'' Remove the variable named Key from the table, its memory is freed by the caller
+Public Sub Remove(Key As String) As Boolean
+
+  Dim sLower As String = LCase(Key)
+  Dim i, j As Integer
+  Dim p As Pointer
+
+  If $iSlots = 0 Then Return False
+  If Not SharedMem.TableLock() Then
+    LastError = SharedMem.LockError
+    Return False
+  Endif
+  i = Find(sLower, Hash(sLower))
+  If i >= 0 Then
+    p = Slot(i)
+    Integer@(p) = StDeleted
+    Long@(p + 8) = Long@(p + 8) + 1                        ' the caches of the other processes see it is gone
+    Long@($pHeader + 8) = Long@($pHeader + 8) - 1
+    ' a deleted slot before an empty one ends no probe: make it empty, and the deleted ones before it
+    j = i
+    While Integer@(Slot(j)) = StDeleted And Integer@(Slot(If(j + 1 >= $iSlots, 0, j + 1))) = StEmpty
+      Integer@(Slot(j)) = StEmpty
+      Dec j
+      If j < 0 Then j = $iSlots - 1
+      If j = i Then Break
+    Wend
+  Endif
+  If $cCache.Exist(Key) Then $cCache.Remove(Key)
+  SharedMem.TableUnlock()
+  Return i >= 0
+
+End
+
+'' Forget the variables cached by this process, the shared table does not change
+Public Sub Clear()
+
+  $cCache.Clear()
+
+End
+
+'' After a process died holding the lock: a record it was writing has an odd version. Such a variable
+'' is removed, its record may be half written. The caller holds the lock. Returns the names removed
+Public Sub Repair() As String[]
+
+  Dim aLost As New String[]
+  Dim i As Integer
+  Dim p As Pointer
+
+  $cCache.Clear()
+  For i = 0 To $iSlots - 1
+    p = Slot(i)
+    If Integer@(p) = StUsed And If (Long@(p + 16) And 1) = 1 Then
+      aLost.Add(String@(p + NameOffset))
+      Integer@(p) = StDeleted
+      Long@(p + 8) = Long@(p + 8) + 1
+      Long@(p + 16) = Long@(p + 16) + 1
+      Long@($pHeader + 8) = Long@($pHeader + 8) - 1
+    Endif
+  Next
+  Return aLost
+
+End
+
+'' For Each: every variable of the table, Key is its name
+Public Sub _next() As SharedMemSymbol
+
+  Dim i As Integer
+  Dim oSym As SharedMemSymbol
+
+  If IsNull(Enum.Index) Then Enum.Index = 0
+  i = Enum.Index
+  If $iSlots = 0 Or If Not SharedMem.TableLock() Then
+    Enum.Stop()
+    Return Null
+  Endif
+  While i < $iSlots
+    If Integer@(Slot(i)) = StUsed Then
+      oSym = FromSlot(i)
+      If oSym <> Null Then
+        Enum.Index = i + 1
+        $sKey = oSym.SymName
+        SharedMem.TableUnlock()
+        Return oSym
+      Endif
+    Endif
+    Inc i
+  Wend
+  SharedMem.TableUnlock()
+  Enum.Stop()
+  Return Null
+
+End

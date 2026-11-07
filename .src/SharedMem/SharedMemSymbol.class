@@ -36,8 +36,13 @@ Public dataLength As Integer = 0          ' Length of the data portion of the bl
 
 Public LastWriteLength As Integer = 0     ' Length of the last data written to the memory
 
+' Where the record is in the shared symbol table (ShmSymbolTable), not saved with the record
+Public SlotIndex As Integer = -1          ' the slot, -1 when not in the table
+Public SlotGen As Long = 0                ' the slot generation when this process read the record
+Public SlotVersion As Long = 0            ' the slot version when this process read the record
+
 Public Const StringBufferExtra As Integer = 1024      ' string and object storage is allocated in blocks of this size, a value that
-                                                      ' grows or shrinks inside its block is written in place, no new block, no table save
+' grows or shrinks inside its block is written in place, no new block, no table save
 
 Public ZeroPointer As Pointer = Null
 Public ZeroRef As Pointer = VarPtr(Zeropointer)
@@ -112,6 +117,24 @@ End
 
 '' Read a variable def And control information From an Input file
 '' Optionally load the data as well in to the shared memory
+'' The value that follows the record in an image or variable file: new storage, then the data
+Public Sub LoadData(mFile As File)
+
+  RootAddress = Null
+  DataAddress = Null
+  If (AllocStorage(datalength)) Then
+    SharedMem.UserMem.ReadData(DataAddress, mFile, DataLength, symtype)
+  Endif
+
+End
+
+'' Skip the value that follows the record, without storing it
+Public Sub SkipData(mFile As File)
+
+  Seek #mFile, Seek(mFile) + DataLength
+
+End
+
 Public Sub _read(MFile As File, Optional WithData As Boolean = False)
 
   If WithData Then
@@ -134,13 +157,7 @@ Public Sub _read(MFile As File, Optional WithData As Boolean = False)
   LastWriteLength = Read #Mfile As Integer
   ShmLastWriteTime = Read #Mfile As Pointer
 
-  If WithData Then
-    RootAddress = Null
-    DataAddress = Null
-    If (AllocStorage(datalength)) Then
-      SharedMem.UserMem.ReadData(DataAddress, mFile, DataLength, symtype)
-    Endif
-  Endif
+  If WithData Then LoadData(mFile)
 
 Catch
   Error.raise("_read symbol read error " & Error.text & ", Probably invalid symbol file format")
@@ -188,9 +205,9 @@ Public Sub SetSymbol(Sname As String, data As Variant, Optional extrastorage As 
       Endif
     Endif
 
-    SharedMem.Add(Me)
+    WriteOrRaise(data)                                    ' storage first: other processes see the variable once it is complete
 
-    WriteOrRaise(data)
+    If Not SharedMem.Add(Me) Then Error.Raise(SharedMem.LastAddError)
 
   Endif
 
