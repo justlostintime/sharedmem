@@ -100,7 +100,7 @@ Sub PrintVariables(thearray As Collection)
 
   Print "\nSymbol Table \n"
   For Each v As Variant In thearray
-    If thearray.key Begins "#" Or thearray.key = "notifylist" Then Continue
+    If thearray.key Begins "#" Then Continue
     Print thearray.key; " = "; v
   Next
   Print "-----------------------------------"

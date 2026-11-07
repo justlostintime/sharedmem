@@ -226,32 +226,6 @@ Catch
 
 End
 
-Public Sub _wait() As Integer
-
-  SetLastWrite()
-  SharedMem.UserMem[ShmWait] += 1
-
-End
-
-Public Sub _waiting() As Boolean
-
-  If SharedMem.UserMem[ShmWait] > 0 Then Return True
-  Return False
-
-End
-
-Public Sub GetWaitCount() As Integer
-
-  Return SharedMem.UserMem[ShmWait]
-
-End
-
-Public Sub _ClearWait() As Integer
-
-  SharedMem.UserMem[ShmWait] -= 1
-
-End
-
 Public Sub getLastWrite() As Float
 
   If ShmLastWriteTime = Null Then

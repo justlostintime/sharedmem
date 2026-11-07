@@ -28,6 +28,7 @@ Fast
 '' 8  Long generation     +1 for each new variable in the slot and when it is freed
 '' 16 Long version        +1 before and +1 after each record write, odd while it is written
 '' 24 Integer record length
+'' 28 Integer waiters     offset of the list of processes waiting for this variable, 0 none (SharedMemWaitQueue)
 '' 32 the lower case name, zero terminated, at most NameMax bytes
 '' 160 the record, at most RecordMax bytes
 Private Const SlotSize As Integer = 512
@@ -35,6 +36,7 @@ Private Const NameOffset As Integer = 32
 Private Const NameMax As Integer = 127
 Private Const RecordOffset As Integer = 160
 Private Const RecordMax As Integer = 352
+Private Const WaitersOffset As Integer = 28
 Private Const StEmpty As Integer = 0
 Private Const StUsed As Integer = 1
 Private Const StDeleted As Integer = 2
@@ -210,6 +212,42 @@ Private Sub FromSlot(i As Integer) As SharedMemSymbol
 
 End
 
+'' The offset of the list of processes waiting for oSym, 0 when there is none or oSym is not the variable of
+'' its slot any more. The caller holds the SharedMem lock
+Public Sub Waiters(oSym As SharedMemSymbol) As Pointer
+
+  Dim p As Pointer
+
+  If oSym = Null Or If oSym.SlotIndex < 0 Or If oSym.SlotIndex >= $iSlots Then Return 0
+  p = Slot(oSym.SlotIndex)
+  If Integer@(p) <> StUsed Or If Long@(p + 8) <> oSym.SlotGen Then Return 0
+  Return CPointer(Integer@(p + WaitersOffset))
+
+End
+
+'' Set the list of processes waiting for oSym, False when oSym is not the variable of its slot any more.
+'' The caller holds the SharedMem lock
+Public Sub SetWaiters(oSym As SharedMemSymbol, pList As Pointer) As Boolean
+
+  Dim p As Pointer
+
+  If oSym = Null Or If oSym.SlotIndex < 0 Or If oSym.SlotIndex >= $iSlots Then Return False
+  p = Slot(oSym.SlotIndex)
+  If Integer@(p) <> StUsed Or If Long@(p + 8) <> oSym.SlotGen Then Return False
+  Integer@(p + WaitersOffset) = CInt(pList)
+  Return True
+
+End
+
+'' A freed variable frees its list of waiting processes
+Private Sub FreeWaiters(p As Pointer)
+
+  If Integer@(p + WaitersOffset) = 0 Then Return
+  SharedMem.ShmFree(CPointer(Integer@(p + WaitersOffset)))
+  Integer@(p + WaitersOffset) = 0
+
+End
+
 '' The variable in slot iSlot when it is still the one of generation iGen, else Null: a notify queue entry
 '' points to a variable this way. The caller holds the SharedMem lock
 Public Sub SymbolAt(iSlot As Integer, iGen As Long) As SharedMemSymbol
@@ -326,6 +364,7 @@ Public Sub Add(oSym As SharedMemSymbol, Optional Key As String) As Boolean
   p = Slot(i)
   If bNew Then                                              ' the slot is invisible until its state is set last
     Integer@(p + 4) = iHash
+    Integer@(p + WaitersOffset) = 0                          ' nobody waits for a new variable
     WriteName(p, sLower)
     Long@(p + 8) = Long@(p + 8) + 1                        ' a new variable: a new generation
   Endif
@@ -396,6 +435,7 @@ Public Sub Remove(Key As String) As Boolean
   i = Find(sLower, Hash(sLower))
   If i >= 0 Then
     p = Slot(i)
+    FreeWaiters(p)
     Integer@(p) = StDeleted
     Long@(p + 8) = Long@(p + 8) + 1                        ' the caches of the other processes see it is gone
     Long@($pHeader + 8) = Long@($pHeader + 8) - 1
@@ -434,6 +474,7 @@ Public Sub Repair() As String[]
     p = Slot(i)
     If Integer@(p) = StUsed And If (Long@(p + 16) And 1) = 1 Then
       aLost.Add(String@(p + NameOffset))
+      FreeWaiters(p)
       Integer@(p) = StDeleted
       Long@(p + 8) = Long@(p + 8) + 1
       Long@(p + 16) = Long@(p + 16) + 1

@@ -11,9 +11,9 @@ Public Sub a_ALLOCFree()
 
     .Begin(128000)
 
-    'begin does some stuff to remove for this test See- SharedMemWaitQueue _Begin
-    .ShmFree(.["NotifyList"])
-    .free("notifylist")
+    'begin makes the #notifyq table, removed for this test, see SharedMemWaitQueue._begin
+    .ShmFree(.["#notifyq"])
+    .free("#notifyq")
 
     starttime = Timer
     For i As Integer = 1 To LoopCount
@@ -81,9 +81,9 @@ Public Sub b_lowLevelAllocAndFree()
     '    Dim cc As Pointer
 
     .begin(500000)
-    'begin does some stuff to remove for this test See- SharedMemWaitQueue _Begin
-    .ShmFree(.["NotifyList"])
-    .free("notifylist")
+    'begin makes the #notifyq table, removed for this test, see SharedMemWaitQueue._begin
+    .ShmFree(.["#notifyq"])
+    .free("#notifyq")
 
     Dim starttime As Float = Timer
     For i As Integer = 0 To 500000
