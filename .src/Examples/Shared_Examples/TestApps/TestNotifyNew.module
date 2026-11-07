@@ -32,13 +32,13 @@ End
 
 Public Sub a_changed(value As Variant, name As String)
 
-  Print name;; value
+  Print "changed ";; name;; value
 
 End
 
 Public Sub b_changed(value As Variant, name As String)
 
-  Print name;; value
+  Print "changed";; name;; value
 
 End
 
