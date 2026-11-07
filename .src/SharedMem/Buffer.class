@@ -24,7 +24,9 @@ Property Methods As Collection Use $Methods
 Property BytesUsed As Integer Use $BytesUsed = 0
 
 Extern memcpy(dest As Pointer, src As Pointer, Len As Integer) As Integer In "libc:6"
+Extern memcpyString(dest As Pointer, src As String, Len As Integer) As Pointer In "libc:6" Exec "memcpy"   ' a String is passed as its characters
 Extern memcmp(CompVal1 As Pointer, CompVal2 As Pointer, NumBerOfBytes As Integer) As Integer In "libc:6"
+Extern memcmpString(CompVal1 As Pointer, CompVal2 As String, NumBerOfBytes As Integer) As Integer In "libc:6" Exec "memcmp"   ' a String is passed as its characters
 Extern memset(dest As Pointer, Value As Integer, Sizet As Integer) As Pointer In "libc:6"
 
 Extern rWrite(handle As Integer, buf As Pointer, cnt As Integer) As Integer In "libc:6" Exec "write"
@@ -394,7 +396,7 @@ Public Sub _put(Data As Variant, index As Integer)
         Return
       Endif
 
-      memcpy(MemPointer, srcptr, data.len)
+      memcpyString(MemPointer, data, data.len)              ' the characters: VarPtr of a Variant holding a String is the String pointer
       memset(MemPointer + data.len, 0, 1)
 
     Default
@@ -491,13 +493,16 @@ Private Sub VerifyCompare(src As Variant, length As Integer, offset As Integer) 
   Else
     If rdType = gb.pointer Then
       dest = src
+    Else If rdType = gb.string Then                         ' the characters: VarPtr of a Variant holding a String is the String pointer
+      length = src.len
+      If offset + length > $StorageLength Then
+        Error.Raise("Out Of Bounds")
+        Return 0
+      Endif
+      Return memcmpString($RootAddress + offset, src, length)
     Else
       Dest = VarPtr(src)
-      If rdType = gb.string Then
-        length = src.len
-      Else
-        length = SizeOf(rdType)
-      Endif
+      length = SizeOf(rdType)
     Endif
   Endif
 

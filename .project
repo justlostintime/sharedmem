@@ -1,7 +1,7 @@
 # Gambas Project File 3.0
 Title=Shared Memory object -sharedmem
 Startup=TestObjectRdWr
-Version=3.24.16
+Version=3.24.17
 Component=gb.debug
 Component=gb.eval
 Component=gb.image

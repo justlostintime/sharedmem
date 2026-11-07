@@ -56,7 +56,7 @@ Public Sub main()
   MyBuff[9] = CPointer(123456)
   MyBuff[20] = "this is a bunch of junk to write to the buffer"
 
-  SharedMem.DumpMem(MyBuff(), MyBuff.Len())
+  'SharedMem.DumpMem(MyBuff(), MyBuff.Len())          ' writes ~/Desktop/dumpfile.ghex
 
   Dim MyStore As New Buffer
   MyStore.Access("TheBuffer")                        ' This creates another pointer to the same buffer area in memory, but does not redefine fields
@@ -81,8 +81,9 @@ Public Sub main()
 
   Print " Compare if Access  are equal      answer is "; If(MyBuff.Equal(MyStore), "Pass", "Fail"); "."
   Print " Compare if buffers are equal      answer is "; If(MyBuff.Equal(MyBuff2), "Fail", "Pass"); "."
-  Print " Compare if buffers are greater    answer is "; If(MyBuff.Greater(MyBuff2), "Pass", "Fail"); "."
-  Print " Compare if buffers are Less       answer is "; If(MyBuff.Less(MyBuff2), "Fail", "Pass"); "."
+  ' at offset 20 MyBuff now holds "Divert and contain", the copy still "this is a bunch of junk": "D" sorts before "t"
+  Print " Compare if buffers are greater    answer is "; If(MyBuff.Greater(MyBuff2), "Fail", "Pass"); "."
+  Print " Compare if buffers are Less       answer is "; If(MyBuff.Less(MyBuff2), "Pass", "Fail"); "."
 
   SharedMem["MyInt"] = 28
 
@@ -120,6 +121,7 @@ Public Sub main()
 
   'SharedMem._print()
 
+  Try Kill SharedMem.DefaultSaveLocation & "TheBuffer_Raw"   ' made by MyBuff.Write()
   SharedMem.End()
 
   Print "End Buffer Test ???????????????????????????????????????????????????????????????????????????????????????????????????????????????????"

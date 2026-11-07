@@ -1545,7 +1545,9 @@ Static Public Sub _get(index As String, ...) As Variant
 
   If px.SpecialType > ShmTypeAry Then        ' type 1 is an array, type 2 is a buffer, type 3 is a element in a buffer
 
-    rx = px.SpecialObject[If(Param.Count = 0, 0, Param[0])]   ' an error from there goes to the Catch below: printed, Null
+    Dim vElementIndex As Variant = 0                        ' not If(Param.Count = 0, 0, Param[0]): If() evaluates both, Param[0] was out of bounds
+    If Param.Count > 0 Then vElementIndex = Param[0]
+    rx = px.SpecialObject[vElementIndex]                    ' an error from there goes to the Catch below: printed, Null
 
   Else
     If Param.count > 0 Then
@@ -1674,7 +1676,9 @@ Static Public Sub _put(data As Variant, index As Variant, ...)
     Endif
 
     If px.SpecialType > ShmTypeAry Then
-      sSubError = px.SpecialPutStatus(If(Param.Count = 0, 0, Param[0]), data)   ' interpreted, returns the error text
+      Dim vPutIndex As Variant = 0                          ' not If(Param.Count = 0, 0, Param[0]): If() evaluates both, Param[0] was out of bounds
+      If Param.Count > 0 Then vPutIndex = Param[0]
+      sSubError = px.SpecialPutStatus(vPutIndex, data)      ' interpreted, returns the error text
       If sSubError <> "" Then Error.Raise(sSubError)
     Else If Param.count > 0 Then
       Dim params As New Variant[]
